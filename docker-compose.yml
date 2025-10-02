@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zynqcloud-postgres
+    environment:
+      POSTGRES_USER: zynqcloud
+      POSTGRES_PASSWORD: supersecret_db_pass
+      POSTGRES_DB: zynqcloud
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zynqcloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: zynqcloud-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: zynqcloud-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10;
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/zynq-cloud --ignore-existing;
+      mc anonymous set download myminio/zynq-cloud;
+      exit 0;
+      "
+
+  backend:
+    build: ./backend
+    container_name: zynqcloud-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://zynqcloud:supersecret_db_pass@postgres:5432/zynqcloud
+      JWT_SECRET: supersecretjwt
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: zynq-cloud
+      SMTP_HOST: smtp.yourmailserver.com
+      SMTP_PORT: 587
+      SMTP_USER: youruser
+      SMTP_PASS: yourpassword
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build: .
+    container_name: zynqcloud-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:3000
+    ports:
+      - "3001:3000"
+    command: npm run start
+
+volumes:
+  postgres_data:
+    driver: local
+  minio_data:
+    driver: local
