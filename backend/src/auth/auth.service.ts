@@ -10,7 +10,7 @@ import { UsersService } from '../users/users.service';
 import { InvitesService } from '../invites/invites.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { User,UserRole } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 
 @Injectable()
 export class AuthService {
@@ -27,13 +27,28 @@ export class AuthService {
       throw new ConflictException('User already exists');
     }
 
-    const publicRegistration = this.configService.get('PUBLIC_REGISTRATION') === 'true';
+    // Count existing users to bootstrap first user
+    const userCount = await this.usersService.count();
+
+    // If no users exist, bootstrap as OWNER
+    if (userCount === 0) {
+      return this.usersService.create({
+        name: registerDto.name,
+        email: registerDto.email,
+        password: registerDto.password,
+        role: UserRole.OWNER,
+      });
+    }
+
+    // Otherwise normal rules apply
+    const publicRegistration =
+      this.configService.get('PUBLIC_REGISTRATION') === 'true';
 
     if (!publicRegistration && !registerDto.inviteToken) {
       throw new ForbiddenException('Invitation required to register');
     }
 
-    let role = 'user';
+    let role: UserRole = UserRole.USER;
 
     if (registerDto.inviteToken) {
       const invitation = await this.invitesService.validateToken(
@@ -42,7 +57,7 @@ export class AuthService {
       if (!invitation) {
         throw new ForbiddenException('Invalid or expired invitation');
       }
-      role = invitation.role;
+      role = (invitation.role as UserRole) ?? UserRole.USER;
       await this.invitesService.markAsAccepted(invitation.id);
     }
 
@@ -50,26 +65,58 @@ export class AuthService {
       name: registerDto.name,
       email: registerDto.email,
       password: registerDto.password,
-      role: (role as UserRole) ?? UserRole.USER,
+      role,
     });
   }
 
-  async login(loginDto: LoginDto): Promise<User> {
-    const user = await this.usersService.findByEmail(loginDto.email);
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+  // async login(loginDto: LoginDto): Promise<User> {
+  //   const user = await this.usersService.findByEmail(loginDto.email);
+  //   if (!user) {
+  //     throw new UnauthorizedException('Invalid credentials');
+  //   }
 
-    const isPasswordValid = await this.usersService.validatePassword(
-      user,
-      loginDto.password,
-    );
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+  //   const isPasswordValid = await this.usersService.validatePassword(
+  //     user,
+  //     loginDto.password,
+  //   );
+  //   if (!isPasswordValid) {
+  //     throw new UnauthorizedException('Invalid credentials');
+  //   }
 
-    return user;
+  //   return user;
+  // }
+//   async login(loginDto: LoginDto): Promise<User> {
+//   // TEMP BYPASS: always return the first user in DB
+//   const user = await this.usersService.findByEmail('admin@example.com');
+//   return user;
+// }
+// async login(loginDto: LoginDto): Promise<User> {
+//   const user = await this.usersService.findByEmail(loginDto.email);
+//   if (!user) throw new UnauthorizedException('Invalid credentials');
+
+//   const isPasswordValid = await this.usersService.validatePassword(user, loginDto.password);
+//   if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');
+
+//   return user;
+// }
+
+async login(loginDto: LoginDto): Promise<User> {
+  const user = await this.usersService.findByEmail(loginDto.email);
+  if (!user) {
+    throw new UnauthorizedException('Invalid credentials');
   }
+
+  const isPasswordValid = await this.usersService.validatePassword(
+    user,
+    loginDto.password,
+  );
+
+  if (!isPasswordValid) {
+    throw new UnauthorizedException('Invalid credentials');
+  }
+
+  return user;
+}
 
   generateJwtToken(user: User): string {
     const payload = { sub: user.id, email: user.email, role: user.role };

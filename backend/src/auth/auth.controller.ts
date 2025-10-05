@@ -43,25 +43,27 @@ export class AuthController {
     return userWithoutPassword;
   }
 
-  @Post('login')
-  @HttpCode(HttpStatus.OK)
-  async login(
-    @Body() loginDto: LoginDto,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const user = await this.authService.login(loginDto);
-    const token = this.authService.generateJwtToken(user);
+@Post('login')
+@HttpCode(HttpStatus.OK)
+async login(
+  @Body() loginDto: LoginDto,
+  @Res({ passthrough: true }) response: Response,
+) {
+  const user = await this.authService.login(loginDto);
+  const token = this.authService.generateJwtToken(user);
 
-    response.cookie('jid', token, {
-      httpOnly: true,
-      secure: this.configService.get('NODE_ENV') === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+  response.cookie('jid', token, {
+    httpOnly: true,
+    secure: this.configService.get('NODE_ENV') === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
 
-    const { password_hash, ...userWithoutPassword } = user;
-    return userWithoutPassword;
-  }
+  const { password_hash, ...userWithoutPassword } = user;
+  return { ...userWithoutPassword, token }; // ✅ send token explicitly
+}
+
+
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)

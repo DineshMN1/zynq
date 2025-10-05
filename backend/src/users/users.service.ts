@@ -29,8 +29,13 @@ export class UsersService {
   return this.usersRepository.save(user);
 }
   async findByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { email } });
-  }
+  return this.usersRepository
+    .createQueryBuilder('user')
+    .addSelect('user.password_hash') // 👈 force load password_hash
+    .where('user.email = :email', { email })
+    .getOne();
+}
+
 
   async findById(id: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { id } });
@@ -65,4 +70,8 @@ export class UsersService {
   async updateStorageUsed(userId: string, delta: number): Promise<void> {
     await this.usersRepository.increment({ id: userId }, 'storage_used', delta);
   }
+  async count(): Promise<number> {
+  return this.usersRepository.count();
+}
+
 }

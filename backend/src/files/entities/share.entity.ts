@@ -13,7 +13,7 @@ export class Share extends BaseEntity {
   @Column()
   file_id: string;
 
-  @ManyToOne(() => File, (file) => file.shares)
+  @ManyToOne(() => File, (file) => file.shares, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'file_id' })
   file: File;
 
@@ -40,4 +40,20 @@ export class Share extends BaseEntity {
   @ManyToOne(() => User)
   @JoinColumn({ name: 'created_by' })
   creator: User;
+
+  // -------------------------------
+  //  New Public Sharing Fields
+  // -------------------------------
+
+  @Column({ default: false })
+  is_public: boolean;
+
+  @Column({ nullable: true, unique: true })
+  share_token?: string; // e.g. randomBytes(16).toString('hex')
+
+  @Column({ nullable: true, type: 'timestamp' })
+  expires_at?: Date; // optional expiry (7 days, etc.)
+
+  @Column({ nullable: true })
+  password?: string; // optional for protected links
 }

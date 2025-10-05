@@ -4,6 +4,7 @@ import VisualEditsMessenger from "../visual-edits/VisualEditsMessenger";
 import ErrorReporter from "@/components/ErrorReporter";
 import Script from "next/script";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
   title: "zynqCloud - Self-Hosted File Management",
@@ -18,7 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <ThemeProvider>
+        <AuthProvider><ThemeProvider>
           <ErrorReporter />
           <Script
             src="https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/scripts//route-messenger.js"
@@ -32,7 +33,8 @@ export default function RootLayout({
           />
           {children}
           <VisualEditsMessenger />
-        </ThemeProvider>
+        </ThemeProvider></AuthProvider>
+        
       </body>
     </html>
   );

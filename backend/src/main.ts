@@ -15,10 +15,23 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // CORS
-  app.enableCors({
-    origin: configService.get('CORS_ORIGIN'),
-    credentials: true,
-  });
+  // CORS
+const corsOrigins = (configService.get<string>('CORS_ORIGIN') || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+app.enableCors({
+  origin: (origin, callback) => {
+    if (!origin || corsOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    }
+  },
+  credentials: true,
+});
+
 
   // Global validation pipe
   app.useGlobalPipes(

@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
 import { FilesService } from './files.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -58,6 +59,7 @@ export class FilesController {
     return this.filesService.getSharedWithMe(user.id);
   }
 
+  // KEEP THIS — the correct Trash endpoint
   @Get('trash')
   async getTrashed(
     @CurrentUser() user: User,
@@ -117,4 +119,24 @@ export class FilesController {
   ) {
     return this.filesService.share(id, user.id, shareDto);
   }
+
+  // ✅ PUBLIC SHARE ROUTE (no auth)
+@Get('public/:token')
+async getPublicShare(@Param('token') token: string) {
+  return this.filesService.getPublicShare(token);
+}
+
+
+@Get('public-shares')
+getPublicShares(@CurrentUser() user: User) {
+  return this.filesService.getPublicSharesByUser(user.id);
+}
+
+@Delete('trash/empty')
+@HttpCode(HttpStatus.NO_CONTENT)
+async emptyTrash(@CurrentUser() user: User) {
+  await this.filesService.emptyTrash(user.id);
+}
+
+
 }

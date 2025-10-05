@@ -37,64 +37,157 @@ export default function InvitesPage() {
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    email: '',
-    role: 'user',
-  });
+  const [formData, setFormData] = useState({ email: '', role: 'user' });
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadInvites();
   }, []);
 
+  const isValidEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const formatDate = (iso?: string) =>
+    iso ? new Date(iso).toLocaleDateString() : '-';
+
+  const clearMessages = () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+  };
+
   const loadInvites = async () => {
     try {
       setLoading(true);
+      clearMessages();
       const data = await inviteApi.list();
       setInvites(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load invites:', error);
+      setErrorMessage(
+        error?.message || 'Failed to load invites. Check your network/auth.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
+const buildInviteLink = (invite: Invitation) => {
+  if ((invite as any).link) return (invite as any).link;
+  if (invite.token) return `${window.location.origin}/register?inviteToken=${invite.token}`;
+  if (invite.id) return `${window.location.origin}/register?inviteId=${invite.id}`;
+  return window.location.origin;
+};
+
+
   const handleCreateInvite = async () => {
+    clearMessages();
+    if (!formData.email || !isValidEmail(formData.email)) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+
     setCreating(true);
     try {
-      const invite = await inviteApi.create(formData);
-      setDialogOpen(false);
-      setFormData({ email: '', role: 'user' });
-      loadInvites();
-      
-      // Copy link to clipboard
-      if (invite.link) {
-        await navigator.clipboard.writeText(invite.link);
-        setCopiedId(invite.id);
-        setTimeout(() => setCopiedId(null), 3000);
+      const invite = await inviteApi.create({
+        email: formData.email,
+        role: formData.role,
+      });
+
+      // for debugging - check backend response shape
+      console.log('invite created:', invite);
+
+      // refresh list AFTER server successfully creates invite
+      await loadInvites();
+
+      // build link and copy
+      const link = buildInviteLink(invite);
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(link);
+          setCopiedId(invite.id);
+          setTimeout(() => setCopiedId(null), 3000);
+          setSuccessMessage('Invite created and link copied to clipboard.');
+        } else {
+          // fallback: prompt the user with the link
+          // (use window.prompt so the user can copy manually)
+          // eslint-disable-next-line no-alert
+          window.prompt('Copy invite link', link);
+          setSuccessMessage('Invite created. Please copy the link from the prompt.');
+          {successMessage && (
+  <div className="p-3 rounded bg-primary/10 text-primary text-sm max-w-3xl">
+    {successMessage}
+    {invites[0] && (invites[0] as any).link && (
+      <div className="mt-1 text-xs text-muted-foreground">
+        Link: {(invites[0] as any).link}
+      </div>
+    )}
+  </div>
+)}
+
+        }
+      } catch (writeErr) {
+        console.error('Clipboard write failed', writeErr);
+        // fallback to prompt
+        // eslint-disable-next-line no-alert
+        window.prompt('Copy invite link', link);
+        setSuccessMessage('Invite created. Please copy the link from the prompt.');
       }
-    } catch (error) {
-      console.error('Failed to create invite:', error);
+
+      // Reset form + close dialog
+      setFormData({ email: '', role: 'user' });
+      setDialogOpen(false);
+    } catch (err: any) {
+      console.error('Failed to create invite:', err);
+      // give actionable error if backend returned JSON
+      setErrorMessage(
+        err?.message ||
+          'Failed to create invite. Check that you are authenticated and your backend is reachable.'
+      );
     } finally {
       setCreating(false);
     }
   };
 
   const handleCopyLink = async (invite: Invitation) => {
-    const link = `${window.location.origin}/register?invite=${invite.token}`;
-    await navigator.clipboard.writeText(link);
-    setCopiedId(invite.id);
-    setTimeout(() => setCopiedId(null), 3000);
+    clearMessages();
+    const link = buildInviteLink(invite);
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(link);
+        setCopiedId(invite.id);
+        setTimeout(() => setCopiedId(null), 3000);
+        setSuccessMessage('Invite link copied.');
+      } else {
+        // fallback prompt
+        // eslint-disable-next-line no-alert
+        window.prompt('Copy invite link', link);
+      }
+    } catch (err) {
+      console.error('Copy failed', err);
+      // fallback prompt
+      // eslint-disable-next-line no-alert
+      window.prompt('Copy invite link', link);
+      setErrorMessage('Failed to copy link automatically — use the prompt to copy.');
+    }
   };
 
   const handleRevokeInvite = async (id: string) => {
+    clearMessages();
     if (!confirm('Are you sure you want to revoke this invite?')) return;
     try {
+      setRevokingId(id);
       await inviteApi.revoke(id);
-      loadInvites();
-    } catch (error) {
-      console.error('Failed to revoke invite:', error);
+      setSuccessMessage('Invite revoked.');
+      await loadInvites();
+    } catch (err) {
+      console.error('Failed to revoke invite:', err);
+      setErrorMessage('Failed to revoke invite. Check your network/auth.');
+    } finally {
+      setRevokingId(null);
     }
   };
 
@@ -107,21 +200,36 @@ export default function InvitesPage() {
             Manage and send invitations to new users
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+
+        <Dialog open={dialogOpen} onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) clearMessages();
+        }}>
           <DialogTrigger asChild>
             <Button>
               <Mail className="mr-2 h-4 w-4" />
               Create Invite
             </Button>
           </DialogTrigger>
+
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create Invitation</DialogTitle>
-              <DialogDescription>
-                Send an invitation link to a new user
-              </DialogDescription>
+              <DialogDescription>Send an invitation link to a new user</DialogDescription>
             </DialogHeader>
+
             <div className="space-y-4 py-4">
+              {errorMessage && (
+                <div className="p-2 rounded bg-destructive/10 text-destructive text-sm">
+                  {errorMessage}
+                </div>
+              )}
+              {successMessage && (
+                <div className="p-2 rounded bg-primary/10 text-primary text-sm">
+                  {successMessage}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -132,6 +240,7 @@ export default function InvitesPage() {
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="role">Role</Label>
                 <Select
@@ -148,8 +257,12 @@ export default function InvitesPage() {
                 </Select>
               </div>
             </div>
+
             <DialogFooter>
-              <Button onClick={handleCreateInvite} disabled={creating || !formData.email}>
+              <Button
+                onClick={handleCreateInvite}
+                disabled={creating || !isValidEmail(formData.email)}
+              >
                 {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create & Copy Link
               </Button>
@@ -157,6 +270,18 @@ export default function InvitesPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* messages above list */}
+      {errorMessage && (
+        <div className="p-3 rounded bg-destructive/10 text-destructive text-sm max-w-3xl">
+          {errorMessage}
+        </div>
+      )}
+      {successMessage && (
+        <div className="p-3 rounded bg-primary/10 text-primary text-sm max-w-3xl">
+          {successMessage}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -170,9 +295,7 @@ export default function InvitesPage() {
             </div>
             <div>
               <h3 className="font-semibold text-lg">No pending invites</h3>
-              <p className="text-sm text-muted-foreground">
-                Create an invite to get started
-              </p>
+              <p className="text-sm text-muted-foreground">Create an invite to get started</p>
             </div>
           </div>
         </Card>
@@ -212,8 +335,8 @@ export default function InvitesPage() {
                       {invite.status}
                     </Badge>
                   </TableCell>
-                  <TableCell>{new Date(invite.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell>{new Date(invite.expires_at).toLocaleDateString()}</TableCell>
+                  <TableCell>{formatDate(invite.created_at)}</TableCell>
+                  <TableCell>{formatDate(invite.expires_at)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button
@@ -229,14 +352,20 @@ export default function InvitesPage() {
                           <Copy className="h-4 w-4" />
                         )}
                       </Button>
+
                       {invite.status === 'pending' && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive"
                           onClick={() => handleRevokeInvite(invite.id)}
+                          disabled={revokingId === invite.id}
                         >
-                          <XCircle className="h-4 w-4" />
+                          {revokingId === invite.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <XCircle className="h-4 w-4" />
+                          )}
                         </Button>
                       )}
                     </div>

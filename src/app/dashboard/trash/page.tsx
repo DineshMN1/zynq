@@ -1,18 +1,26 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Trash2, MoreVertical, RotateCcw, XCircle, Loader2, File, Folder } from 'lucide-react';
-import { fileApi, type FileMetadata } from '@/lib/api';
-import { formatBytes } from '@/lib/auth';
-import { motion } from 'framer-motion';
+} from "@/components/ui/dropdown-menu";
+import {
+  Trash2,
+  MoreVertical,
+  RotateCcw,
+  XCircle,
+  Loader2,
+  File,
+  Folder,
+} from "lucide-react";
+import { fileApi, type FileMetadata } from "@/lib/api";
+import { formatBytes } from "@/lib/auth";
+import { motion } from "framer-motion";
 
 export default function TrashPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
@@ -25,13 +33,10 @@ export default function TrashPage() {
   const loadTrash = async () => {
     try {
       setLoading(true);
-      // In a real implementation, add a backend endpoint for trash
-      // For now, we'll show an empty state
-      const response = await fileApi.list({ page: 1, limit: 50 });
-      const deletedFiles = response.items.filter((f) => f.deleted_at);
-      setFiles(deletedFiles);
+      const response = await fileApi.trash({ page: 1, limit: 50 });
+      setFiles(response.items);
     } catch (error) {
-      console.error('Failed to load trash:', error);
+      console.error("Failed to load trash:", error);
     } finally {
       setLoading(false);
     }
@@ -42,16 +47,34 @@ export default function TrashPage() {
       await fileApi.restore(id);
       loadTrash();
     } catch (error) {
-      console.error('Failed to restore file:', error);
+      console.error("Failed to restore file:", error);
     }
   };
 
   const handlePermanentDelete = async (id: string) => {
+    if (!confirm("Permanently delete this file?")) return;
     try {
       await fileApi.permanentDelete(id);
-      loadTrash();
+      setFiles(files.filter((f) => f.id !== id)); // remove from UI instantly
     } catch (error) {
-      console.error('Failed to permanently delete file:', error);
+      console.error("Failed to permanently delete file:", error);
+      alert("Error deleting file permanently");
+    }
+  };
+
+  const handleEmptyTrash = async () => {
+    if (
+      !confirm(
+        "Are you sure you want to empty the trash? This cannot be undone."
+      )
+    )
+      return;
+    try {
+      await fileApi.emptyTrash();
+      setFiles([]); // clear UI
+    } catch (error) {
+      console.error("Failed to empty trash:", error);
+      alert("Error emptying trash");
     }
   };
 
@@ -66,7 +89,9 @@ export default function TrashPage() {
           </p>
         </div>
         {files.length > 0 && (
-          <Button variant="destructive">Empty Trash</Button>
+          <Button variant="destructive" onClick={handleEmptyTrash}>
+            Empty Trash
+          </Button>
         )}
       </div>
 

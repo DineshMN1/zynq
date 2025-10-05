@@ -12,10 +12,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zynqcloud"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U zynqcloud -d zynqcloud"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
+    networks:
+      - zynqcloud-network
 
   minio:
     image: minio/minio:latest
@@ -34,6 +37,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - zynqcloud-network
 
   minio-init:
     image: minio/mc:latest
@@ -49,10 +54,13 @@ services:
       mc anonymous set download myminio/zynq-cloud;
       exit 0;
       "
+    networks:
+      - zynqcloud-network
 
   backend:
     build: ./backend
     container_name: zynqcloud-backend
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,35 +68,48 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      PORT: 3000
-      DATABASE_URL: postgres://zynqcloud:supersecret_db_pass@postgres:5432/zynqcloud
+      PORT: 4000
+      DATABASE_URL: postgresql://zynqcloud:supersecret_db_pass@postgres:5432/zynqcloud
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: zynqcloud
+      DATABASE_PASSWORD: supersecret_db_pass
+      DATABASE_NAME: zynqcloud
       JWT_SECRET: supersecretjwt
-      MINIO_ENDPOINT: minio
-      MINIO_PORT: 9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_BUCKET: zynq-cloud
-      SMTP_HOST: smtp.yourmailserver.com
+      S3_REGION: us-east-1
+      S3_BUCKET: zynq-cloud
+      S3_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_FORCE_PATH_STYLE: "true"
+      SMTP_HOST: smtp.gmail.com
       SMTP_PORT: 587
-      SMTP_USER: youruser
-      SMTP_PASS: yourpassword
+      SMTP_USER: your-email@gmail.com
+      SMTP_PASS: your-app-password
+      CORS_ORIGIN: http://localhost:3001
     ports:
-      - "3000:3000"
+      - "4000:4000"
+    networks:
+      - zynqcloud-network
 
   frontend:
     build: .
     container_name: zynqcloud-frontend
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:3000
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
     ports:
       - "3001:3000"
-    command: npm run start
+    networks:
+      - zynqcloud-network
 
 volumes:
   postgres_data:
     driver: local
   minio_data:
     driver: local
+
+networks:
+  zynqcloud-network:
+    driver: bridge

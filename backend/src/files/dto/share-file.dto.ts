@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean } from 'class-validator'; // ✅ Added IsBoolean
 import { SharePermission } from '../entities/share.entity';
 
 export class ShareFileDto {
@@ -12,4 +12,8 @@ export class ShareFileDto {
 
   @IsEnum(SharePermission)
   permission: SharePermission;
+
+  @IsOptional()
+  @IsBoolean()
+  isPublic?: boolean; // ✅ Now valid
 }

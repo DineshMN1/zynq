@@ -18,9 +18,14 @@ export class User extends BaseEntity {
   @Column({ unique: true })
   email: string;
 
-  @Column()
-  @Exclude()
+  @Column({ name: 'password_hash' })
+  @Exclude({ toPlainOnly: true })
   password_hash: string;
+
+  // ✅ Add this getter alias so user.password works everywhere
+  get password(): string {
+    return this.password_hash;
+  }
 
   @Column({
     type: 'enum',
@@ -32,7 +37,7 @@ export class User extends BaseEntity {
   @Column({ type: 'bigint', default: 0 })
   storage_used: number;
 
-  @Column({ type: 'bigint', default: 10737418240 }) // 10GB
+  @Column({ type: 'bigint', default: 10737418240 })
   storage_limit: number;
 
   @OneToMany(() => File, (file) => file.owner)

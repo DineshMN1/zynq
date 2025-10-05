@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 import {
   Table,
   TableBody,
@@ -46,14 +47,18 @@ export default function UsersPage() {
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-    try {
-      await adminApi.deleteUser(id);
-      loadUsers();
-    } catch (error) {
-      console.error('Failed to delete user:', error);
-    }
-  };
+  if (!confirm('Are you sure you want to delete this user?')) return;
+  try {
+    await adminApi.deleteUser(id);
+    // ✅ Remove deleted user immediately
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+    // Optional: re-fetch for confirmation
+    setTimeout(loadUsers, 500);
+  } catch (error) {
+    console.error('Failed to delete user:', error);
+  }
+};
+
 
   return (
     <div className="p-6 space-y-6">
@@ -64,10 +69,15 @@ export default function UsersPage() {
             Manage users and their permissions
           </p>
         </div>
-        <Button>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Invite User
-        </Button>
+        import Link from "next/link";
+
+<Button asChild>
+  <Link href="/dashboard/settings/invites">
+    <UserPlus className="mr-2 h-4 w-4" />
+    Invite User
+  </Link>
+</Button>
+
       </div>
 
       {loading ? (

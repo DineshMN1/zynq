@@ -13,6 +13,8 @@ import { StorageService } from '../storage/storage.service';
 import { UsersService } from '../users/users.service';
 import { CreateFileDto } from './dto/create-file.dto';
 import { ShareFileDto } from './dto/share-file.dto';
+import { randomBytes } from 'crypto';
+
 
 @Injectable()
 export class FilesService {
@@ -26,48 +28,54 @@ export class FilesService {
   ) {}
 
   async create(
-    userId: string,
-    createFileDto: CreateFileDto,
-  ): Promise<File & { uploadUrl?: string }> {
-    const user = await this.usersService.findById(userId);
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.storage_used + createFileDto.size > user.storage_limit) {
-      throw new BadRequestException('Storage limit exceeded');
-    }
-
-    let uploadUrl: string | undefined;
-    let storagePath: string | undefined;
-
-    if (!createFileDto.isFolder) {
-      const presigned = await this.storageService.getPresignedUploadUrl(
-        createFileDto.name,
-        createFileDto.mimeType,
-      );
-      uploadUrl = presigned.uploadUrl;
-      storagePath = presigned.storagePath;
-    }
-
-    const file = this.filesRepository.create({
-      owner_id: userId,
-      name: createFileDto.name,
-      size: createFileDto.size,
-      mime_type: createFileDto.mimeType,
-      parent_id: createFileDto.parentId,
-      is_folder: createFileDto.isFolder || false,
-      storage_path: storagePath,
-    });
-
-    const savedFile = await this.filesRepository.save(file);
-
-    if (!createFileDto.isFolder) {
-      await this.usersService.updateStorageUsed(userId, createFileDto.size);
-    }
-
-    return { ...savedFile, uploadUrl };
+  userId: string,
+  createFileDto: CreateFileDto,
+): Promise<File & { uploadUrl?: string }> {
+  const user = await this.usersService.findById(userId);
+  if (!user) {
+    throw new NotFoundException('User not found');
   }
+
+  // ✅ Convert bigint to number before comparing
+  const used = Number(user.storage_used);
+  const limit = Number(user.storage_limit);
+  const size = Number(createFileDto.size);
+
+  if (used + size > limit) {
+    throw new BadRequestException('Storage limit exceeded');
+  }
+
+  let uploadUrl: string | undefined;
+  let storagePath: string | undefined;
+
+  if (!createFileDto.isFolder) {
+    const presigned = await this.storageService.getPresignedUploadUrl(
+      createFileDto.name,
+      createFileDto.mimeType,
+    );
+    uploadUrl = presigned.uploadUrl;
+    storagePath = presigned.storagePath;
+  }
+
+  const file = this.filesRepository.create({
+    owner_id: userId,
+    name: createFileDto.name,
+    size: createFileDto.size,
+    mime_type: createFileDto.mimeType,
+    parent_id: createFileDto.parentId,
+    is_folder: createFileDto.isFolder || false,
+    storage_path: storagePath,
+  });
+
+  const savedFile = await this.filesRepository.save(file);
+
+  if (!createFileDto.isFolder) {
+    await this.usersService.updateStorageUsed(userId, createFileDto.size);
+  }
+
+  return { ...savedFile, uploadUrl };
+}
+
 
   async findAll(
     userId: string,
@@ -149,23 +157,33 @@ export class FilesService {
     await this.filesRepository.delete(id);
   }
 
-  async share(
-    fileId: string,
-    userId: string,
-    shareDto: ShareFileDto,
-  ): Promise<Share> {
-    const file = await this.findById(fileId, userId);
+// import { randomBytes } from 'crypto';
+// import { Share } from './entities/share.entity';
+// import { ShareFileDto } from './dto/share-file.dto';
 
-    const share = this.sharesRepository.create({
-      file_id: file.id,
-      grantee_user_id: shareDto.toUserId,
-      grantee_email: shareDto.email,
-      permission: shareDto.permission,
-      created_by: userId,
-    });
+async share(fileId: string, userId: string, shareDto: ShareFileDto): Promise<Share & { publicLink?: string | null }> {
+  const file = await this.findById(fileId, userId);
 
-    return this.sharesRepository.save(share);
-  }
+  const share = this.sharesRepository.create({
+    file_id: file.id,
+    grantee_user_id: shareDto.toUserId,
+    grantee_email: shareDto.email,
+    permission: shareDto.permission,
+    created_by: userId,
+    is_public: shareDto.isPublic || false,
+    share_token: shareDto.isPublic ? randomBytes(16).toString('hex') : undefined,
+  });
+
+  const saved = await this.sharesRepository.save(share);
+
+  return {
+    ...saved,
+    publicLink: shareDto.isPublic
+      ? `${process.env.FRONTEND_URL || 'http://localhost:3000'}/share/${saved.share_token}`
+      : null,
+  };
+}
+
 
   async getSharedWithMe(userId: string): Promise<Share[]> {
     return this.sharesRepository.find({
@@ -202,4 +220,61 @@ export class FilesService {
 
     return this.storageService.getPresignedDownloadUrl(file.storage_path);
   }
+
+  async getFileByShareToken(token: string): Promise<File | null> {
+  const share = await this.sharesRepository.findOne({
+    where: { share_token: token, is_public: true },
+    relations: ['file'],
+  });
+  return share?.file || null;
+}
+
+async getPublicShare(token: string) {
+  const share = await this.sharesRepository.findOne({
+    where: { share_token: token, is_public: true },
+    relations: ['file', 'file.owner'],
+  });
+
+  if (!share) {
+    throw new NotFoundException('Public share not found');
+  }
+
+  const file = share.file;
+  const downloadUrl = !file.is_folder
+    ? await this.storageService.getPresignedDownloadUrl(file.storage_path)
+    : null;
+
+  return {
+    name: file.name,
+    size: file.size,
+    mimeType: file.mime_type,
+    owner: file.owner.name,
+    createdAt: file.created_at,
+    downloadUrl,
+  };
+}
+
+
+async getPublicSharesByUser(userId: string): Promise<Share[]> {
+  return this.sharesRepository.find({
+    where: { created_by: userId, is_public: true },
+    relations: ['file'],
+  });
+}
+
+
+async emptyTrash(userId: string): Promise<void> {
+  const trashedFiles = await this.filesRepository.find({
+    where: { owner_id: userId, deleted_at: Not(IsNull()) },
+  });
+
+  for (const file of trashedFiles) {
+    if (file.storage_path) {
+      await this.storageService.deleteObject(file.storage_path);
+      await this.usersService.updateStorageUsed(userId, -file.size);
+    }
+    await this.filesRepository.delete(file.id);
+  }
+}
+
 }
