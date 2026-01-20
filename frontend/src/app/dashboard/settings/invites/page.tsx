@@ -117,17 +117,6 @@ const buildInviteLink = (invite: Invitation) => {
           // eslint-disable-next-line no-alert
           window.prompt('Copy invite link', link);
           setSuccessMessage('Invite created. Please copy the link from the prompt.');
-          {successMessage && (
-  <div className="p-3 rounded bg-primary/10 text-primary text-sm max-w-3xl">
-    {successMessage}
-    {invites[0] && (invites[0] as any).link && (
-      <div className="mt-1 text-xs text-muted-foreground">
-        Link: {(invites[0] as any).link}
-      </div>
-    )}
-  </div>
-)}
-
         }
       } catch (writeErr) {
         console.error('Clipboard write failed', writeErr);

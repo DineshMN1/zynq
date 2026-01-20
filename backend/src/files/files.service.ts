@@ -157,11 +157,7 @@ export class FilesService {
     await this.filesRepository.delete(id);
   }
 
-// import { randomBytes } from 'crypto';
-// import { Share } from './entities/share.entity';
-// import { ShareFileDto } from './dto/share-file.dto';
-
-async share(fileId: string, userId: string, shareDto: ShareFileDto): Promise<Share & { publicLink?: string | null }> {
+  async share(fileId: string, userId: string, shareDto: ShareFileDto): Promise<Share & { publicLink?: string | null }> {
   const file = await this.findById(fileId, userId);
 
   const share = this.sharesRepository.create({
@@ -240,7 +236,7 @@ async getPublicShare(token: string) {
   }
 
   const file = share.file;
-  const downloadUrl = !file.is_folder
+  const downloadUrl = !file.is_folder && file.storage_path
     ? await this.storageService.getPresignedDownloadUrl(file.storage_path)
     : null;
 

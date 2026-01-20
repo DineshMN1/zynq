@@ -51,7 +51,7 @@ export class InvitesService {
       console.log('Email sending skipped — EMAIL_ENABLED is not true');
     }
   } catch (error) {
-    console.warn('Failed to send invitation email (skipped):', error.message);
+    console.warn('Failed to send invitation email (skipped):', error instanceof Error ? error.message : 'Unknown error');
   }
 
   return { ...saved, link };

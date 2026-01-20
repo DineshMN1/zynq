@@ -1,6 +1,7 @@
 {
-    "name": "app",
-    "version": "0.1.0",
+    "name": "zynqcloud-frontend",
+    "version": "1.0.0",
+    "description": "Self-hosted file management frontend with Next.js",
     "private": true,
     "scripts": {
         "dev": "next dev --turbopack",

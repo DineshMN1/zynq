@@ -1,71 +1,136 @@
-# zynqCloud Backend
+<p align="center">
+  <h1 align="center">zynqCloud Backend</h1>
+  <p align="center">
+    Production-ready REST API for self-hosted file management
+    <br />
+    <strong>NestJS</strong> · <strong>PostgreSQL</strong> · <strong>S3-Compatible Storage</strong>
+  </p>
+</p>
 
-Self-hosted file management backend built with NestJS, PostgreSQL, and S3-compatible storage.
+<p align="center">
+  <img src="https://img.shields.io/badge/NestJS-10.x-E0234E?style=flat-square&logo=nestjs" alt="NestJS" />
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/PostgreSQL-14+-336791?style=flat-square&logo=postgresql" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
+</p>
 
-## 🚀 Features
+---
 
-- **Authentication & Authorization**: JWT-based auth with HttpOnly cookies, role-based access control
-- **File Management**: Upload, download, share, delete (soft & permanent) files
-- **Folder Structure**: Hierarchical folder organization
-- **Invite System**: Admin-only user invitations with email notifications
-- **Storage Integration**: S3/MinIO for file storage, PostgreSQL for metadata
-- **User Management**: Admin panel for user management and storage quotas
-- **Settings**: User preferences (theme, telemetry)
-- **Security**: Rate limiting, CORS, bcrypt password hashing, input validation
+## Overview
 
-## 📋 Prerequisites
+The zynqCloud backend is a robust, scalable REST API built with NestJS that provides:
 
-- Node.js 20+
+- **Secure Authentication** - JWT tokens with HttpOnly cookies
+- **File Management** - Upload, download, share, organize files
+- **Role-Based Access** - Owner, Admin, User permission levels
+- **S3 Integration** - Works with AWS S3, MinIO, or any S3-compatible storage
+- **Invite System** - Controlled user registration via invitations
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        zynqCloud Backend                         │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌────────┐│
+│  │  Auth   │  │  Files  │  │ Invites │  │  Admin  │  │Settings││
+│  │ Module  │  │ Module  │  │ Module  │  │ Module  │  │ Module ││
+│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘  └───┬────┘│
+│       │            │            │            │           │      │
+│  ┌────┴────────────┴────────────┴────────────┴───────────┴────┐ │
+│  │                      Core Services                          │ │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │ │
+│  │  │  Users   │  │ Storage  │  │  Email   │  │  Guards  │    │ │
+│  │  │ Service  │  │ Service  │  │ Service  │  │ & Pipes  │    │ │
+│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐              ┌─────────────────┐           │
+│  │   PostgreSQL    │              │   S3 / MinIO    │           │
+│  │   (Metadata)    │              │   (File Blobs)  │           │
+│  └─────────────────┘              └─────────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Tech Stack
+
+| Component | Technology | Version |
+|-----------|------------|---------|
+| Framework | NestJS | 10.x |
+| Language | TypeScript | 5.x |
+| Database | PostgreSQL | 14+ |
+| ORM | TypeORM | 0.3.x |
+| Auth | Passport + JWT | - |
+| Storage | AWS SDK v3 | 3.x |
+| Validation | class-validator | 0.14.x |
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 20+ (LTS recommended)
 - PostgreSQL 14+
-- S3-compatible storage (MinIO, AWS S3, etc.)
-- SMTP server (for invitation emails)
+- S3-compatible storage (MinIO for local development)
+- pnpm, npm, or yarn
 
-## 🛠️ Installation
-
-### 1. Clone and Install Dependencies
+### Installation
 
 ```bash
+# Navigate to backend directory
 cd backend
+
+# Install dependencies
 npm install
-```
 
-### 2. Environment Configuration
-
-Copy the example environment file:
-
-```bash
+# Copy environment configuration
 cp .env.example .env
+
+# Start with Docker (PostgreSQL + MinIO)
+docker-compose up -d postgres minio minio-init
+
+# Run database migrations
+psql -h localhost -U zynqcloud -d zynqcloud -f migrations/001_initial_schema.sql
+
+# Start development server
+npm run start:dev
 ```
 
-Edit `.env` with your configuration:
+The API will be available at `http://localhost:4000/api/v1`
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file with the following configuration:
 
 ```env
-# Server
+# ═══════════════════════════════════════════════════════════════
+# SERVER CONFIGURATION
+# ═══════════════════════════════════════════════════════════════
 PORT=4000
 NODE_ENV=development
 
-# Database
-DATABASE_URL=postgresql://zynqcloud:zynqcloud_password@localhost:5432/zynqcloud
+# ═══════════════════════════════════════════════════════════════
+# DATABASE CONFIGURATION
+# ═══════════════════════════════════════════════════════════════
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
 DATABASE_USER=zynqcloud
 DATABASE_PASSWORD=zynqcloud_password
 DATABASE_NAME=zynqcloud
+DATABASE_URL=postgresql://zynqcloud:zynqcloud_password@localhost:5432/zynqcloud
 
-# JWT & Cookies
+# ═══════════════════════════════════════════════════════════════
+# AUTHENTICATION
+# ═══════════════════════════════════════════════════════════════
+# IMPORTANT: Use a strong secret in production (min 32 characters)
 JWT_SECRET=your-super-secret-jwt-key-at-least-32-characters-long
 JWT_EXPIRES_IN=7d
 COOKIE_DOMAIN=localhost
 
-# SMTP (for invitations)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-SMTP_FROM=zynqCloud <no-reply@yourdomain.com>
-
-# S3 / MinIO
+# ═══════════════════════════════════════════════════════════════
+# S3 / MINIO STORAGE
+# ═══════════════════════════════════════════════════════════════
 S3_ENDPOINT=http://localhost:9000
 S3_REGION=us-east-1
 S3_BUCKET=zynq-cloud
@@ -73,375 +138,733 @@ S3_ACCESS_KEY_ID=minioadmin
 S3_SECRET_ACCESS_KEY=minioadmin
 S3_FORCE_PATH_STYLE=true
 
-# Features
-ENABLE_TELEMETRY=false
+# ═══════════════════════════════════════════════════════════════
+# EMAIL (SMTP) - Optional
+# ═══════════════════════════════════════════════════════════════
+EMAIL_ENABLED=false
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+SMTP_FROM=zynqCloud <no-reply@yourdomain.com>
+
+# ═══════════════════════════════════════════════════════════════
+# APPLICATION SETTINGS
+# ═══════════════════════════════════════════════════════════════
+FRONTEND_URL=http://localhost:3001
+CORS_ORIGIN=http://localhost:3001
 PUBLIC_REGISTRATION=false
 INVITE_TOKEN_TTL_HOURS=72
 
-# Frontend
-FRONTEND_URL=http://localhost:3000
-
-# CORS
-CORS_ORIGIN=http://localhost:3000
-
-# Rate Limiting
+# ═══════════════════════════════════════════════════════════════
+# RATE LIMITING
+# ═══════════════════════════════════════════════════════════════
 RATE_LIMIT_TTL=60
 RATE_LIMIT_MAX=100
 ```
 
-### 3. Start Services with Docker
+### Variable Reference
 
-Start PostgreSQL and MinIO:
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `PORT` | No | `4000` | HTTP server port |
+| `NODE_ENV` | Yes | - | `development` or `production` |
+| `DATABASE_HOST` | Yes | - | PostgreSQL hostname |
+| `DATABASE_PORT` | No | `5432` | PostgreSQL port |
+| `DATABASE_USER` | Yes | - | Database username |
+| `DATABASE_PASSWORD` | Yes | - | Database password |
+| `DATABASE_NAME` | Yes | - | Database name |
+| `JWT_SECRET` | Yes | - | JWT signing secret (min 32 chars) |
+| `JWT_EXPIRES_IN` | No | `7d` | Token expiration |
+| `S3_ENDPOINT` | Yes | - | S3/MinIO endpoint URL |
+| `S3_BUCKET` | Yes | - | Storage bucket name |
+| `S3_ACCESS_KEY_ID` | Yes | - | S3 access key |
+| `S3_SECRET_ACCESS_KEY` | Yes | - | S3 secret key |
+| `S3_REGION` | No | `us-east-1` | S3 region |
+| `S3_FORCE_PATH_STYLE` | No | `false` | Required for MinIO |
+| `CORS_ORIGIN` | Yes | - | Allowed CORS origins |
+| `PUBLIC_REGISTRATION` | No | `false` | Allow signup without invite |
+| `INVITE_TOKEN_TTL_HOURS` | No | `72` | Invite link expiration |
 
-```bash
-docker-compose up -d
+## API Reference
+
+### Base URL
+
 ```
-
-This will:
-- Start PostgreSQL on port 5432
-- Start MinIO on port 9000 (API) and 9001 (Console)
-- Automatically run database migrations
-- Create the `zynq-cloud` bucket in MinIO
-
-Access MinIO Console: http://localhost:9001
-- Username: `minioadmin`
-- Password: `minioadmin`
-
-### 4. Run Database Migrations
-
-The migrations run automatically via docker-compose. For manual execution:
-
-```bash
-psql -h localhost -U zynqcloud -d zynqcloud -f migrations/001_initial_schema.sql
+http://localhost:4000/api/v1
 ```
-
-### 5. Start the Backend
-
-Development mode (with hot reload):
-
-```bash
-npm run start:dev
-```
-
-Production build:
-
-```bash
-npm run build
-npm run start:prod
-```
-
-The API will be available at: **http://localhost:4000/api/v1**
-
-## 📡 API Endpoints
 
 ### Authentication
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/auth/register` | Register new user | No |
-| POST | `/auth/login` | Login user | No |
-| POST | `/auth/logout` | Logout user | Yes |
-| GET | `/auth/me` | Get current user | Yes |
+All authenticated endpoints require a valid JWT token sent via:
+- **Cookie**: `jid` (HttpOnly, set automatically on login)
+- **Header**: `Authorization: Bearer <token>`
 
-### Files
+---
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/files` | List user's files | Yes |
-| POST | `/files` | Create file metadata & get upload URL | Yes |
-| GET | `/files/:id` | Get file metadata | Yes |
-| DELETE | `/files/:id` | Soft delete file | Yes |
-| POST | `/files/:id/restore` | Restore from trash | Yes |
-| DELETE | `/files/:id/permanent` | Permanently delete | Yes |
-| POST | `/files/:id/share` | Share file with user | Yes |
-| GET | `/files/shared` | Get files shared with me | Yes |
-| GET | `/files/trash` | Get trashed files | Yes |
-| GET | `/files/:id/download` | Get download URL | Yes |
+### Auth Endpoints
 
-### Invitations (Admin Only)
+#### Register User
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/invites` | Create invitation | Admin |
-| GET | `/invites` | List pending invites | Admin |
-| POST | `/invites/:id/revoke` | Revoke invitation | Admin |
-| POST | `/invites/accept` | Accept invitation | No |
+```http
+POST /auth/register
+Content-Type: application/json
 
-### Admin
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/admin/users` | List all users | Admin |
-| PUT | `/admin/users/:id` | Update user role/quota | Admin |
-| DELETE | `/admin/users/:id` | Delete user | Admin |
-
-### Settings
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/settings` | Get user settings | Yes |
-| PUT | `/settings` | Update user settings | Yes |
-
-## 🔐 Authentication Flow
-
-### Registration
-
-1. **With Invite Token**:
-```bash
-POST /api/v1/auth/register
 {
   "name": "John Doe",
   "email": "john@example.com",
-  "password": "securepassword",
-  "inviteToken": "uuid-token-here"
+  "password": "SecurePass123!",
+  "inviteToken": "optional-invite-token"
 }
 ```
 
-2. **Public Registration** (if enabled):
-```bash
-POST /api/v1/auth/register
+**Response** `201 Created`
+```json
 {
+  "id": "uuid",
   "name": "John Doe",
   "email": "john@example.com",
-  "password": "securepassword"
+  "role": "user",
+  "storage_used": 0,
+  "storage_limit": 5368709120,
+  "created_at": "2025-01-20T10:00:00.000Z"
 }
 ```
 
-Response: Sets `jid` HttpOnly cookie and returns user data.
+> **Note**: First registered user automatically becomes `owner`
 
-### Login
+#### Login
 
-```bash
-POST /api/v1/auth/login
+```http
+POST /auth/login
+Content-Type: application/json
+
 {
   "email": "john@example.com",
-  "password": "securepassword"
+  "password": "SecurePass123!"
 }
 ```
 
-Response: Sets `jid` HttpOnly cookie.
-
-### Logout
-
-```bash
-POST /api/v1/auth/logout
+**Response** `200 OK` - Sets `jid` HttpOnly cookie
+```json
+{
+  "id": "uuid",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "role": "user"
+}
 ```
 
-Clears the `jid` cookie.
+#### Get Current User
 
-## 📦 File Upload Flow
+```http
+GET /auth/me
+Cookie: jid=<token>
+```
 
-1. **Create file metadata**:
-```bash
-POST /api/v1/files
+**Response** `200 OK`
+```json
+{
+  "id": "uuid",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "role": "user",
+  "storage_used": 1048576,
+  "storage_limit": 5368709120
+}
+```
+
+#### Logout
+
+```http
+POST /auth/logout
+Cookie: jid=<token>
+```
+
+**Response** `200 OK` - Clears cookie
+
+---
+
+### Files Endpoints
+
+#### List Files
+
+```http
+GET /files?page=1&limit=50&search=&parentId=
+Cookie: jid=<token>
+```
+
+**Query Parameters**
+| Param | Type | Description |
+|-------|------|-------------|
+| `page` | number | Page number (default: 1) |
+| `limit` | number | Items per page (default: 50) |
+| `search` | string | Search by filename |
+| `parentId` | string | Filter by parent folder |
+
+**Response** `200 OK`
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "name": "document.pdf",
+      "mime_type": "application/pdf",
+      "size": 1048576,
+      "is_folder": false,
+      "parent_id": null,
+      "created_at": "2025-01-20T10:00:00.000Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+#### Create File / Get Upload URL
+
+```http
+POST /files
+Cookie: jid=<token>
+Content-Type: application/json
+
 {
   "name": "document.pdf",
-  "size": 1024000,
+  "size": 1048576,
   "mimeType": "application/pdf",
-  "parentId": null,  // optional
+  "parentId": null,
   "isFolder": false
 }
 ```
 
-Response:
+**Response** `201 Created`
 ```json
 {
-  "id": "file-uuid",
+  "id": "uuid",
   "name": "document.pdf",
-  "uploadUrl": "https://minio:9000/presigned-url...",
   "storage_path": "uuid-document.pdf",
-  ...
+  "uploadUrl": "https://s3.../presigned-upload-url",
+  "created_at": "2025-01-20T10:00:00.000Z"
 }
 ```
 
-2. **Upload file to presigned URL**:
+#### Upload Flow
+
+1. Call `POST /files` to get presigned upload URL
+2. `PUT` file binary to `uploadUrl`
+3. File is now stored and ready
+
 ```bash
-PUT <uploadUrl>
-Content-Type: application/pdf
-Body: <file-binary-data>
+# Step 2: Upload to presigned URL
+curl -X PUT "<uploadUrl>" \
+  -H "Content-Type: application/pdf" \
+  --data-binary @document.pdf
 ```
 
-3. **Download file**:
-```bash
-GET /api/v1/files/:id/download
+#### Download File
+
+```http
+GET /files/:id/download
+Cookie: jid=<token>
 ```
 
-Response:
+**Response** `200 OK`
 ```json
 {
-  "url": "https://minio:9000/presigned-download-url..."
+  "url": "https://s3.../presigned-download-url"
 }
 ```
 
-## 👥 Invitation System
+#### Delete File (Soft)
 
-### Admin creates invitation:
+```http
+DELETE /files/:id
+Cookie: jid=<token>
+```
 
-```bash
-POST /api/v1/invites
+**Response** `204 No Content`
+
+#### Restore from Trash
+
+```http
+POST /files/:id/restore
+Cookie: jid=<token>
+```
+
+**Response** `200 OK`
+
+#### Permanent Delete
+
+```http
+DELETE /files/:id/permanent
+Cookie: jid=<token>
+```
+
+**Response** `204 No Content`
+
+#### Share File
+
+```http
+POST /files/:id/share
+Cookie: jid=<token>
+Content-Type: application/json
+
+{
+  "email": "recipient@example.com",
+  "permission": "read",
+  "isPublic": false
+}
+```
+
+**Response** `201 Created`
+```json
+{
+  "id": "share-uuid",
+  "file_id": "file-uuid",
+  "permission": "read",
+  "publicLink": null
+}
+```
+
+#### Get Shared Files
+
+```http
+GET /files/shared
+Cookie: jid=<token>
+```
+
+#### Get Trash
+
+```http
+GET /files/trash?page=1&limit=50
+Cookie: jid=<token>
+```
+
+---
+
+### Invitations Endpoints (Admin/Owner Only)
+
+#### Create Invitation
+
+```http
+POST /invites
+Cookie: jid=<token>
+Content-Type: application/json
+
 {
   "email": "newuser@example.com",
   "role": "user"
 }
 ```
 
-Response:
+**Response** `201 Created`
 ```json
 {
-  "id": "invite-uuid",
+  "id": "uuid",
   "email": "newuser@example.com",
-  "token": "token-uuid",
-  "link": "http://localhost:3000/register?inviteToken=token-uuid",
+  "token": "invite-token",
+  "link": "http://localhost:3001/register?inviteToken=invite-token",
+  "role": "user",
   "status": "pending",
-  "expires_at": "2024-01-15T12:00:00Z"
+  "expires_at": "2025-01-23T10:00:00.000Z"
 }
 ```
 
-An email is automatically sent to the invitee with the registration link.
+#### List Invitations
 
-### New user registers with token:
-
-```bash
-POST /api/v1/auth/register
-{
-  "name": "New User",
-  "email": "newuser@example.com",
-  "password": "password123",
-  "inviteToken": "token-uuid"
-}
+```http
+GET /invites
+Cookie: jid=<token>
 ```
 
-## 🗄️ Database Schema
+#### Revoke Invitation
 
-```sql
-users (id, name, email, password_hash, role, storage_used, storage_limit, created_at, updated_at)
-invitations (id, email, token, role, inviter_id, status, created_at, expires_at)
-files (id, owner_id, name, mime_type, size, storage_path, parent_id, is_folder, deleted_at, created_at, updated_at)
-shares (id, file_id, grantee_user_id, grantee_email, permission, created_by, created_at)
-settings (id, user_id, key, value, updated_at)
+```http
+POST /invites/:id/revoke
+Cookie: jid=<token>
 ```
-
-## 🧪 Testing
-
-Run unit tests:
-```bash
-npm run test
-```
-
-Run e2e tests:
-```bash
-npm run test:e2e
-```
-
-Test coverage:
-```bash
-npm run test:cov
-```
-
-## 🐳 Docker Deployment
-
-### Build and run with Docker:
-
-```bash
-# Build image
-docker build -t zynqcloud-backend .
-
-# Run container
-docker run -p 4000:4000 --env-file .env zynqcloud-backend
-```
-
-### Full stack with docker-compose:
-
-```bash
-docker-compose up -d
-```
-
-## 📊 Monitoring
-
-The application uses NestJS built-in logging. For production:
-
-1. **Health Check Endpoint** (add to `app.controller.ts`):
-```typescript
-@Get('health')
-health() {
-  return { status: 'ok', timestamp: new Date().toISOString() };
-}
-```
-
-2. **Prometheus Metrics**: Install `@willsoto/nestjs-prometheus`
-
-3. **Error Tracking**: Integrate Sentry
-
-## 🔒 Security Best Practices
-
-- ✅ JWT tokens in HttpOnly cookies (XSS protection)
-- ✅ Bcrypt password hashing (cost: 12)
-- ✅ Rate limiting on all endpoints
-- ✅ Input validation with class-validator
-- ✅ CORS configured for frontend origin
-- ✅ SQL injection protection via TypeORM
-- ✅ Role-based access control
-
-### Production Checklist:
-
-- [ ] Set `NODE_ENV=production`
-- [ ] Use strong `JWT_SECRET` (32+ characters)
-- [ ] Enable HTTPS and set `secure: true` on cookies
-- [ ] Configure firewall rules
-- [ ] Set up database backups
-- [ ] Rotate secrets regularly
-- [ ] Enable CSP headers
-- [ ] Monitor logs and errors
-- [ ] Set up S3 bucket lifecycle policies
-
-## 📝 Environment Variables Reference
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| PORT | No | 4000 | Server port |
-| NODE_ENV | Yes | - | Environment (development/production) |
-| DATABASE_URL | Yes | - | PostgreSQL connection string |
-| JWT_SECRET | Yes | - | JWT signing secret (32+ chars) |
-| SMTP_HOST | Yes | - | SMTP server hostname |
-| S3_ENDPOINT | Yes | - | S3 endpoint URL |
-| S3_BUCKET | Yes | - | S3 bucket name |
-| FRONTEND_URL | Yes | - | Frontend URL for invite links |
-| PUBLIC_REGISTRATION | No | false | Allow registration without invite |
-| INVITE_TOKEN_TTL_HOURS | No | 72 | Invite expiration (hours) |
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🆘 Troubleshooting
-
-### Database connection fails
-- Ensure PostgreSQL is running: `docker-compose ps`
-- Check DATABASE_URL in .env
-- Verify credentials match docker-compose.yml
-
-### MinIO upload fails
-- Check MinIO is running: `docker-compose ps`
-- Verify bucket exists: http://localhost:9001
-- Ensure S3_FORCE_PATH_STYLE=true for local MinIO
-
-### Email invitations not sending
-- Verify SMTP credentials
-- For Gmail, use App Password (not account password)
-- Check SMTP_PORT and SMTP_SECURE settings
-
-### CORS errors
-- Ensure CORS_ORIGIN matches frontend URL exactly
-- Check frontend is using credentials: 'include'
 
 ---
 
-Built with ❤️ using NestJS, TypeORM, and PostgreSQL
+### Admin Endpoints (Admin/Owner Only)
+
+#### List Users
+
+```http
+GET /admin/users?page=1&limit=50
+Cookie: jid=<token>
+```
+
+**Response** `200 OK`
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "user",
+      "storage_used": 1048576,
+      "storage_limit": 5368709120,
+      "created_at": "2025-01-20T10:00:00.000Z"
+    }
+  ],
+  "meta": {
+    "total": 1,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+#### Update User
+
+```http
+PUT /admin/users/:id
+Cookie: jid=<token>
+Content-Type: application/json
+
+{
+  "role": "admin",
+  "storage_limit": 10737418240
+}
+```
+
+#### Delete User
+
+```http
+DELETE /admin/users/:id
+Cookie: jid=<token>
+```
+
+---
+
+### Settings Endpoints
+
+#### Get Settings
+
+```http
+GET /settings
+Cookie: jid=<token>
+```
+
+#### Update Settings
+
+```http
+PUT /settings
+Cookie: jid=<token>
+Content-Type: application/json
+
+{
+  "theme": "dark",
+  "notifications": true
+}
+```
+
+## Database Schema
+
+```sql
+-- Users table
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) DEFAULT 'user',
+    storage_used BIGINT DEFAULT 0,
+    storage_limit BIGINT DEFAULT 5368709120,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Files table
+CREATE TABLE files (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    mime_type VARCHAR(255),
+    size BIGINT DEFAULT 0,
+    storage_path VARCHAR(500),
+    parent_id UUID REFERENCES files(id) ON DELETE CASCADE,
+    is_folder BOOLEAN DEFAULT false,
+    deleted_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Invitations table
+CREATE TABLE invitations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    role VARCHAR(50) DEFAULT 'user',
+    inviter_id UUID REFERENCES users(id),
+    status VARCHAR(50) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP NOT NULL
+);
+
+-- Shares table
+CREATE TABLE shares (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_id UUID REFERENCES files(id) ON DELETE CASCADE,
+    grantee_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    grantee_email VARCHAR(255),
+    permission VARCHAR(50) DEFAULT 'read',
+    is_public BOOLEAN DEFAULT false,
+    share_token VARCHAR(255),
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Settings table
+CREATE TABLE settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    key VARCHAR(255) NOT NULL,
+    value JSONB,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+## User Roles
+
+| Role | Permissions |
+|------|-------------|
+| `owner` | Full system access, first registered user |
+| `admin` | Manage users, invites, view all files |
+| `user` | Manage own files, access shared files |
+
+## Development
+
+### Available Scripts
+
+```bash
+# Development with hot reload
+npm run start:dev
+
+# Production build
+npm run build
+
+# Start production server
+npm run start:prod
+
+# Run linter
+npm run lint
+
+# Format code
+npm run format
+
+# Run unit tests
+npm run test
+
+# Run tests with coverage
+npm run test:cov
+
+# Run e2e tests
+npm run test:e2e
+```
+
+### Project Structure
+
+```
+backend/
+├── src/
+│   ├── auth/                 # Authentication module
+│   │   ├── decorators/       # @CurrentUser, @Roles
+│   │   ├── dto/              # Login, Register DTOs
+│   │   ├── guards/           # JWT, Roles guards
+│   │   ├── strategies/       # Passport JWT strategy
+│   │   ├── auth.controller.ts
+│   │   ├── auth.service.ts
+│   │   └── auth.module.ts
+│   ├── files/                # File management module
+│   │   ├── dto/
+│   │   ├── entities/
+│   │   ├── files.controller.ts
+│   │   ├── files.service.ts
+│   │   └── files.module.ts
+│   ├── users/                # User management
+│   ├── invites/              # Invitation system
+│   ├── admin/                # Admin operations
+│   ├── settings/             # User settings
+│   ├── storage/              # S3 integration
+│   ├── email/                # SMTP service
+│   ├── common/               # Shared utilities
+│   ├── app.module.ts         # Root module
+│   └── main.ts               # Entry point
+├── migrations/               # SQL migrations
+├── test/                     # Test files
+├── Dockerfile
+├── .env.example
+└── package.json
+```
+
+## Production Deployment
+
+### Docker
+
+```bash
+# Build production image
+docker build -t zynqcloud-backend .
+
+# Run container
+docker run -d \
+  --name zynqcloud-backend \
+  -p 4000:4000 \
+  --env-file .env.production \
+  zynqcloud-backend
+```
+
+### Docker Compose
+
+```yaml
+backend:
+  build: ./backend
+  environment:
+    NODE_ENV: production
+    DATABASE_HOST: postgres
+    JWT_SECRET: ${JWT_SECRET}
+    S3_ENDPOINT: http://minio:9000
+  depends_on:
+    - postgres
+    - minio
+  restart: unless-stopped
+```
+
+### Production Checklist
+
+#### Security
+
+- [ ] Set `NODE_ENV=production`
+- [ ] Use strong `JWT_SECRET` (32+ characters, randomly generated)
+- [ ] Enable HTTPS (set `secure: true` on cookies)
+- [ ] Configure proper CORS origins
+- [ ] Enable rate limiting
+- [ ] Use strong database passwords
+- [ ] Rotate secrets regularly
+
+#### Infrastructure
+
+- [ ] Set up database backups
+- [ ] Configure PostgreSQL connection pooling
+- [ ] Set up S3 bucket lifecycle policies
+- [ ] Configure firewall rules
+- [ ] Set up monitoring and alerting
+- [ ] Configure log aggregation
+
+#### Performance
+
+- [ ] Enable gzip compression
+- [ ] Configure proper cache headers
+- [ ] Set up CDN for static assets
+- [ ] Monitor memory usage
+- [ ] Configure connection limits
+
+### Health Check
+
+Add a health endpoint for load balancers:
+
+```bash
+curl http://localhost:4000/api/v1/health
+```
+
+Expected response:
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-01-20T10:00:00.000Z",
+  "uptime": 3600
+}
+```
+
+## Security
+
+### Implemented Security Measures
+
+| Feature | Implementation |
+|---------|---------------|
+| Password Hashing | bcrypt (cost factor: 12) |
+| Token Storage | HttpOnly cookies (XSS protection) |
+| CSRF Protection | SameSite cookie policy |
+| SQL Injection | TypeORM parameterized queries |
+| Input Validation | class-validator decorators |
+| Rate Limiting | @nestjs/throttler |
+| CORS | Configurable allowed origins |
+| Role-Based Access | Custom guards |
+
+### Security Headers (Recommended)
+
+Configure in reverse proxy (Nginx/Caddy):
+
+```nginx
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-XSS-Protection "1; mode=block" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Content-Security-Policy "default-src 'self'" always;
+```
+
+## Troubleshooting
+
+### Database Connection Failed
+
+```bash
+# Check PostgreSQL status
+docker-compose ps postgres
+
+# View logs
+docker-compose logs postgres
+
+# Test connection
+psql -h localhost -U zynqcloud -d zynqcloud -c "SELECT 1"
+```
+
+### S3/MinIO Upload Failed
+
+```bash
+# Check MinIO status
+docker-compose ps minio
+
+# Verify bucket exists
+docker exec zynqcloud-minio mc ls myminio/
+
+# Check credentials
+curl http://localhost:9000/minio/health/live
+```
+
+### JWT/Auth Issues
+
+- Verify `JWT_SECRET` is consistent across restarts
+- Check cookie domain matches your setup
+- Ensure frontend sends `credentials: 'include'`
+
+### CORS Errors
+
+- Verify `CORS_ORIGIN` exactly matches frontend URL
+- Include protocol (`http://` or `https://`)
+- Check for trailing slashes
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guidelines.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
+
+---
+
+<p align="center">
+  <strong>zynqCloud Backend</strong> - Built with NestJS for production-grade performance
+  <br />
+  <a href="https://github.com/DineshMN1/zynq">GitHub</a> ·
+  <a href="https://github.com/DineshMN1/zynq/issues">Report Bug</a> ·
+  <a href="https://github.com/DineshMN1/zynq/discussions">Discussions</a>
+</p>

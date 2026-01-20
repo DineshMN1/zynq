@@ -1,280 +1,484 @@
+<div align="center">
+
 # zynqCloud
 
-A self-hosted file management platform built with Next.js, TypeScript, and Tailwind CSS. zynqCloud provides secure, fast, and completely self-hosted file storage with role-based access control, team collaboration features, and S3-compatible storage integration.
+### Self-Hosted File Management Platform
 
-![zynqCloud](https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=1200&h=400&fit=crop)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-10-E0234E?style=for-the-badge&logo=nestjs)](https://nestjs.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript)](https://typescriptlang.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker)](https://docker.com/)
 
-## ✨ Features
+**Take control of your files. Host your own cloud.**
 
-- 🔐 **Secure Authentication** - JWT-based auth with HttpOnly cookies
-- 👥 **Role-Based Access** - Admin, user, and owner roles with fine-grained permissions
-- 📧 **Invite System** - Admin-controlled user invitations with copy-to-clipboard links
-- 📁 **File Management** - Upload, organize, share, and delete files with metadata storage
-- 🗑️ **Trash System** - Soft delete with restore and permanent delete options
-- 🤝 **Team Collaboration** - Share files with read/write permissions
-- 🎨 **Dark/Light Theme** - Elegant purple-accented design with theme toggle
-- 📊 **Storage Quotas** - Per-user storage limits and usage tracking
-- 🔒 **Privacy First** - Optional telemetry with user consent
-- 📱 **Responsive Design** - Mobile-friendly interface with collapsible sidebar
-- ⚡ **Fast & Modern** - Built on Next.js 15 with App Router
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 20+ or Bun
-- Backend API running (see backend setup instructions)
-- PostgreSQL database
-- S3-compatible storage (AWS S3, MinIO, etc.)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd zynqcloud-frontend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   # or
-   bun install
-   ```
-
-3. **Configure environment variables**
-   ```bash
-   cp .env.local.example .env.local
-   ```
-   
-   Edit `.env.local` and set your backend API URL:
-   ```env
-   NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
-   ```
-
-4. **Run the development server**
-   ```bash
-   npm run dev
-   # or
-   bun dev
-   ```
-
-5. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-## 📁 Project Structure
-
-```
-zynqcloud-frontend/
-├── src/
-│   ├── app/                    # Next.js App Router pages
-│   │   ├── dashboard/          # Protected dashboard routes
-│   │   │   ├── files/          # My Files page
-│   │   │   ├── shared/         # Shared files page
-│   │   │   ├── trash/          # Trash page
-│   │   │   ├── profile/        # User profile
-│   │   │   ├── settings/       # Settings pages
-│   │   │   │   ├── users/      # Admin: User management
-│   │   │   │   └── invites/    # Admin: Invite management
-│   │   │   └── layout.tsx      # Dashboard layout with auth
-│   │   ├── login/              # Login page
-│   │   ├── register/           # Registration page
-│   │   ├── layout.tsx          # Root layout
-│   │   ├── page.tsx            # Landing page
-│   │   └── globals.css         # Global styles with purple theme
-│   ├── components/             # React components
-│   │   ├── ui/                 # shadcn/ui components
-│   │   ├── Sidebar.tsx         # Dashboard sidebar
-│   │   ├── Header.tsx          # Dashboard header
-│   │   └── ThemeProvider.tsx   # Theme context provider
-│   ├── lib/
-│   │   ├── api.ts              # API client with typed endpoints
-│   │   ├── auth.ts             # Auth utilities
-│   │   └── utils.ts            # Utility functions
-│   └── hooks/
-│       └── use-theme.ts        # Theme hook
-├── public/                     # Static assets
-├── .env.local.example          # Environment variables template
-├── package.json
-├── tailwind.config.ts
-└── tsconfig.json
-```
-
-## 🎨 Design System
-
-### Colors
-
-- **Primary**: Purple (#7c3aed / oklch(0.591 0.210 293.655))
-- **Background**: Dynamic based on theme
-- **Foreground**: Dynamic based on theme
-- **Accent**: Purple tones for interactive elements
-
-### Components
-
-Built with shadcn/ui for consistency and accessibility:
-- Buttons, Cards, Badges
-- Dropdowns, Dialogs, Sheets
-- Tables, Forms, Inputs
-- Toasts, Tooltips, Popovers
-
-## 🔌 API Integration
-
-The frontend communicates with the backend via REST API. All endpoints are typed and wrapped in `src/lib/api.ts`:
-
-### Authentication
-- `POST /auth/register` - User registration
-- `POST /auth/login` - User login
-- `POST /auth/logout` - User logout
-- `GET /auth/me` - Get current user
-
-### Files
-- `GET /files` - List files (paginated)
-- `POST /files` - Create file metadata / get upload URL
-- `GET /files/:id` - Get file metadata
-- `DELETE /files/:id` - Soft delete file
-- `POST /files/:id/restore` - Restore from trash
-- `DELETE /files/:id/permanent` - Permanently delete
-- `POST /files/:id/share` - Share file
-- `GET /files/shared` - Get shared files
-
-### Admin
-- `GET /admin/users` - List all users
-- `PUT /admin/users/:id` - Update user
-- `DELETE /admin/users/:id` - Delete user
-- `POST /invites` - Create invite
-- `GET /invites` - List invites
-- `POST /invites/:id/revoke` - Revoke invite
-
-### Settings
-- `GET /settings` - Get settings
-- `PUT /settings` - Update settings
-
-## 🔒 Authentication Flow
-
-1. **Login**: User enters credentials → Backend validates → JWT stored in HttpOnly cookie
-2. **Protected Routes**: Dashboard layout checks auth on mount → Redirects to login if not authenticated
-3. **Logout**: Clears cookie → Redirects to login
-
-## 🎭 User Roles
-
-- **User**: Can manage their own files, view shared files
-- **Admin**: All user permissions + manage users and invites
-- **Owner**: Full system access
-
-## 📧 Invite System
-
-1. Admin creates invite with email and role
-2. Backend generates unique token and sends email
-3. Frontend provides "Copy Link" button for manual sharing
-4. Invitee registers using invite link with token parameter
-5. Token validates and assigns role on registration
-
-## 🗑️ File Deletion
-
-- **Soft Delete**: Moves to trash, restorable for 30 days
-- **Permanent Delete**: Admin or owner can permanently delete
-- **Auto-cleanup**: Backend cron job removes files after 30 days (configurable)
-
-## 🎨 Theming
-
-Toggle between light and dark themes:
-- Persisted in localStorage
-- Synced with backend settings (optional)
-- Purple accent consistent across themes
-
-## 🔧 Development
-
-### Available Scripts
-
-```bash
-npm run dev       # Start development server
-npm run build     # Build for production
-npm run start     # Start production server
-npm run lint      # Run ESLint
-npm run type-check # Run TypeScript type checking
-```
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_API_URL` | Backend API base URL | `http://localhost:4000/api/v1` |
-
-## 📦 Production Deployment
-
-1. **Build the application**
-   ```bash
-   npm run build
-   ```
-
-2. **Set production environment variables**
-   ```env
-   NEXT_PUBLIC_API_URL=https://api.yourdomain.com/api/v1
-   ```
-
-3. **Deploy to your hosting provider**
-   - Vercel, Netlify, or any Node.js hosting
-   - Ensure API URL is accessible from your domain
-   - Configure CORS on backend to allow your domain
-
-4. **SSL/HTTPS**
-   - Required for production
-   - Ensures secure cookies work properly
-
-## 🛡️ Security Considerations
-
-- JWT stored in HttpOnly cookies (not accessible via JavaScript)
-- CSRF protection via SameSite cookie policy
-- All API requests include credentials
-- Input validation on forms
-- Rate limiting (backend responsibility)
-- File type and size restrictions
-
-## 🧪 Testing
-
-```bash
-# Run unit tests (coming soon)
-npm run test
-
-# Run e2e tests (coming soon)
-npm run test:e2e
-```
-
-## 📝 Backend Integration
-
-This frontend requires the zynqCloud backend. Follow the backend prompt provided in your documentation to set up:
-
-- PostgreSQL database with migrations
-- S3/MinIO for file storage
-- SMTP for email invitations
-- JWT authentication
-- API endpoints matching the spec
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## 📄 License
-
-[Your License Here]
-
-## 🙏 Acknowledgments
-
-- Built with [Next.js](https://nextjs.org/)
-- UI components from [shadcn/ui](https://ui.shadcn.com/)
-- Icons from [Lucide](https://lucide.dev/)
-- Animations with [Framer Motion](https://www.framer.com/motion/)
-
-## 📧 Support
-
-For issues or questions:
-- Open an issue on GitHub
-- Contact: [your-email@example.com]
+[Quick Start](#quick-start) · [Installation](docs/INSTALLATION.md) · [API Docs](backend/README.md) · [Contributing](CONTRIBUTING.md)
 
 ---
 
-**zynqCloud** - Self-hosted file management, built for privacy and control.
+</div>
+
+## Why zynqCloud?
+
+In an era of data breaches and privacy concerns, zynqCloud gives you **complete ownership** of your files. No third-party access, no subscriptions, no compromises.
+
+<table>
+<tr>
+<td width="50%">
+
+### For Individuals
+- Store personal documents securely
+- Access files from anywhere
+- Share with family & friends
+- No monthly fees
+
+</td>
+<td width="50%">
+
+### For Teams
+- Collaborate on projects
+- Role-based access control
+- Invite-only registration
+- Centralized file management
+
+</td>
+</tr>
+</table>
+
+## Features
+
+<table>
+<tr>
+<td align="center" width="25%">
+<br />
+<img src="https://api.iconify.design/mdi:shield-lock.svg?color=%237c3aed" width="48" height="48" alt="Security" />
+<br /><br />
+<b>Secure by Default</b>
+<br />
+<sub>JWT auth, bcrypt hashing, HttpOnly cookies</sub>
+</td>
+<td align="center" width="25%">
+<br />
+<img src="https://api.iconify.design/mdi:folder-multiple.svg?color=%237c3aed" width="48" height="48" alt="Files" />
+<br /><br />
+<b>File Management</b>
+<br />
+<sub>Upload, organize, share, and recover files</sub>
+</td>
+<td align="center" width="25%">
+<br />
+<img src="https://api.iconify.design/mdi:account-group.svg?color=%237c3aed" width="48" height="48" alt="Team" />
+<br /><br />
+<b>Team Collaboration</b>
+<br />
+<sub>Share files with granular permissions</sub>
+</td>
+<td align="center" width="25%">
+<br />
+<img src="https://api.iconify.design/mdi:cloud-sync.svg?color=%237c3aed" width="48" height="48" alt="Storage" />
+<br /><br />
+<b>S3 Compatible</b>
+<br />
+<sub>AWS S3, MinIO, or any S3 storage</sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="25%">
+<br />
+<img src="https://api.iconify.design/mdi:account-key.svg?color=%237c3aed" width="48" height="48" alt="Roles" />
+<br /><br />
+<b>Role-Based Access</b>
+<br />
+<sub>Owner, Admin, User permission levels</sub>
+</td>
+<td align="center" width="25%">
+<br />
+<img src="https://api.iconify.design/mdi:email-fast.svg?color=%237c3aed" width="48" height="48" alt="Invites" />
+<br /><br />
+<b>Invite System</b>
+<br />
+<sub>Controlled user registration</sub>
+</td>
+<td align="center" width="25%">
+<br />
+<img src="https://api.iconify.design/mdi:delete-restore.svg?color=%237c3aed" width="48" height="48" alt="Trash" />
+<br /><br />
+<b>Trash & Recovery</b>
+<br />
+<sub>Soft delete with restore option</sub>
+</td>
+<td align="center" width="25%">
+<br />
+<img src="https://api.iconify.design/mdi:palette.svg?color=%237c3aed" width="48" height="48" alt="Theme" />
+<br /><br />
+<b>Dark/Light Theme</b>
+<br />
+<sub>Beautiful purple-accented UI</sub>
+</td>
+</tr>
+</table>
+
+## Tech Stack
+
+<table>
+<tr>
+<th align="left">Frontend</th>
+<th align="left">Backend</th>
+<th align="left">Infrastructure</th>
+</tr>
+<tr>
+<td valign="top">
+
+- **Next.js 15** - React Framework
+- **React 19** - UI Library
+- **TypeScript** - Type Safety
+- **Tailwind CSS** - Styling
+- **shadcn/ui** - Components
+- **Framer Motion** - Animations
+
+</td>
+<td valign="top">
+
+- **NestJS 10** - Node.js Framework
+- **TypeORM** - Database ORM
+- **PostgreSQL** - Database
+- **Passport.js** - Authentication
+- **AWS SDK** - S3 Integration
+- **Nodemailer** - Email Service
+
+</td>
+<td valign="top">
+
+- **Docker** - Containerization
+- **Docker Compose** - Orchestration
+- **MinIO** - S3 Storage
+- **Nginx** - Reverse Proxy
+- **GitHub Actions** - CI/CD
+
+</td>
+</tr>
+</table>
+
+## Quick Start
+
+### One-Command Deploy
+
+```bash
+git clone https://github.com/DineshMN1/zynq.git && cd zynq && docker-compose up -d
+```
+
+That's it! Access your cloud at:
+
+| Service | URL | Default Credentials |
+|---------|-----|---------------------|
+| **Frontend** | http://localhost:3001 | Register first user (becomes Owner) |
+| **Backend API** | http://localhost:4000 | - |
+| **MinIO Console** | http://localhost:9001 | `minioadmin` / `minioadmin` |
+
+### Manual Setup
+
+<details>
+<summary><b>Click to expand manual installation steps</b></summary>
+
+#### Prerequisites
+- Node.js 20+
+- PostgreSQL 14+
+- MinIO or S3-compatible storage
+
+#### Backend Setup
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run start:dev
+```
+
+#### Frontend Setup
+```bash
+cd frontend
+cp .env.local.example .env.local
+npm install
+npm run dev
+```
+
+See [Installation Guide](docs/INSTALLATION.md) for detailed instructions.
+
+</details>
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              zynqCloud                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│    ┌──────────────────┐              ┌──────────────────┐               │
+│    │                  │   REST API   │                  │               │
+│    │  Next.js Frontend│◄────────────►│  NestJS Backend  │               │
+│    │   (Port 3001)    │              │   (Port 4000)    │               │
+│    │                  │              │                  │               │
+│    └──────────────────┘              └────────┬─────────┘               │
+│                                               │                          │
+│                         ┌─────────────────────┼─────────────────────┐   │
+│                         │                     │                     │   │
+│                         ▼                     ▼                     ▼   │
+│               ┌──────────────┐      ┌──────────────┐      ┌───────────┐│
+│               │  PostgreSQL  │      │    MinIO     │      │   SMTP    ││
+│               │  (Metadata)  │      │ (File Blobs) │      │  (Email)  ││
+│               │  Port 5432   │      │  Port 9000   │      │           ││
+│               └──────────────┘      └──────────────┘      └───────────┘│
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Project Structure
+
+```
+zynq/
+├── frontend/                 # Next.js 15 Application
+│   ├── src/
+│   │   ├── app/             # App Router pages
+│   │   ├── components/      # React components (40+ UI components)
+│   │   ├── context/         # Auth context provider
+│   │   ├── hooks/           # Custom React hooks
+│   │   └── lib/             # API client & utilities
+│   └── Dockerfile
+│
+├── backend/                  # NestJS API Server
+│   ├── src/
+│   │   ├── auth/            # JWT authentication
+│   │   ├── files/           # File CRUD & sharing
+│   │   ├── users/           # User management
+│   │   ├── invites/         # Invitation system
+│   │   ├── admin/           # Admin operations
+│   │   ├── storage/         # S3 integration
+│   │   └── email/           # SMTP service
+│   ├── migrations/          # Database schema
+│   └── Dockerfile
+│
+├── docs/                     # Documentation
+├── .github/                  # CI/CD workflows
+├── docker-compose.yml        # Container orchestration
+└── README.md
+```
+
+## Configuration
+
+### Environment Variables
+
+<details>
+<summary><b>Frontend Environment</b></summary>
+
+```env
+# frontend/.env.local
+NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+```
+
+</details>
+
+<details>
+<summary><b>Backend Environment</b></summary>
+
+```env
+# backend/.env
+
+# Server
+PORT=4000
+NODE_ENV=production
+
+# Database
+DATABASE_HOST=postgres
+DATABASE_PORT=5432
+DATABASE_USER=zynqcloud
+DATABASE_PASSWORD=secure_password_here
+DATABASE_NAME=zynqcloud
+
+# Authentication (IMPORTANT: Use strong secret)
+JWT_SECRET=your-super-secret-key-at-least-32-characters
+
+# S3 Storage
+S3_ENDPOINT=http://minio:9000
+S3_BUCKET=zynq-cloud
+S3_ACCESS_KEY_ID=minioadmin
+S3_SECRET_ACCESS_KEY=minioadmin
+S3_REGION=us-east-1
+S3_FORCE_PATH_STYLE=true
+
+# CORS
+CORS_ORIGIN=http://localhost:3001
+
+# Email (Optional)
+EMAIL_ENABLED=false
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+```
+
+</details>
+
+## User Roles & Permissions
+
+| Role | Files | Users | Invites | Settings |
+|:----:|:-----:|:-----:|:-------:|:--------:|
+| **Owner** | Full Access | Manage All | Create/Revoke | All Settings |
+| **Admin** | Full Access | View All | Create/Revoke | Limited |
+| **User** | Own Files | - | - | Own Settings |
+
+> **First Registration**: The first user to register automatically becomes the **Owner**
+
+## API Overview
+
+Full API documentation available in [backend/README.md](backend/README.md)
+
+```
+Authentication
+  POST   /api/v1/auth/register     Create account
+  POST   /api/v1/auth/login        Login
+  POST   /api/v1/auth/logout       Logout
+  GET    /api/v1/auth/me           Current user
+
+Files
+  GET    /api/v1/files             List files
+  POST   /api/v1/files             Create/Upload file
+  GET    /api/v1/files/:id         Get file details
+  DELETE /api/v1/files/:id         Soft delete
+  POST   /api/v1/files/:id/share   Share file
+
+Admin (Requires Admin/Owner role)
+  GET    /api/v1/admin/users       List all users
+  PUT    /api/v1/admin/users/:id   Update user
+  DELETE /api/v1/admin/users/:id   Delete user
+  POST   /api/v1/invites           Create invitation
+```
+
+## Security
+
+<table>
+<tr>
+<td width="50%">
+
+### Implemented
+- JWT with HttpOnly cookies
+- Bcrypt password hashing (cost: 12)
+- Role-based access control
+- Input validation (class-validator)
+- SQL injection protection (TypeORM)
+- Rate limiting
+- CORS protection
+
+</td>
+<td width="50%">
+
+### Production Checklist
+- [ ] Use HTTPS everywhere
+- [ ] Set strong JWT_SECRET (32+ chars)
+- [ ] Change default passwords
+- [ ] Configure firewall rules
+- [ ] Enable security headers
+- [ ] Set up monitoring
+- [ ] Regular backups
+
+</td>
+</tr>
+</table>
+
+> **Security Issues**: Please report security vulnerabilities to **mndinesh674@gmail.com** instead of opening a public issue.
+
+## Contributing
+
+We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for details.
+
+```bash
+# Fork and clone the repo
+git clone https://github.com/YOUR_USERNAME/zynq.git
+
+# Create a feature branch
+git checkout -b feature/amazing-feature
+
+# Make your changes and commit
+git commit -m "feat: add amazing feature"
+
+# Push and create a Pull Request
+git push origin feature/amazing-feature
+```
+
+## Roadmap
+
+- [ ] Mobile app (React Native)
+- [ ] File versioning
+- [ ] End-to-end encryption
+- [ ] WebDAV support
+- [ ] Thumbnail previews
+- [ ] Full-text search
+- [ ] Two-factor authentication
+- [ ] Audit logs
+
+## Support
+
+<table>
+<tr>
+<td align="center">
+<a href="https://github.com/DineshMN1/zynq/issues">
+<img src="https://api.iconify.design/mdi:bug.svg?color=%237c3aed" width="32" height="32" /><br />
+<b>Report Bug</b>
+</a>
+</td>
+<td align="center">
+<a href="https://github.com/DineshMN1/zynq/issues">
+<img src="https://api.iconify.design/mdi:lightbulb.svg?color=%237c3aed" width="32" height="32" /><br />
+<b>Request Feature</b>
+</a>
+</td>
+<td align="center">
+<a href="https://github.com/DineshMN1/zynq/discussions">
+<img src="https://api.iconify.design/mdi:forum.svg?color=%237c3aed" width="32" height="32" /><br />
+<b>Discussions</b>
+</a>
+</td>
+<td align="center">
+<a href="docs/INSTALLATION.md">
+<img src="https://api.iconify.design/mdi:book-open-variant.svg?color=%237c3aed" width="32" height="32" /><br />
+<b>Documentation</b>
+</a>
+</td>
+</tr>
+</table>
+
+## Acknowledgments
+
+Built with these amazing open-source projects:
+
+<p align="center">
+<a href="https://nextjs.org"><img src="https://img.shields.io/badge/Next.js-black?style=flat-square&logo=next.js" alt="Next.js" /></a>
+<a href="https://nestjs.com"><img src="https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white" alt="NestJS" /></a>
+<a href="https://tailwindcss.com"><img src="https://img.shields.io/badge/Tailwind-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white" alt="Tailwind" /></a>
+<a href="https://ui.shadcn.com"><img src="https://img.shields.io/badge/shadcn/ui-black?style=flat-square" alt="shadcn/ui" /></a>
+<a href="https://typeorm.io"><img src="https://img.shields.io/badge/TypeORM-FE0803?style=flat-square" alt="TypeORM" /></a>
+<a href="https://min.io"><img src="https://img.shields.io/badge/MinIO-C72E49?style=flat-square&logo=minio&logoColor=white" alt="MinIO" /></a>
+<a href="https://postgresql.org"><img src="https://img.shields.io/badge/PostgreSQL-336791?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL" /></a>
+<a href="https://docker.com"><img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker" /></a>
+</p>
+
+## License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+
+**[zynqCloud](https://github.com/DineshMN1/zynq)** - Your files, your cloud, your control.
+
+Made with passion for privacy and self-hosting
+
+<br />
+
+<a href="https://github.com/DineshMN1/zynq/stargazers">
+<img src="https://img.shields.io/github/stars/DineshMN1/zynq?style=social" alt="Stars" />
+</a>
+<a href="https://github.com/DineshMN1/zynq/network/members">
+<img src="https://img.shields.io/github/forks/DineshMN1/zynq?style=social" alt="Forks" />
+</a>
+
+</div>

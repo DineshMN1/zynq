@@ -69,14 +69,12 @@ export default function UsersPage() {
             Manage users and their permissions
           </p>
         </div>
-        import Link from "next/link";
-
-<Button asChild>
-  <Link href="/dashboard/settings/invites">
-    <UserPlus className="mr-2 h-4 w-4" />
-    Invite User
-  </Link>
-</Button>
+        <Button asChild>
+          <Link href="/dashboard/settings/invites">
+            <UserPlus className="mr-2 h-4 w-4" />
+            Invite User
+          </Link>
+        </Button>
 
       </div>
 

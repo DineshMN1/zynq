@@ -69,38 +69,7 @@ export class AuthService {
     });
   }
 
-  // async login(loginDto: LoginDto): Promise<User> {
-  //   const user = await this.usersService.findByEmail(loginDto.email);
-  //   if (!user) {
-  //     throw new UnauthorizedException('Invalid credentials');
-  //   }
-
-  //   const isPasswordValid = await this.usersService.validatePassword(
-  //     user,
-  //     loginDto.password,
-  //   );
-  //   if (!isPasswordValid) {
-  //     throw new UnauthorizedException('Invalid credentials');
-  //   }
-
-  //   return user;
-  // }
-//   async login(loginDto: LoginDto): Promise<User> {
-//   // TEMP BYPASS: always return the first user in DB
-//   const user = await this.usersService.findByEmail('admin@example.com');
-//   return user;
-// }
-// async login(loginDto: LoginDto): Promise<User> {
-//   const user = await this.usersService.findByEmail(loginDto.email);
-//   if (!user) throw new UnauthorizedException('Invalid credentials');
-
-//   const isPasswordValid = await this.usersService.validatePassword(user, loginDto.password);
-//   if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');
-
-//   return user;
-// }
-
-async login(loginDto: LoginDto): Promise<User> {
+  async login(loginDto: LoginDto): Promise<User> {
   const user = await this.usersService.findByEmail(loginDto.email);
   if (!user) {
     throw new UnauthorizedException('Invalid credentials');

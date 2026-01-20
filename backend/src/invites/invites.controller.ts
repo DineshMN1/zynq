@@ -7,6 +7,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InvitesService } from './invites.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -53,7 +54,7 @@ export class InvitesController {
   async accept(@Body() acceptDto: AcceptInviteDto) {
     const invitation = await this.invitesService.validateToken(acceptDto.token);
     if (!invitation) {
-      throw new Error('Invalid or expired invitation');
+      throw new ForbiddenException('Invalid or expired invitation');
     }
 
     const user = await this.usersService.create({
