@@ -1,0 +1,14 @@
+{
+  "name": "@zynqcloud/shared-types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript types for zynqCloud",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "private": true,
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
