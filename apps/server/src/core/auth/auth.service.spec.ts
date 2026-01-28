@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  ConflictException,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
 import { InvitationService } from '../invitation/invitation.service';
@@ -135,17 +139,24 @@ describe('AuthService', () => {
       userService.findByEmail.mockResolvedValue(null);
       userService.count.mockResolvedValue(1);
       invitationService.validateToken.mockResolvedValue(mockInvitation as any);
-      userService.create.mockResolvedValue({ ...mockUser, role: UserRole.ADMIN } as any);
+      userService.create.mockResolvedValue({
+        ...mockUser,
+        role: UserRole.ADMIN,
+      } as any);
 
-      const result = await service.register({
+      await service.register({
         name: 'Invited User',
         email: 'invited@example.com',
         password: 'Password1!',
         inviteToken: 'valid-token',
       });
 
-      expect(invitationService.validateToken).toHaveBeenCalledWith('valid-token');
-      expect(invitationService.markAsAccepted).toHaveBeenCalledWith('invite-123');
+      expect(invitationService.validateToken).toHaveBeenCalledWith(
+        'valid-token',
+      );
+      expect(invitationService.markAsAccepted).toHaveBeenCalledWith(
+        'invite-123',
+      );
       expect(userService.create).toHaveBeenCalledWith({
         name: 'Invited User',
         email: 'invited@example.com',
@@ -175,7 +186,7 @@ describe('AuthService', () => {
       configService.get.mockReturnValue('true');
       userService.create.mockResolvedValue(mockUser as any);
 
-      const result = await service.register({
+      await service.register({
         name: 'Public User',
         email: 'public@example.com',
         password: 'Password1!',

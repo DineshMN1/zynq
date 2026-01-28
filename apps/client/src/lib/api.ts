@@ -181,6 +181,10 @@ export const fileApi = {
 
   getShared: () => fetchApi<Share[]>('/files/shared'),
   getPublicShares: () => fetchApi<Share[]>('/files/public-shares'),
+  revokeShare: (shareId: string) =>
+    fetchApi<{ success: boolean }>(`/files/shares/${shareId}`, {
+      method: 'DELETE',
+    }),
   emptyTrash: () =>
   fetchApi<void>('/files/trash/empty', {
     method: 'DELETE',

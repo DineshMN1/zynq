@@ -62,7 +62,10 @@ CREATE TABLE shares (
   created_by UUID REFERENCES users(id) ON DELETE CASCADE,
   is_public BOOLEAN DEFAULT false,             -- ✅ public share flag
   share_token TEXT UNIQUE,                     -- ✅ unique public link token
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  expires_at TIMESTAMPTZ,                      -- ✅ optional expiry
+  password TEXT,                               -- ✅ optional password protection
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- ===========================================
@@ -73,6 +76,7 @@ CREATE TABLE settings (
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   key TEXT NOT NULL,
   value JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

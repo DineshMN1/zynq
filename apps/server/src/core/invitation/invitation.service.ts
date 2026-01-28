@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -45,9 +42,8 @@ export class InvitationService {
 
     try {
       if (process.env.EMAIL_ENABLED === 'true') {
-        const { EmailService } = await import(
-          '../../integrations/email/email.service'
-        );
+        const { EmailService } =
+          await import('../../integrations/email/email.service');
         const emailService = new EmailService(this.configService);
         await emailService.sendInvitationEmail(
           createInviteDto.email,

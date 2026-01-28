@@ -1,23 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Share2, Loader2, File, Folder, Globe } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Share2, Loader2, File, Folder, Globe, Trash2, Copy, Check } from 'lucide-react';
 import { fileApi, type Share } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
 import { motion } from 'framer-motion';
+import { toast } from '@/hooks/use-toast';
+import { ToastContainer } from '@/components/toast-container';
 
 export default function SharedPage() {
   const [privateShares, setPrivateShares] = useState<Share[]>([]);
   const [publicShares, setPublicShares] = useState<Share[]>([]);
   const [loading, setLoading] = useState(true);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadShares();
-  }, []);
-
-  const loadShares = async () => {
+  const loadShares = useCallback(async () => {
     try {
       setLoading(true);
       const [privateData, publicData] = await Promise.all([
@@ -30,6 +30,50 @@ export default function SharedPage() {
       console.error('Failed to load shared files:', error);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadShares();
+  }, [loadShares]);
+
+  const handleRevokeShare = async (shareId: string) => {
+    if (!confirm('Are you sure you want to stop sharing this file publicly? The link will no longer work.')) {
+      return;
+    }
+    try {
+      await fileApi.revokeShare(shareId);
+      setPublicShares(publicShares.filter((s) => s.id !== shareId));
+      toast({
+        title: 'Share revoked',
+        description: 'Public link has been disabled.',
+      });
+    } catch (error) {
+      console.error('Failed to revoke share:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to revoke the share.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCopyLink = async (token: string, shareId: string) => {
+    const link = `${window.location.origin}/share/${token}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(shareId);
+      setTimeout(() => setCopiedId(null), 2000);
+      toast({
+        title: 'Link copied',
+        description: 'Public link copied to clipboard.',
+      });
+    } catch {
+      toast({
+        title: 'Failed to copy',
+        description: 'Could not copy link to clipboard.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -94,13 +138,28 @@ export default function SharedPage() {
                         <p className="text-xs text-muted-foreground mt-1">
                           {formatBytes(share.file?.size ?? 0)}
                         </p>
-                        <a
-                          href={`/share/${share.share_token}`}
-                          target="_blank"
-                          className="text-xs text-primary hover:underline"
-                        >
-                          View Public Link →
-                        </a>
+                        <div className="flex gap-2 mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => share.share_token && handleCopyLink(share.share_token, share.id)}
+                          >
+                            {copiedId === share.id ? (
+                              <Check className="h-3 w-3 mr-1" />
+                            ) : (
+                              <Copy className="h-3 w-3 mr-1" />
+                            )}
+                            Copy
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleRevokeShare(share.id)}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Stop Sharing
+                          </Button>
+                        </div>
                       </div>
                     </Card>
                   </motion.div>
@@ -152,6 +211,8 @@ export default function SharedPage() {
           )}
         </>
       )}
+
+      <ToastContainer />
     </div>
   );
 }

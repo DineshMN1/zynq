@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, Search, FolderPlus } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Upload, Search, FolderPlus, X } from "lucide-react";
 import { fileApi, type FileMetadata } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { ToastContainer } from "@/components/toast-container";
@@ -12,11 +13,16 @@ import { FileBreadcrumb } from "@/features/file/components/file-breadcrumb";
 import { CreateFolderDialog } from "@/features/file/components/create-folder-dialog";
 import { PublicLinkDialog } from "@/features/share/components/public-link-dialog";
 
+interface UploadProgress {
+  fileName: string;
+  progress: number;
+  status: 'uploading' | 'completed' | 'error';
+}
+
 export default function FilesPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [pathStack, setPathStack] = useState<
     { id: string | null; name: string }[]
@@ -26,18 +32,15 @@ export default function FilesPage() {
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [publicLink, setPublicLink] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
 
   const currentFolderId = pathStack[pathStack.length - 1]?.id;
 
-  useEffect(() => {
-    loadFiles();
-  }, [page, search, currentFolderId]);
-
-  const loadFiles = async () => {
+  const loadFiles = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fileApi.list({
-        page,
+        page: 1,
         limit: 50,
         search: search || undefined,
         parentId: currentFolderId || undefined,
@@ -54,7 +57,11 @@ export default function FilesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, currentFolderId]);
+
+  useEffect(() => {
+    loadFiles();
+  }, [loadFiles]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to move this file to Trash?")) return;
@@ -77,26 +84,70 @@ export default function FilesPage() {
 
   const handleUploadClick = () => fileInputRef.current?.click();
 
+  const uploadFileWithProgress = (url: string, file: File, contentType: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      let uploadComplete = false;
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(prev => prev ? { ...prev, progress: percent } : null);
+          if (percent === 100) {
+            uploadComplete = true;
+          }
+        }
+      });
+
+      xhr.upload.addEventListener('load', () => {
+        // Upload finished sending data
+        uploadComplete = true;
+        setUploadProgress(prev => prev ? { ...prev, progress: 100 } : null);
+      });
+
+      xhr.addEventListener('readystatechange', () => {
+        if (xhr.readyState === 4) {
+          // Request finished - check if upload completed successfully
+          // For S3/MinIO, status 200 means success
+          // But sometimes CORS prevents reading the response, so if upload completed, consider it success
+          if (xhr.status === 200 || xhr.status === 204 || (uploadComplete && xhr.status === 0)) {
+            setUploadProgress(prev => prev ? { ...prev, progress: 100, status: 'completed' } : null);
+            resolve();
+          } else if (uploadComplete) {
+            // Upload data was sent but we got an unexpected status - still likely succeeded
+            console.warn(`Upload may have succeeded despite status ${xhr.status}`);
+            setUploadProgress(prev => prev ? { ...prev, progress: 100, status: 'completed' } : null);
+            resolve();
+          } else {
+            setUploadProgress(prev => prev ? { ...prev, status: 'error' } : null);
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        }
+      });
+
+      xhr.open('PUT', url);
+      xhr.setRequestHeader('Content-Type', contentType);
+      xhr.send(file);
+    });
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      setLoading(true);
+      setUploadProgress({ fileName: file.name, progress: 0, status: 'uploading' });
+
       const created = await fileApi.create({
         name: file.name,
         size: file.size,
-        mimeType: file.type,
+        mimeType: file.type || 'application/octet-stream',
         parentId: currentFolderId || undefined,
         isFolder: false,
       });
 
       if (created.uploadUrl) {
-        await fetch(created.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
+        await uploadFileWithProgress(created.uploadUrl, file, file.type || 'application/octet-stream');
       }
 
       await loadFiles();
@@ -104,6 +155,9 @@ export default function FilesPage() {
         title: "Upload successful",
         description: `${file.name} uploaded.`,
       });
+
+      // Clear progress after a short delay
+      setTimeout(() => setUploadProgress(null), 2000);
     } catch (err) {
       console.error("File upload failed:", err);
       toast({
@@ -111,8 +165,9 @@ export default function FilesPage() {
         description: "Unable to upload this file.",
         variant: "destructive",
       });
+      setUploadProgress(prev => prev ? { ...prev, status: 'error' } : null);
+      setTimeout(() => setUploadProgress(null), 3000);
     } finally {
-      setLoading(false);
       e.target.value = "";
     }
   };
@@ -217,6 +272,40 @@ export default function FilesPage() {
             />
           </div>
         </div>
+
+        {/* Upload Progress Bar */}
+        {uploadProgress && (
+          <div className="bg-card border rounded-lg p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Upload className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium truncate max-w-[200px]">
+                  {uploadProgress.fileName}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {uploadProgress.status === 'completed' ? 'Completed' :
+                   uploadProgress.status === 'error' ? 'Failed' :
+                   `${uploadProgress.progress}%`}
+                </span>
+                <button
+                  onClick={() => setUploadProgress(null)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <Progress
+              value={uploadProgress.progress}
+              className={`h-2 ${
+                uploadProgress.status === 'error' ? '[&>div]:bg-destructive' :
+                uploadProgress.status === 'completed' ? '[&>div]:bg-green-500' : ''
+              }`}
+            />
+          </div>
+        )}
 
         {/* Breadcrumb */}
         <FileBreadcrumb

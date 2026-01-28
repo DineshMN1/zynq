@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
-import type { LegendProps } from "recharts"
 import type {
   Payload,
   ValueType,
@@ -181,4 +180,13 @@ function ChartLegendContent({
       ))}
     </div>
   )
+}
+
+export {
+  useChart,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
 }

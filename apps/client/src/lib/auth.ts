@@ -4,7 +4,7 @@ import { authApi, type User } from './api';
 export async function getCurrentUser(): Promise<User | null> {
   try {
     return await authApi.me();
-  } catch (error) {
+  } catch {
     return null;
   }
 }

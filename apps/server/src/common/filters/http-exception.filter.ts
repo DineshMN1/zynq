@@ -55,7 +55,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
-      } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+      } else if (
+        typeof exceptionResponse === 'object' &&
+        exceptionResponse !== null
+      ) {
         const responseObj = exceptionResponse as Record<string, unknown>;
         message = (responseObj.message as string) || message;
         if (Array.isArray(responseObj.message)) {
@@ -72,7 +75,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const errorResponse: ErrorResponse = {
       statusCode: status,
       message,
-      error: errorName.replace('Exception', '').replace(/([A-Z])/g, ' $1').trim(),
+      error: errorName
+        .replace('Exception', '')
+        .replace(/([A-Z])/g, ' $1')
+        .trim(),
       errorCode,
       requestId,
       timestamp: new Date().toISOString(),

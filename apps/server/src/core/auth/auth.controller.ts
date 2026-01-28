@@ -41,7 +41,7 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    const { password_hash, ...userWithoutPassword } = user;
+    const { password_hash: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 
@@ -62,7 +62,7 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    const { password_hash, ...userWithoutPassword } = user;
+    const { password_hash: _, ...userWithoutPassword } = user;
     return { ...userWithoutPassword, token };
   }
 
@@ -77,7 +77,7 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   getProfile(@CurrentUser() user: User) {
-    const { password_hash, ...userWithoutPassword } = user;
+    const { password_hash: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 }

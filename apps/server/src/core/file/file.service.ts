@@ -7,7 +7,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, Not } from 'typeorm';
 import { File } from './entities/file.entity';
 import { Share } from '../share/entities/share.entity';
-import { User } from '../user/entities/user.entity';
 import { StorageService } from '../storage/storage.service';
 import { UserService } from '../user/user.service';
 import { CreateFileDto, BLOCKED_EXTENSIONS_REGEX } from './dto/create-file.dto';
@@ -30,8 +29,13 @@ export class FileService {
     createFileDto: CreateFileDto,
   ): Promise<File & { uploadUrl?: string }> {
     // Validate file extension for security
-    if (!createFileDto.isFolder && BLOCKED_EXTENSIONS_REGEX.test(createFileDto.name)) {
-      throw new BadRequestException('File type not allowed for security reasons');
+    if (
+      !createFileDto.isFolder &&
+      BLOCKED_EXTENSIONS_REGEX.test(createFileDto.name)
+    ) {
+      throw new BadRequestException(
+        'File type not allowed for security reasons',
+      );
     }
 
     const user = await this.userService.findById(userId);
@@ -262,6 +266,18 @@ export class FileService {
       where: { created_by: userId, is_public: true },
       relations: ['file'],
     });
+  }
+
+  async revokeShare(shareId: string, userId: string): Promise<void> {
+    const share = await this.sharesRepository.findOne({
+      where: { id: shareId, created_by: userId },
+    });
+
+    if (!share) {
+      throw new NotFoundException('Share not found');
+    }
+
+    await this.sharesRepository.delete(shareId);
   }
 
   async emptyTrash(userId: string): Promise<void> {

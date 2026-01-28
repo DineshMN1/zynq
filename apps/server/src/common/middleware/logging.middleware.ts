@@ -16,7 +16,6 @@ export class LoggingMiddleware implements NestMiddleware {
     // Get request details
     const { method, originalUrl, ip } = req;
     const userAgent = req.get('user-agent') || '';
-    const contentLength = req.get('content-length') || '0';
 
     // Log incoming request
     this.logger.log(

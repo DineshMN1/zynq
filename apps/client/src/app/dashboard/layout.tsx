@@ -21,7 +21,7 @@ export default function DashboardLayout({
       try {
         const userData = await authApi.me();
         setUser(userData);
-      } catch (error) {
+      } catch {
         router.push('/login');
       } finally {
         setLoading(false);

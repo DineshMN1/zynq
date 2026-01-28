@@ -41,17 +41,16 @@ export function FileCard({
     try {
       const res = await fileApi.download(file.id);
       if (res.url) {
-        const response = await fetch(res.url);
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-
+        // Open the presigned URL directly - this avoids CORS issues
+        // and lets the browser handle the download natively
         const a = document.createElement("a");
-        a.href = blobUrl;
+        a.href = res.url;
         a.download = file.name || "download";
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        window.URL.revokeObjectURL(blobUrl);
       } else {
         toast({
           title: "Download failed",

@@ -13,11 +13,17 @@ import { v4 as uuidv4 } from 'uuid';
 export class StorageService {
   private s3Client: S3Client;
   private bucket: string;
+  private internalEndpoint: string;
+  private publicEndpoint: string;
 
   constructor(private configService: ConfigService) {
     this.bucket = this.configService.get('S3_BUCKET');
+    this.internalEndpoint = this.configService.get('S3_ENDPOINT');
+    this.publicEndpoint =
+      this.configService.get('S3_PUBLIC_ENDPOINT') || this.internalEndpoint;
+
     this.s3Client = new S3Client({
-      endpoint: this.configService.get('S3_ENDPOINT'),
+      endpoint: this.internalEndpoint,
       region: this.configService.get('S3_REGION'),
       credentials: {
         accessKeyId: this.configService.get('S3_ACCESS_KEY_ID'),
@@ -25,6 +31,11 @@ export class StorageService {
       },
       forcePathStyle: this.configService.get('S3_FORCE_PATH_STYLE') === 'true',
     });
+  }
+
+  private toPublicUrl(url: string): string {
+    // Replace internal endpoint with public endpoint for browser access
+    return url.replace(this.internalEndpoint, this.publicEndpoint);
   }
 
   async getPresignedUploadUrl(
@@ -38,11 +49,11 @@ export class StorageService {
       ContentType: mimeType,
     });
 
-    const uploadUrl = await getSignedUrl(this.s3Client, command, {
+    const internalUrl = await getSignedUrl(this.s3Client, command, {
       expiresIn: 3600,
     });
 
-    return { uploadUrl, storagePath };
+    return { uploadUrl: this.toPublicUrl(internalUrl), storagePath };
   }
 
   async getPresignedDownloadUrl(storagePath: string): Promise<string> {
@@ -51,7 +62,11 @@ export class StorageService {
       Key: storagePath,
     });
 
-    return getSignedUrl(this.s3Client, command, { expiresIn: 3600 });
+    const internalUrl = await getSignedUrl(this.s3Client, command, {
+      expiresIn: 3600,
+    });
+
+    return this.toPublicUrl(internalUrl);
   }
 
   async deleteObject(storagePath: string): Promise<void> {

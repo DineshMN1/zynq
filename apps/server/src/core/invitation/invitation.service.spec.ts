@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { NotFoundException } from '@nestjs/common';
 import { InvitationService } from './invitation.service';
@@ -14,7 +14,6 @@ jest.mock('uuid', () => ({
 describe('InvitationService', () => {
   let service: InvitationService;
   let repository: jest.Mocked<Repository<Invitation>>;
-  let configService: jest.Mocked<ConfigService>;
 
   const mockInvitation: Partial<Invitation> = {
     id: 'invite-123',
@@ -62,7 +61,6 @@ describe('InvitationService', () => {
 
     service = module.get<InvitationService>(InvitationService);
     repository = module.get(getRepositoryToken(Invitation));
-    configService = module.get(ConfigService);
   });
 
   it('should be defined', () => {
@@ -88,7 +86,9 @@ describe('InvitationService', () => {
         expires_at: expect.any(Date),
       });
       expect(repository.save).toHaveBeenCalled();
-      expect(result.link).toBe('http://localhost:3000/register?inviteToken=test-invite-token');
+      expect(result.link).toBe(
+        'http://localhost:3000/register?inviteToken=test-invite-token',
+      );
     });
 
     it('should create admin invitation', async () => {
@@ -96,7 +96,7 @@ describe('InvitationService', () => {
       repository.create.mockReturnValue(adminInvite as Invitation);
       repository.save.mockResolvedValue(adminInvite as Invitation);
 
-      const result = await service.create(
+      await service.create(
         { email: 'admin@example.com', role: UserRole.ADMIN },
         'owner-123',
         'Owner User',
@@ -140,7 +140,9 @@ describe('InvitationService', () => {
     it('should throw NotFoundException if invitation not found', async () => {
       repository.findOne.mockResolvedValue(null);
 
-      await expect(service.revoke('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.revoke('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

@@ -18,8 +18,8 @@ vi.mock('next/navigation', () => ({
 
 // Mock next/image
 vi.mock('next/image', () => ({
-  default: (props: { src: string; alt: string; [key: string]: unknown }) => {
-    return React.createElement('img', { src: props.src, alt: props.alt, ...props });
+  default: ({ src, alt, ...rest }: { src: string; alt: string; [key: string]: unknown }) => {
+    return React.createElement('img', { src, alt, ...rest });
   },
 }));
 

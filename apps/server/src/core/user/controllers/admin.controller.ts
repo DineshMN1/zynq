@@ -24,17 +24,14 @@ export class AdminController {
   constructor(private userService: UserService) {}
 
   @Get('users')
-  async getUsers(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
+  async getUsers(@Query('page') page?: string, @Query('limit') limit?: string) {
     const { items, total } = await this.userService.findAll(
       parseInt(page) || 1,
       parseInt(limit) || 50,
     );
 
     const usersWithoutPasswords = items.map((user) => {
-      const { password_hash, ...userWithoutPassword } = user;
+      const { password_hash: _, ...userWithoutPassword } = user;
       return userWithoutPassword;
     });
 
@@ -51,7 +48,7 @@ export class AdminController {
   @Put('users/:id')
   async updateUser(@Param('id') id: string, @Body() updateDto: UpdateUserDto) {
     const user = await this.userService.update(id, updateDto);
-    const { password_hash, ...userWithoutPassword } = user;
+    const { password_hash: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 

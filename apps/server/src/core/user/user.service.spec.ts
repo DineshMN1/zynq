@@ -93,8 +93,14 @@ describe('UserService', () => {
       };
 
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed_password');
-      repository.create.mockReturnValue({ ...mockUser, role: UserRole.ADMIN } as User);
-      repository.save.mockResolvedValue({ ...mockUser, role: UserRole.ADMIN } as User);
+      repository.create.mockReturnValue({
+        ...mockUser,
+        role: UserRole.ADMIN,
+      } as User);
+      repository.save.mockResolvedValue({
+        ...mockUser,
+        role: UserRole.ADMIN,
+      } as User);
 
       await service.create(createData);
 
@@ -114,10 +120,15 @@ describe('UserService', () => {
       const result = await service.findByEmail('test@example.com');
 
       expect(repository.createQueryBuilder).toHaveBeenCalledWith('user');
-      expect(mockQueryBuilder.addSelect).toHaveBeenCalledWith('user.password_hash');
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith('user.email = :email', {
-        email: 'test@example.com',
-      });
+      expect(mockQueryBuilder.addSelect).toHaveBeenCalledWith(
+        'user.password_hash',
+      );
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        'user.email = :email',
+        {
+          email: 'test@example.com',
+        },
+      );
       expect(result).toEqual(mockUser);
     });
 
@@ -136,7 +147,9 @@ describe('UserService', () => {
 
       const result = await service.findById('user-123');
 
-      expect(repository.findOne).toHaveBeenCalledWith({ where: { id: 'user-123' } });
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+      });
       expect(result).toEqual(mockUser);
     });
 
@@ -180,7 +193,10 @@ describe('UserService', () => {
   describe('update', () => {
     it('should update user and return updated user', async () => {
       const updateData = { name: 'Updated Name' };
-      repository.findOne.mockResolvedValue({ ...mockUser, name: 'Updated Name' } as User);
+      repository.findOne.mockResolvedValue({
+        ...mockUser,
+        name: 'Updated Name',
+      } as User);
 
       const result = await service.update('user-123', updateData);
 
@@ -191,9 +207,9 @@ describe('UserService', () => {
     it('should throw NotFoundException if user not found after update', async () => {
       repository.findOne.mockResolvedValue(null);
 
-      await expect(service.update('nonexistent', { name: 'Test' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.update('nonexistent', { name: 'Test' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -209,16 +225,25 @@ describe('UserService', () => {
     it('should return true for valid password', async () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-      const result = await service.validatePassword(mockUser as User, 'correct-password');
+      const result = await service.validatePassword(
+        mockUser as User,
+        'correct-password',
+      );
 
-      expect(bcrypt.compare).toHaveBeenCalledWith('correct-password', 'hashed_password');
+      expect(bcrypt.compare).toHaveBeenCalledWith(
+        'correct-password',
+        'hashed_password',
+      );
       expect(result).toBe(true);
     });
 
     it('should return false for invalid password', async () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      const result = await service.validatePassword(mockUser as User, 'wrong-password');
+      const result = await service.validatePassword(
+        mockUser as User,
+        'wrong-password',
+      );
 
       expect(result).toBe(false);
     });

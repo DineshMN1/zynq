@@ -13,19 +13,24 @@ jest.mock('@aws-sdk/client-s3', () => ({
 }));
 
 jest.mock('@aws-sdk/s3-request-presigner', () => ({
-  getSignedUrl: jest.fn().mockResolvedValue('https://s3.example.com/presigned-url'),
+  getSignedUrl: jest
+    .fn()
+    .mockResolvedValue('https://s3.example.com/presigned-url'),
 }));
 
 jest.mock('uuid', () => ({
   v4: jest.fn().mockReturnValue('test-uuid'),
 }));
 
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 describe('StorageService', () => {
   let service: StorageService;
-  let configService: jest.Mocked<ConfigService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -51,7 +56,6 @@ describe('StorageService', () => {
     }).compile();
 
     service = module.get<StorageService>(StorageService);
-    configService = module.get(ConfigService);
   });
 
   afterEach(() => {
@@ -64,7 +68,10 @@ describe('StorageService', () => {
 
   describe('getPresignedUploadUrl', () => {
     it('should generate presigned upload URL with UUID prefix', async () => {
-      const result = await service.getPresignedUploadUrl('test.pdf', 'application/pdf');
+      const result = await service.getPresignedUploadUrl(
+        'test.pdf',
+        'application/pdf',
+      );
 
       expect(PutObjectCommand).toHaveBeenCalledWith({
         Bucket: 'test-bucket',
@@ -91,7 +98,8 @@ describe('StorageService', () => {
 
   describe('getPresignedDownloadUrl', () => {
     it('should generate presigned download URL', async () => {
-      const result = await service.getPresignedDownloadUrl('test-uuid-test.pdf');
+      const result =
+        await service.getPresignedDownloadUrl('test-uuid-test.pdf');
 
       expect(GetObjectCommand).toHaveBeenCalledWith({
         Bucket: 'test-bucket',

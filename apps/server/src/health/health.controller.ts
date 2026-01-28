@@ -106,7 +106,8 @@ export class HealthController {
     } catch (error) {
       return {
         status: 'down',
-        error: error instanceof Error ? error.message : 'Database connection failed',
+        error:
+          error instanceof Error ? error.message : 'Database connection failed',
       };
     }
   }
@@ -122,7 +123,8 @@ export class HealthController {
     } catch (error) {
       return {
         status: 'down',
-        error: error instanceof Error ? error.message : 'Storage connection failed',
+        error:
+          error instanceof Error ? error.message : 'Storage connection failed',
       };
     }
   }

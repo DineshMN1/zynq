@@ -9,9 +9,11 @@ import { formatBytes } from '@/lib/auth';
 
 interface SharedFile {
   name: string;
-  mime_type: string;
+  mimeType: string;
   size: number;
   downloadUrl: string;
+  owner: string;
+  createdAt: string;
 }
 
 export default function PublicSharePage() {
@@ -22,7 +24,7 @@ export default function PublicSharePage() {
 
   const fetchFile = useCallback(async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'}/share/${token}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'}/public/share/${token}`);
       if (!res.ok) throw new Error('File not found');
       const data = await res.json();
       setFile(data);
@@ -40,7 +42,7 @@ export default function PublicSharePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-primary/5">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -48,7 +50,7 @@ export default function PublicSharePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-center p-6">
+      <div className="min-h-screen flex flex-col items-center justify-center text-center p-6 bg-gradient-to-br from-background to-primary/5">
         <Cloud className="h-10 w-10 text-primary mb-3" />
         <h1 className="text-xl font-semibold">{error}</h1>
       </div>
@@ -67,12 +69,18 @@ export default function PublicSharePage() {
           <File className="h-10 w-10 text-muted-foreground" />
           <p className="text-lg font-medium">{file?.name}</p>
           <p className="text-sm text-muted-foreground">
-            {file?.mime_type} • {formatBytes(file?.size || 0)}
+            {formatBytes(file?.size || 0)}
           </p>
+          {file?.owner && (
+            <p className="text-xs text-muted-foreground">
+              Shared by {file.owner}
+            </p>
+          )}
         </div>
 
         <Button
           size="lg"
+          className="w-full"
           onClick={() => file?.downloadUrl && window.open(file.downloadUrl, '_blank')}
         >
           <Download className="mr-2 h-4 w-4" />

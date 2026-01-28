@@ -19,7 +19,7 @@ async function bootstrap() {
   // CORS
   const corsOrigins = (configService.get<string>('CORS_ORIGIN') || '')
     .split(',')
-    .map(o => o.trim())
+    .map((o) => o.trim())
     .filter(Boolean);
 
   app.enableCors({

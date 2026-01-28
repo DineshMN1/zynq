@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi, type User } from '@/lib/api';
 
@@ -23,6 +23,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
   const router = useRouter();
 
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    setUser(null);
+    setToken(null);
+    router.push('/login');
+  }, [router]);
+
   useEffect(() => {
     // Load saved token if page refreshes
     const savedToken = localStorage.getItem('token');
@@ -33,7 +40,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .then((data) => setUser(data))
         .catch(() => logout());
     }
-  }, []);
+  }, [logout]);
 
   const login = (user: User) => {
     if (user.token) {
@@ -41,13 +48,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setToken(user.token);
       setUser(user);
     }
-  };
-
-  const logout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
-    setToken(null);
-    router.push('/login');
   };
 
   return (

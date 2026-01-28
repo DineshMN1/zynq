@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -44,39 +44,38 @@ export default function InvitesPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadInvites();
-  }, []);
-
   const isValidEmail = (email: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   const formatDate = (iso?: string) =>
     iso ? new Date(iso).toLocaleDateString() : '-';
 
-  const clearMessages = () => {
+  const clearMessages = useCallback(() => {
     setErrorMessage(null);
     setSuccessMessage(null);
-  };
+  }, []);
 
-  const loadInvites = async () => {
+  const loadInvites = useCallback(async () => {
     try {
       setLoading(true);
       clearMessages();
       const data = await inviteApi.list();
       setInvites(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to load invites:', error);
-      setErrorMessage(
-        error?.message || 'Failed to load invites. Check your network/auth.'
-      );
+      const message = error instanceof Error ? error.message : 'Failed to load invites. Check your network/auth.';
+      setErrorMessage(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [clearMessages]);
 
-const buildInviteLink = (invite: Invitation) => {
-  if ((invite as any).link) return (invite as any).link;
+  useEffect(() => {
+    loadInvites();
+  }, [loadInvites]);
+
+const buildInviteLink = (invite: Invitation & { link?: string }) => {
+  if (invite.link) return invite.link;
   if (invite.token) return `${window.location.origin}/register?inviteToken=${invite.token}`;
   if (invite.id) return `${window.location.origin}/register?inviteId=${invite.id}`;
   return window.location.origin;
@@ -112,16 +111,11 @@ const buildInviteLink = (invite: Invitation) => {
           setTimeout(() => setCopiedId(null), 3000);
           setSuccessMessage('Invite created and link copied to clipboard.');
         } else {
-          // fallback: prompt the user with the link
-          // (use window.prompt so the user can copy manually)
-          // eslint-disable-next-line no-alert
           window.prompt('Copy invite link', link);
           setSuccessMessage('Invite created. Please copy the link from the prompt.');
         }
       } catch (writeErr) {
         console.error('Clipboard write failed', writeErr);
-        // fallback to prompt
-        // eslint-disable-next-line no-alert
         window.prompt('Copy invite link', link);
         setSuccessMessage('Invite created. Please copy the link from the prompt.');
       }
@@ -129,13 +123,10 @@ const buildInviteLink = (invite: Invitation) => {
       // Reset form + close dialog
       setFormData({ email: '', role: 'user' });
       setDialogOpen(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create invite:', err);
-      // give actionable error if backend returned JSON
-      setErrorMessage(
-        err?.message ||
-          'Failed to create invite. Check that you are authenticated and your backend is reachable.'
-      );
+      const message = err instanceof Error ? err.message : 'Failed to create invite. Check that you are authenticated and your backend is reachable.';
+      setErrorMessage(message);
     } finally {
       setCreating(false);
     }
@@ -151,14 +142,10 @@ const buildInviteLink = (invite: Invitation) => {
         setTimeout(() => setCopiedId(null), 3000);
         setSuccessMessage('Invite link copied.');
       } else {
-        // fallback prompt
-        // eslint-disable-next-line no-alert
         window.prompt('Copy invite link', link);
       }
     } catch (err) {
       console.error('Copy failed', err);
-      // fallback prompt
-      // eslint-disable-next-line no-alert
       window.prompt('Copy invite link', link);
       setErrorMessage('Failed to copy link automatically — use the prompt to copy.');
     }

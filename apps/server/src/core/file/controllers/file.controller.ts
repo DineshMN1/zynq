@@ -95,6 +95,16 @@ export class FileController {
     return this.fileService.getPublicSharesByUser(user.id);
   }
 
+  @Delete('shares/:shareId')
+  @HttpCode(HttpStatus.OK)
+  async revokeShare(
+    @CurrentUser() user: User,
+    @Param('shareId') shareId: string,
+  ) {
+    await this.fileService.revokeShare(shareId, user.id);
+    return { success: true };
+  }
+
   // ========================================
   // PARAMETERIZED ROUTES LAST
   // ========================================

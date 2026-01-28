@@ -119,9 +119,15 @@ describe('FileService', () => {
       });
 
       expect(userService.findById).toHaveBeenCalledWith('user-123');
-      expect(storageService.getPresignedUploadUrl).toHaveBeenCalledWith('test.pdf', 'application/pdf');
+      expect(storageService.getPresignedUploadUrl).toHaveBeenCalledWith(
+        'test.pdf',
+        'application/pdf',
+      );
       expect(filesRepository.save).toHaveBeenCalled();
-      expect(userService.updateStorageUsed).toHaveBeenCalledWith('user-123', 1024);
+      expect(userService.updateStorageUsed).toHaveBeenCalledWith(
+        'user-123',
+        1024,
+      );
       expect(result.uploadUrl).toBe('https://s3.example.com/upload');
     });
 
@@ -191,9 +197,12 @@ describe('FileService', () => {
       const result = await service.findAll('user-123', 1, 50);
 
       expect(filesRepository.createQueryBuilder).toHaveBeenCalledWith('file');
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith('file.owner_id = :userId', {
-        userId: 'user-123',
-      });
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        'file.owner_id = :userId',
+        {
+          userId: 'user-123',
+        },
+      );
       expect(result).toEqual({ items: [mockFile], total: 1 });
     });
 
@@ -202,9 +211,12 @@ describe('FileService', () => {
 
       await service.findAll('user-123', 1, 50, 'test');
 
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('file.name ILIKE :search', {
-        search: '%test%',
-      });
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'file.name ILIKE :search',
+        {
+          search: '%test%',
+        },
+      );
     });
 
     it('should filter by parent folder', async () => {
@@ -212,9 +224,12 @@ describe('FileService', () => {
 
       await service.findAll('user-123', 1, 50, undefined, 'folder-123');
 
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('file.parent_id = :parentId', {
-        parentId: 'folder-123',
-      });
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'file.parent_id = :parentId',
+        {
+          parentId: 'folder-123',
+        },
+      );
     });
   });
 
@@ -242,7 +257,10 @@ describe('FileService', () => {
   describe('softDelete', () => {
     it('should mark file as deleted', async () => {
       filesRepository.findOne.mockResolvedValue(mockFile as File);
-      filesRepository.save.mockResolvedValue({ ...mockFile, deleted_at: new Date() } as File);
+      filesRepository.save.mockResolvedValue({
+        ...mockFile,
+        deleted_at: new Date(),
+      } as File);
 
       await service.softDelete('file-123', 'user-123');
 
@@ -256,7 +274,10 @@ describe('FileService', () => {
     it('should restore deleted file', async () => {
       const deletedFile = { ...mockFile, deleted_at: new Date() };
       filesRepository.findOne.mockResolvedValue(deletedFile as File);
-      filesRepository.save.mockResolvedValue({ ...mockFile, deleted_at: null } as File);
+      filesRepository.save.mockResolvedValue({
+        ...mockFile,
+        deleted_at: null,
+      } as File);
 
       const result = await service.restore('file-123', 'user-123');
 
@@ -279,16 +300,19 @@ describe('FileService', () => {
       await service.permanentDelete('file-123', 'user-123');
 
       expect(storageService.deleteObject).toHaveBeenCalledWith('uuid-test.pdf');
-      expect(userService.updateStorageUsed).toHaveBeenCalledWith('user-123', -1024);
+      expect(userService.updateStorageUsed).toHaveBeenCalledWith(
+        'user-123',
+        -1024,
+      );
       expect(filesRepository.delete).toHaveBeenCalledWith('file-123');
     });
 
     it('should throw NotFoundException if file not found', async () => {
       filesRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.permanentDelete('nonexistent', 'user-123')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.permanentDelete('nonexistent', 'user-123'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -305,11 +329,14 @@ describe('FileService', () => {
     });
 
     it('should throw BadRequestException for folders', async () => {
-      filesRepository.findOne.mockResolvedValue({ ...mockFile, is_folder: true } as File);
+      filesRepository.findOne.mockResolvedValue({
+        ...mockFile,
+        is_folder: true,
+      } as File);
 
-      await expect(service.getDownloadUrl('folder-123', 'user-123')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.getDownloadUrl('folder-123', 'user-123'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -338,7 +365,10 @@ describe('FileService', () => {
   describe('getTrashedFiles', () => {
     it('should return trashed files', async () => {
       const trashedFile = { ...mockFile, deleted_at: new Date() };
-      filesRepository.findAndCount.mockResolvedValue([[trashedFile as File], 1]);
+      filesRepository.findAndCount.mockResolvedValue([
+        [trashedFile as File],
+        1,
+      ]);
 
       const result = await service.getTrashedFiles('user-123', 1, 50);
 

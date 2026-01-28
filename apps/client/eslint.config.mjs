@@ -9,6 +9,9 @@ const eslintConfig = [
     extends: ['next/core-web-vitals', 'next/typescript'],
   }),
   {
+    ignores: ['src/visual-edits/component-tagger-loader.js'],
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',
