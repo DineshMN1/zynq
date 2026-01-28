@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
-  title: "zynqCloud - Self-Hosted File Management",
+  title: "ZynqCloud ",
   description: "Secure, fast, and completely self-hosted file storage with role-based access control and team collaboration.",
 };
 
