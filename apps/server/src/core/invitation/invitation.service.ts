@@ -40,7 +40,7 @@ export class InvitationService {
     const saved = await this.invitationsRepository.save(invitation);
 
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3001';
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const link = `${frontendUrl}/register?inviteToken=${token}`;
 
     try {

@@ -1,9 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { CoreModule } from './core/core.module';
 import { EmailModule } from './integrations/email/email.module';
+import { HealthModule } from './health/health.module';
+import { LoggingMiddleware } from './common/middleware/logging.middleware';
 
 @Module({
   imports: [
@@ -30,7 +32,7 @@ import { EmailModule } from './integrations/email/email.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => [
         {
-          ttl: configService.get('RATE_LIMIT_TTL') || 60,
+          ttl: configService.get('RATE_LIMIT_TTL') || 60000,
           limit: configService.get('RATE_LIMIT_MAX') || 100,
         },
       ],
@@ -38,6 +40,11 @@ import { EmailModule } from './integrations/email/email.module';
     }),
     CoreModule,
     EmailModule,
+    HealthModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggingMiddleware).forRoutes('*');
+  }
+}

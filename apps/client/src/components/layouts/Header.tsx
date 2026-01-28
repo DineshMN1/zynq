@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, AvatarFallback } from './ui/avatar';
-import { Button } from './ui/button';
+import { Avatar, AvatarFallback } from '../ui/avatar';
+import { Button } from '../ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,11 +11,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from './ui/dropdown-menu';
+} from '../ui/dropdown-menu';
 import { LogOut, User as UserIcon, Moon, Sun } from 'lucide-react';
 import { authApi, type User } from '@/lib/api';
 import { getInitials } from '@/lib/auth';
-import { useTheme } from './ThemeProvider';
+import { useTheme } from '../ThemeProvider';
 
 interface HeaderProps {
   user: User | null;

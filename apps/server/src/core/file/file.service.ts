@@ -10,7 +10,7 @@ import { Share } from '../share/entities/share.entity';
 import { User } from '../user/entities/user.entity';
 import { StorageService } from '../storage/storage.service';
 import { UserService } from '../user/user.service';
-import { CreateFileDto } from './dto/create-file.dto';
+import { CreateFileDto, BLOCKED_EXTENSIONS_REGEX } from './dto/create-file.dto';
 import { ShareFileDto } from '../share/dto/share-file.dto';
 import { randomBytes } from 'crypto';
 
@@ -29,6 +29,11 @@ export class FileService {
     userId: string,
     createFileDto: CreateFileDto,
   ): Promise<File & { uploadUrl?: string }> {
+    // Validate file extension for security
+    if (!createFileDto.isFolder && BLOCKED_EXTENSIONS_REGEX.test(createFileDto.name)) {
+      throw new BadRequestException('File type not allowed for security reasons');
+    }
+
     const user = await this.userService.findById(userId);
     if (!user) {
       throw new NotFoundException('User not found');

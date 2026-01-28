@@ -30,6 +30,31 @@ export class InvitationController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.OWNER)
   create(@CurrentUser() user: User, @Body() createInviteDto: CreateInviteDto) {
+    // Role hierarchy: OWNER > ADMIN > USER
+    // Users can only invite roles equal to or lower than their own
+    const roleHierarchy = {
+      [UserRole.OWNER]: 3,
+      [UserRole.ADMIN]: 2,
+      [UserRole.USER]: 1,
+    };
+
+    const inviterLevel = roleHierarchy[user.role] || 0;
+    const inviteeLevel = roleHierarchy[createInviteDto.role] || 0;
+
+    if (inviteeLevel > inviterLevel) {
+      throw new ForbiddenException('Cannot invite users with higher privileges than your own');
+    }
+
+    // Only OWNER can create ADMIN invites
+    if (createInviteDto.role === UserRole.ADMIN && user.role !== UserRole.OWNER) {
+      throw new ForbiddenException('Only owners can invite admins');
+    }
+
+    // Only OWNER can create OWNER invites
+    if (createInviteDto.role === UserRole.OWNER && user.role !== UserRole.OWNER) {
+      throw new ForbiddenException('Only owners can invite other owners');
+    }
+
     return this.invitationService.create(createInviteDto, user.id, user.name);
   }
 

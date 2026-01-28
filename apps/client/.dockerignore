@@ -14,3 +14,9 @@ yarn-error.log*
 .vscode
 coverage
 .nyc_output
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+src/setupTests.ts
+vitest.config.ts

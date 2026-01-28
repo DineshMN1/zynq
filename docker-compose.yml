@@ -10,7 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+      - ./apps/server/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zynqcloud -d zynqcloud"]
       interval: 5s
@@ -58,7 +58,7 @@ services:
       - zynqcloud-network
 
   backend:
-    build: ./backend
+    build: ./apps/server
     container_name: zynqcloud-backend
     restart: unless-stopped
     depends_on:
@@ -75,7 +75,7 @@ services:
       DATABASE_USER: zynqcloud
       DATABASE_PASSWORD: supersecret_db_pass
       DATABASE_NAME: zynqcloud
-      JWT_SECRET: supersecretjwt
+      JWT_SECRET: ${JWT_SECRET:-zynqcloud_dev_secret_change_in_production_32chars}
       S3_REGION: us-east-1
       S3_BUCKET: zynq-cloud
       S3_ENDPOINT: http://minio:9000
@@ -86,21 +86,21 @@ services:
       SMTP_PORT: 587
       SMTP_USER: your-email@gmail.com
       SMTP_PASS: your-app-password
-      CORS_ORIGIN: http://localhost:3001
+      CORS_ORIGIN: http://localhost:3000
     ports:
       - "4000:4000"
     networks:
       - zynqcloud-network
 
   frontend:
-    build: ./frontend
+    build: ./apps/client
     container_name: zynqcloud-frontend
     depends_on:
       - backend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
     ports:
-      - "3001:3000"
+      - "3000:3000"
     networks:
       - zynqcloud-network
 
