@@ -14,14 +14,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Cloud, Loader2 } from "lucide-react";
+import { Cloud, Loader2, CheckCircle2 } from "lucide-react";
 import { Eye, EyeOff } from "lucide-react";
 import { authApi } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
 
 export default function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [inviteToken, setInviteToken] = useState<string | null>(null);
@@ -35,6 +37,12 @@ export default function RegisterForm() {
     confirmPassword: "",
   });
 
+  // Password strength indicator
+  const [passwordStrength, setPasswordStrength] = useState({
+    length: false,
+    match: false,
+  });
+
   useEffect(() => {
     const token = searchParams.get("invite") || searchParams.get("inviteToken");
     if (token) {
@@ -42,10 +50,25 @@ export default function RegisterForm() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    // Update password strength
+    setPasswordStrength({
+      length: formData.password.length >= 8,
+      match: formData.password.length > 0 && formData.password === formData.confirmPassword,
+    });
+  }, [formData.password, formData.confirmPassword]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    // Validation
+    if (formData.password.length < 8) {
+      setError("Password must be at least 8 characters long");
+      setLoading(false);
+      return;
+    }
 
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
@@ -54,15 +77,30 @@ export default function RegisterForm() {
     }
 
     try {
-      await authApi.register({
+      const user = await authApi.register({
         name: formData.name,
         email: formData.email,
         password: formData.password,
         inviteToken: inviteToken || undefined,
       });
+      login(user);
       router.push("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+    } catch (err: any) {
+      // Parse error message
+      let errorMessage = "Registration failed";
+      if (err?.message) {
+        try {
+          const errorText = err.message;
+          const jsonMatch = errorText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const errorData = JSON.parse(jsonMatch[0]);
+            errorMessage = errorData.message || errorMessage;
+          }
+        } catch {
+          errorMessage = err.message;
+        }
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -93,7 +131,6 @@ export default function RegisterForm() {
             </CardDescription>
           </CardHeader>
 
-          {/* ✅ make sure form is closed */}
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               {error && (
@@ -114,6 +151,7 @@ export default function RegisterForm() {
                   }
                   required
                   disabled={loading}
+                  minLength={2}
                 />
               </div>
 
@@ -144,6 +182,7 @@ export default function RegisterForm() {
                     }
                     required
                     disabled={loading}
+                    minLength={8}
                     className="pr-10"
                   />
                   <button
@@ -159,6 +198,16 @@ export default function RegisterForm() {
                     )}
                   </button>
                 </div>
+
+                {/* Password strength indicator */}
+                {formData.password.length > 0 && (
+                  <div className="space-y-1 mt-2">
+                    <div className={`flex items-center gap-2 text-xs ${passwordStrength.length ? 'text-green-600' : 'text-gray-500'}`}>
+                      <CheckCircle2 className={`h-3 w-3 ${passwordStrength.length ? 'text-green-600' : 'text-gray-400'}`} />
+                      <span>At least 8 characters</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -176,6 +225,7 @@ export default function RegisterForm() {
                     }
                     required
                     disabled={loading}
+                    minLength={8}
                     className="pr-10"
                   />
                   <button
@@ -191,11 +241,23 @@ export default function RegisterForm() {
                     )}
                   </button>
                 </div>
+
+                {/* Password match indicator */}
+                {formData.confirmPassword.length > 0 && (
+                  <div className={`flex items-center gap-2 text-xs mt-2 ${passwordStrength.match ? 'text-green-600' : 'text-red-600'}`}>
+                    <CheckCircle2 className={`h-3 w-3 ${passwordStrength.match ? 'text-green-600' : 'text-red-400'}`} />
+                    <span>{passwordStrength.match ? 'Passwords match' : 'Passwords do not match'}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
 
             <CardFooter className="flex flex-col gap-4 mt-5">
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || !passwordStrength.length || !passwordStrength.match}
+              >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create Account
               </Button>

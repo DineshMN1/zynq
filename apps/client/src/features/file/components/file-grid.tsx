@@ -11,6 +11,9 @@ interface FileGridProps {
   onOpenFolder: (folder: FileMetadata) => void;
   onDelete: (id: string) => void;
   onShare: (id: string) => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onCardClick?: (id: string, e: React.MouseEvent) => void;
 }
 
 export function FileGrid({
@@ -19,6 +22,9 @@ export function FileGrid({
   onOpenFolder,
   onDelete,
   onShare,
+  selectedIds,
+  onToggleSelect,
+  onCardClick,
 }: FileGridProps) {
   if (loading) {
     return (
@@ -56,6 +62,9 @@ export function FileGrid({
           onOpenFolder={onOpenFolder}
           onDelete={onDelete}
           onShare={onShare}
+          isSelected={selectedIds?.has(file.id)}
+          onToggleSelect={onToggleSelect}
+          onCardClick={onCardClick}
         />
       ))}
     </div>

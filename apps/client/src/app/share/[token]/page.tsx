@@ -20,6 +20,7 @@ export default function PublicSharePage() {
   const { token } = useParams<{ token: string }>();
   const [file, setFile] = useState<SharedFile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
 
   const fetchFile = useCallback(async () => {
@@ -39,6 +40,27 @@ export default function PublicSharePage() {
     if (!token) return;
     fetchFile();
   }, [token, fetchFile]);
+
+  const handleDownload = async () => {
+    if (!file?.downloadUrl) return;
+    setDownloading(true);
+    try {
+      const response = await fetch(file.downloadUrl);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = file.name || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      setError('Download failed. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -81,10 +103,15 @@ export default function PublicSharePage() {
         <Button
           size="lg"
           className="w-full"
-          onClick={() => file?.downloadUrl && window.open(file.downloadUrl, '_blank')}
+          disabled={downloading}
+          onClick={handleDownload}
         >
-          <Download className="mr-2 h-4 w-4" />
-          Download File
+          {downloading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          {downloading ? 'Downloading...' : 'Download File'}
         </Button>
 
         <p className="text-xs text-muted-foreground mt-3">

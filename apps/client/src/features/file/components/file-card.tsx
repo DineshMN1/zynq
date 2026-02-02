@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +22,7 @@ import {
 import { type FileMetadata, fileApi } from "@/lib/api";
 import { formatBytes } from "@/lib/auth";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface FileCardProps {
   file: FileMetadata;
@@ -28,6 +30,9 @@ interface FileCardProps {
   onOpenFolder: (folder: FileMetadata) => void;
   onDelete: (id: string) => void;
   onShare: (id: string) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  onCardClick?: (id: string, e: React.MouseEvent) => void;
 }
 
 export function FileCard({
@@ -36,21 +41,24 @@ export function FileCard({
   onOpenFolder,
   onDelete,
   onShare,
+  isSelected,
+  onToggleSelect,
+  onCardClick,
 }: FileCardProps) {
   const handleDownload = async () => {
     try {
       const res = await fileApi.download(file.id);
       if (res.url) {
-        // Open the presigned URL directly - this avoids CORS issues
-        // and lets the browser handle the download natively
+        const response = await fetch(res.url);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = res.url;
+        a.href = blobUrl;
         a.download = file.name || "download";
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
       } else {
         toast({
           title: "Download failed",
@@ -68,6 +76,19 @@ export function FileCard({
     }
   };
 
+  const hasSelect = !!onToggleSelect;
+  const IconComponent = file.is_folder ? Folder : File;
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (onCardClick) {
+      onCardClick(file.id, e);
+      return;
+    }
+    if (file.is_folder) {
+      onOpenFolder(file);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -75,16 +96,32 @@ export function FileCard({
       transition={{ duration: 0.3, delay: index * 0.05 }}
     >
       <Card
-        className="p-4 hover:border-primary/50 transition-colors cursor-pointer"
-        onClick={() => file.is_folder && onOpenFolder(file)}
+        className={cn(
+          "p-4 hover:border-primary/50 transition-colors cursor-pointer",
+          isSelected && "border-primary bg-primary/5"
+        )}
+        onClick={handleCardClick}
       >
         <div className="flex items-start justify-between mb-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            {file.is_folder ? (
-              <Folder className="h-5 w-5 text-primary" />
-            ) : (
-              <File className="h-5 w-5 text-primary" />
+          <div className="flex items-center gap-2">
+            {hasSelect && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect(file.id);
+                }}
+                className="flex items-center"
+              >
+                <Checkbox
+                  checked={isSelected}
+                  className="h-4 w-4"
+                  tabIndex={-1}
+                />
+              </div>
             )}
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <IconComponent className="h-5 w-5 text-primary" />
+            </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

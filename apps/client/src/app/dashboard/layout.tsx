@@ -48,7 +48,7 @@ export default function DashboardLayout({
       <Sidebar user={user} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={user} />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto transition-colors duration-200">
           {children}
         </main>
       </div>

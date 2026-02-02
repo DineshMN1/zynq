@@ -1,12 +1,19 @@
 // API client for zynqCloud backend
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
-export interface ApiError {
-  error: {
-    code: string;
-    message: string;
-    details?: unknown;
-  };
+// Custom API Error class
+export class ApiError extends Error {
+  statusCode: number;
+  errorCode?: string;
+  details?: any;
+
+  constructor(message: string, statusCode: number, errorCode?: string, details?: any) {
+    super(message);
+    this.name = 'ApiError';
+    this.statusCode = statusCode;
+    this.errorCode = errorCode;
+    this.details = details;
+  }
 }
 
 export interface User {
@@ -17,7 +24,7 @@ export interface User {
   storage_used?: number;
   storage_limit?: number;
   created_at?: string;
-  token?: string; //  added
+  token?: string;
 }
 
 export interface FileMetadata {
@@ -29,6 +36,7 @@ export interface FileMetadata {
   storage_path?: string;
   parent_id?: string | null;
   is_folder: boolean;
+  file_hash?: string;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -43,11 +51,10 @@ export interface Share {
   created_by: string;
   created_at: string;
   file?: FileMetadata;
-  is_public?: boolean;       //  new
-  share_token?: string | null; //  new
-  publicLink?: string | null; //  new
+  is_public?: boolean;
+  share_token?: string | null;
+  publicLink?: string | null;
 }
-
 
 export interface Invitation {
   id: string;
@@ -67,6 +74,7 @@ export interface PaginatedResponse<T> {
     limit: number;
   };
 }
+
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('token');
@@ -87,20 +95,32 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || 'An error occurred');
+    let errorData: any = {};
+
+    try {
+      errorData = JSON.parse(text);
+    } catch {
+      // If not JSON, use text as message
+      errorData = { message: text };
+    }
+
+    throw new ApiError(
+      errorData.message || 'An error occurred',
+      response.status,
+      errorData.errorCode,
+      errorData
+    );
   }
 
-  // ✅ Handle 204 No Content or empty responses safely
+  // Handle 204 No Content or empty responses safely
   if (response.status === 204 || response.headers.get('Content-Length') === '0') {
     return {} as T;
   }
 
-  // ✅ Try parsing JSON only if body exists
+  // Try parsing JSON only if body exists
   const text = await response.text();
   return text ? JSON.parse(text) : ({} as T);
 }
-
-
 
 // Auth endpoints
 export const authApi = {
@@ -122,6 +142,8 @@ export const authApi = {
     }),
 
   me: () => fetchApi<User>('/auth/me'),
+
+  checkSetupStatus: () => fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
 };
 
 // File endpoints
@@ -141,14 +163,22 @@ export const fileApi = {
     mimeType: string;
     parentId?: string;
     isFolder?: boolean;
+    fileHash?: string;
   }) =>
-    fetchApi<FileMetadata & { uploadUrl?: string; presignedFields?: Record<string, string> }>(
+    fetchApi<FileMetadata & {
+      uploadUrl?: string;
+      presignedFields?: Record<string, string>;
+      duplicateFiles?: FileMetadata[];
+    }>(
       '/files',
       {
         method: 'POST',
         body: JSON.stringify(data),
       }
     ),
+
+  checkDuplicate: (hash: string) =>
+    fetchApi<{ isDuplicate: boolean; files: FileMetadata[] }>(`/files/check-duplicate/${hash}`),
 
   get: (id: string) => fetchApi<FileMetadata>(`/files/${id}`),
 
@@ -167,17 +197,16 @@ export const fileApi = {
       method: 'DELETE',
     }),
 
-  share: (id: string, data: { 
-  toUserId?: string; 
-  email?: string; 
-  permission: 'read' | 'write'; 
-  isPublic?: boolean; // ✅ Added
-}) =>
-  fetchApi<Share>(`/files/${id}/share`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-
+  share: (id: string, data: {
+    toUserId?: string;
+    email?: string;
+    permission: 'read' | 'write';
+    isPublic?: boolean;
+  }) =>
+    fetchApi<Share>(`/files/${id}/share`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   getShared: () => fetchApi<Share[]>('/files/shared'),
   getPublicShares: () => fetchApi<Share[]>('/files/public-shares'),
@@ -185,20 +214,24 @@ export const fileApi = {
     fetchApi<{ success: boolean }>(`/files/shares/${shareId}`, {
       method: 'DELETE',
     }),
-  emptyTrash: () =>
-  fetchApi<void>('/files/trash/empty', {
-    method: 'DELETE',
-  }),
+  bulkDelete: (ids: string[]) =>
+    fetchApi<{ deleted: number }>('/files/bulk', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids }),
+    }),
 
+  emptyTrash: () =>
+    fetchApi<void>('/files/trash/empty', {
+      method: 'DELETE',
+    }),
 
   download: (id: string) => fetchApi<{ url: string }>(`/files/${id}/download`),
   trash: (params: { page?: number; limit?: number }) => {
-  const query = new URLSearchParams();
-  if (params.page) query.append("page", params.page.toString());
-  if (params.limit) query.append("limit", params.limit.toString());
-  return fetchApi<PaginatedResponse<FileMetadata>>(`/files/trash?${query}`);
-},
-
+    const query = new URLSearchParams();
+    if (params.page) query.append("page", params.page.toString());
+    if (params.limit) query.append("limit", params.limit.toString());
+    return fetchApi<PaginatedResponse<FileMetadata>>(`/files/trash?${query}`);
+  },
 };
 
 // Invite endpoints

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -22,15 +22,33 @@ import { motion } from "framer-motion";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth(); 
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
-
   const [loading, setLoading] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
+
+  useEffect(() => {
+    checkSetupStatus();
+  }, []);
+
+  const checkSetupStatus = async () => {
+    try {
+      const response = await authApi.checkSetupStatus();
+      if (response.needsSetup) {
+        // Redirect to setup page
+        router.push("/setup");
+      }
+    } catch (error) {
+      console.error("Failed to check setup status:", error);
+    } finally {
+      setCheckingSetup(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,13 +56,8 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // 1️⃣ Login through backend
       const data = await authApi.login(formData);
-
-      // 2️⃣ Let AuthContext handle saving token + user
       login(data);
-
-      // 3️⃣ Redirect to dashboard
       router.push("/dashboard");
     } catch (err) {
       console.error("Login failed:", err);
@@ -53,6 +66,17 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (checkingSetup) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span className="text-lg">Loading...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
@@ -137,13 +161,6 @@ export default function LoginPage() {
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign In
               </Button>
-
-              <p className="text-sm text-center text-muted-foreground">
-                Don&apos;t have an account?{" "}
-                <Link href="/register" className="text-primary hover:underline">
-                  Register
-                </Link>
-              </p>
             </CardFooter>
           </form>
         </Card>
