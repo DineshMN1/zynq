@@ -7,7 +7,7 @@ node_modules/
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
+.claude/
 # Build outputs
 dist/
 build/
