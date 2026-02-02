@@ -29,6 +29,7 @@ export interface FileMetadata {
   storage_path?: string;
   parent_id?: string | null;
   is_folder: boolean;
+  file_hash?: string;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -104,6 +105,8 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 
 // Auth endpoints
 export const authApi = {
+  getSetupStatus: () => fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
+
   register: (data: { name: string; email: string; password: string; inviteToken?: string }) =>
     fetchApi<User>('/auth/register', {
       method: 'POST',
@@ -141,12 +144,22 @@ export const fileApi = {
     mimeType: string;
     parentId?: string;
     isFolder?: boolean;
+    fileHash?: string;
   }) =>
     fetchApi<FileMetadata & { uploadUrl?: string; presignedFields?: Record<string, string> }>(
       '/files',
       {
         method: 'POST',
         body: JSON.stringify(data),
+      }
+    ),
+
+  checkDuplicate: (fileHash: string) =>
+    fetchApi<{ isDuplicate: boolean; existingFile?: FileMetadata }>(
+      '/files/check-duplicate',
+      {
+        method: 'POST',
+        body: JSON.stringify({ fileHash }),
       }
     ),
 

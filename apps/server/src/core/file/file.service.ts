@@ -71,6 +71,7 @@ export class FileService {
       parent_id: createFileDto.parentId,
       is_folder: createFileDto.isFolder || false,
       storage_path: storagePath,
+      file_hash: createFileDto.fileHash,
     });
 
     const savedFile = await this.filesRepository.save(file);
@@ -292,5 +293,27 @@ export class FileService {
       }
       await this.filesRepository.delete(file.id);
     }
+  }
+
+  async checkDuplicate(
+    userId: string,
+    fileHash: string,
+  ): Promise<{ isDuplicate: boolean; existingFile?: File }> {
+    if (!fileHash) {
+      return { isDuplicate: false };
+    }
+
+    const existingFile = await this.filesRepository.findOne({
+      where: {
+        owner_id: userId,
+        file_hash: fileHash,
+        deleted_at: IsNull(),
+      },
+    });
+
+    return {
+      isDuplicate: !!existingFile,
+      existingFile: existingFile || undefined,
+    };
   }
 }

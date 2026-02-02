@@ -101,6 +101,10 @@ export class CreateFileDto {
   @IsOptional()
   @IsString()
   storagePath?: string;
+
+  @IsOptional()
+  @IsString()
+  fileHash?: string;
 }
 
 export { ALLOWED_MIME_TYPES, BLOCKED_EXTENSIONS_REGEX };

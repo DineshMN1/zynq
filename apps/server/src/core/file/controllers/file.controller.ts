@@ -105,6 +105,14 @@ export class FileController {
     return { success: true };
   }
 
+  @Post('check-duplicate')
+  async checkDuplicate(
+    @CurrentUser() user: User,
+    @Body() body: { fileHash: string },
+  ) {
+    return this.fileService.checkDuplicate(user.id, body.fileHash);
+  }
+
   // ========================================
   // PARAMETERIZED ROUTES LAST
   // ========================================

@@ -12,6 +12,8 @@ import { FileGrid } from "@/features/file/components/file-grid";
 import { FileBreadcrumb } from "@/features/file/components/file-breadcrumb";
 import { CreateFolderDialog } from "@/features/file/components/create-folder-dialog";
 import { PublicLinkDialog } from "@/features/share/components/public-link-dialog";
+import { DuplicateWarningDialog } from "@/features/file/components/duplicate-warning-dialog";
+import { computeFileHash } from "@/lib/file-hash";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +47,9 @@ export default function FilesPage() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateFile, setDuplicateFile] = useState<FileMetadata | undefined>();
+  const [pendingUpload, setPendingUpload] = useState<{ file: File; hash: string } | null>(null);
 
   const currentFolderId = pathStack[pathStack.length - 1]?.id;
 
@@ -151,10 +156,7 @@ export default function FilesPage() {
     });
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const uploadFile = async (file: File, fileHash?: string) => {
     try {
       setUploadProgress({ fileName: file.name, progress: 0, status: 'uploading' });
 
@@ -164,6 +166,7 @@ export default function FilesPage() {
         mimeType: file.type || 'application/octet-stream',
         parentId: currentFolderId || undefined,
         isFolder: false,
+        fileHash,
       });
 
       if (created.uploadUrl) {
@@ -176,8 +179,44 @@ export default function FilesPage() {
         description: `${file.name} uploaded.`,
       });
 
-      // Clear progress after a short delay
       setTimeout(() => setUploadProgress(null), 2000);
+    } catch (err) {
+      console.error("File upload failed:", err);
+      toast({
+        title: "Upload failed",
+        description: "Unable to upload this file.",
+        variant: "destructive",
+      });
+      setUploadProgress(prev => prev ? { ...prev, status: 'error' } : null);
+      setTimeout(() => setUploadProgress(null), 3000);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadProgress({ fileName: file.name, progress: 0, status: 'uploading' });
+
+      // Compute file hash
+      const fileHash = await computeFileHash(file);
+
+      // Check for duplicates
+      const { isDuplicate, existingFile } = await fileApi.checkDuplicate(fileHash);
+
+      if (isDuplicate && existingFile) {
+        // Show duplicate warning dialog
+        setPendingUpload({ file, hash: fileHash });
+        setDuplicateFile(existingFile);
+        setDuplicateDialogOpen(true);
+        setUploadProgress(null);
+        e.target.value = "";
+        return;
+      }
+
+      // No duplicate, proceed with upload
+      await uploadFile(file, fileHash);
     } catch (err) {
       console.error("File upload failed:", err);
       toast({
@@ -190,6 +229,21 @@ export default function FilesPage() {
     } finally {
       e.target.value = "";
     }
+  };
+
+  const handleUploadAnyway = async () => {
+    setDuplicateDialogOpen(false);
+    if (pendingUpload) {
+      await uploadFile(pendingUpload.file, pendingUpload.hash);
+      setPendingUpload(null);
+      setDuplicateFile(undefined);
+    }
+  };
+
+  const handleCancelDuplicate = () => {
+    setDuplicateDialogOpen(false);
+    setPendingUpload(null);
+    setDuplicateFile(undefined);
   };
 
   const handleCreateFolder = async () => {
@@ -385,6 +439,16 @@ export default function FilesPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Duplicate Warning Dialog */}
+        <DuplicateWarningDialog
+          open={duplicateDialogOpen}
+          onOpenChange={setDuplicateDialogOpen}
+          fileName={pendingUpload?.file.name || ""}
+          existingFile={duplicateFile}
+          onUploadAnyway={handleUploadAnyway}
+          onCancel={handleCancelDuplicate}
+        />
       </div>
 
       <ToastContainer />

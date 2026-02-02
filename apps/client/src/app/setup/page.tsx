@@ -6,8 +6,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
 import {
   Card,
   CardContent,
@@ -16,28 +14,32 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Cloud, Loader2 } from "lucide-react";
+import { Cloud, Loader2, Eye, EyeOff, Shield } from "lucide-react";
 import { authApi } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
 
-export default function LoginPage() {
+export default function SetupPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [showPassword, setShowPassword] = useState(false);
-  const [checking, setChecking] = useState(true);
-
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [formData, setFormData] = useState({
+    name: "",
     email: "",
     password: "",
+    confirmPassword: "",
   });
 
   useEffect(() => {
     authApi.getSetupStatus()
       .then(({ needsSetup }) => {
-        if (needsSetup) {
-          router.push("/setup");
+        if (!needsSetup) {
+          router.push("/login");
         }
         setChecking(false);
       })
@@ -51,22 +53,39 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError("Password must be at least 8 characters");
+      setLoading(false);
+      return;
+    }
+
     try {
-      // 1️⃣ Login through backend
-      const data = await authApi.login(formData);
-
-      // 2️⃣ Let AuthContext handle saving token + user
-      login(data);
-
-      // 3️⃣ Redirect to dashboard
+      const user = await authApi.register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+      });
+      login(user);
       router.push("/dashboard");
     } catch (err) {
-      console.error("Login failed:", err);
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "Setup failed");
     } finally {
       setLoading(false);
     }
   };
+
+  const passwordsMatch = formData.password === formData.confirmPassword;
+  const isValid =
+    formData.name.length >= 2 &&
+    formData.email.includes("@") &&
+    formData.password.length >= 8 &&
+    passwordsMatch;
 
   if (checking) {
     return (
@@ -93,9 +112,12 @@ export default function LoginPage() {
 
         <Card className="border-2">
           <CardHeader>
-            <CardTitle className="text-2xl">Welcome back</CardTitle>
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <CardTitle className="text-2xl">Initial Setup</CardTitle>
+            </div>
             <CardDescription>
-              Sign in to your account to continue
+              Create your administrator account to get started
             </CardDescription>
           </CardHeader>
 
@@ -108,11 +130,26 @@ export default function LoginPage() {
               )}
 
               <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Your name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder="admin@example.com"
                   value={formData.email}
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
@@ -124,11 +161,11 @@ export default function LoginPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
+                    placeholder="Minimum 8 characters"
                     value={formData.password}
                     onChange={(e) =>
                       setFormData({ ...formData, password: e.target.value })
@@ -137,7 +174,6 @@ export default function LoginPage() {
                     disabled={loading}
                     className="pr-10"
                   />
-
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
@@ -151,21 +187,58 @@ export default function LoginPage() {
                     )}
                   </button>
                 </div>
+                {formData.password.length > 0 && formData.password.length < 8 && (
+                  <p className="text-xs text-destructive">
+                    Password must be at least 8 characters
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Confirm your password"
+                    value={formData.confirmPassword}
+                    onChange={(e) =>
+                      setFormData({ ...formData, confirmPassword: e.target.value })
+                    }
+                    required
+                    disabled={loading}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                    disabled={loading}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+                {formData.confirmPassword.length > 0 && !passwordsMatch && (
+                  <p className="text-xs text-destructive">
+                    Passwords do not match
+                  </p>
+                )}
               </div>
             </CardContent>
 
             <CardFooter className="flex flex-col gap-4 mt-5">
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || !isValid}
+              >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign In
+                Create Admin Account
               </Button>
-
-              <p className="text-sm text-center text-muted-foreground">
-                Don&apos;t have an account?{" "}
-                <Link href="/register" className="text-primary hover:underline">
-                  Register
-                </Link>
-              </p>
             </CardFooter>
           </form>
         </Card>
