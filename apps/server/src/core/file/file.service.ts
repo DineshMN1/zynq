@@ -2,9 +2,10 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, Not } from 'typeorm';
+import { Repository, IsNull, Not, In } from 'typeorm';
 import { File } from './entities/file.entity';
 import { Share } from '../share/entities/share.entity';
 import { StorageService } from '../storage/storage.service';
@@ -51,6 +52,29 @@ export class FileService {
       throw new BadRequestException('Storage limit exceeded');
     }
 
+    // Check for duplicate content if hash is provided and not a folder
+    if (createFileDto.fileHash && !createFileDto.isFolder) {
+      const duplicates = await this.findDuplicatesByHash(
+        userId,
+        createFileDto.fileHash,
+      );
+
+      if (duplicates.length > 0) {
+        // Return error with duplicate information
+        throw new ConflictException({
+          message: 'Duplicate content detected',
+          duplicates: duplicates.map((file) => ({
+            id: file.id,
+            name: file.name,
+            size: file.size,
+            mime_type: file.mime_type,
+            created_at: file.created_at,
+            parent_id: file.parent_id,
+          })),
+        });
+      }
+    }
+
     let uploadUrl: string | undefined;
     let storagePath: string | undefined;
 
@@ -71,6 +95,7 @@ export class FileService {
       parent_id: createFileDto.parentId,
       is_folder: createFileDto.isFolder || false,
       storage_path: storagePath,
+      file_hash: createFileDto.fileHash,
     });
 
     const savedFile = await this.filesRepository.save(file);
@@ -130,6 +155,31 @@ export class FileService {
     const file = await this.findById(id, userId);
     file.deleted_at = new Date();
     await this.filesRepository.save(file);
+  }
+
+  async bulkSoftDelete(
+    ids: string[],
+    userId: string,
+  ): Promise<{ deleted: number }> {
+    const files = await this.filesRepository.find({
+      where: {
+        id: In(ids),
+        owner_id: userId,
+        deleted_at: IsNull(),
+      },
+    });
+
+    if (files.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const now = new Date();
+    for (const file of files) {
+      file.deleted_at = now;
+    }
+    await this.filesRepository.save(files);
+
+    return { deleted: files.length };
   }
 
   async restore(id: string, userId: string): Promise<File> {
@@ -224,7 +274,7 @@ export class FileService {
       throw new NotFoundException('File storage path not found');
     }
 
-    return this.storageService.getPresignedDownloadUrl(file.storage_path);
+    return this.storageService.getPresignedDownloadUrl(file.storage_path, file.name);
   }
 
   async getFileByShareToken(token: string): Promise<File | null> {
@@ -248,7 +298,7 @@ export class FileService {
     const file = share.file;
     const downloadUrl =
       !file.is_folder && file.storage_path
-        ? await this.storageService.getPresignedDownloadUrl(file.storage_path)
+        ? await this.storageService.getPresignedDownloadUrl(file.storage_path, file.name)
         : null;
 
     return {
@@ -292,5 +342,32 @@ export class FileService {
       }
       await this.filesRepository.delete(file.id);
     }
+  }
+
+  async findDuplicatesByHash(
+    userId: string,
+    fileHash: string,
+  ): Promise<File[]> {
+    return this.filesRepository.find({
+      where: {
+        owner_id: userId,
+        file_hash: fileHash,
+        deleted_at: IsNull(),
+        is_folder: false,
+      },
+      order: { created_at: 'DESC' },
+      take: 10,
+    });
+  }
+
+  async checkDuplicate(
+    userId: string,
+    fileHash: string,
+  ): Promise<{ isDuplicate: boolean; files: File[] }> {
+    const duplicates = await this.findDuplicatesByHash(userId, fileHash);
+    return {
+      isDuplicate: duplicates.length > 0,
+      files: duplicates,
+    };
   }
 }

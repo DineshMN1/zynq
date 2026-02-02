@@ -34,6 +34,9 @@ export class File extends BaseEntity {
   @Column({ default: false })
   is_folder: boolean;
 
+  @Column({ nullable: true })
+  file_hash: string;
+
   @Column({ type: 'timestamptz', nullable: true })
   deleted_at: Date;
 

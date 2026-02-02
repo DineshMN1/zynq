@@ -56,10 +56,13 @@ export class StorageService {
     return { uploadUrl: this.toPublicUrl(internalUrl), storagePath };
   }
 
-  async getPresignedDownloadUrl(storagePath: string): Promise<string> {
+  async getPresignedDownloadUrl(storagePath: string, fileName?: string): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: storagePath,
+      ...(fileName && {
+        ResponseContentDisposition: `attachment; filename="${fileName}"`,
+      }),
     });
 
     const internalUrl = await getSignedUrl(this.s3Client, command, {

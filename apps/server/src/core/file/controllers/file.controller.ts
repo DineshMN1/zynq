@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { User } from '../../user/entities/user.entity';
 import { CreateFileDto } from '../dto/create-file.dto';
+import { BulkDeleteFilesDto } from '../dto/bulk-delete-files.dto';
 import { ShareFileDto } from '../../share/dto/share-file.dto';
 
 @Controller('files')
@@ -103,6 +104,23 @@ export class FileController {
   ) {
     await this.fileService.revokeShare(shareId, user.id);
     return { success: true };
+  }
+
+  @Delete('bulk')
+  @HttpCode(HttpStatus.OK)
+  async bulkDelete(
+    @CurrentUser() user: User,
+    @Body() dto: BulkDeleteFilesDto,
+  ) {
+    return this.fileService.bulkSoftDelete(dto.ids, user.id);
+  }
+
+  @Get('check-duplicate/:hash')
+  async checkDuplicate(
+    @CurrentUser() user: User,
+    @Param('hash') hash: string,
+  ) {
+    return this.fileService.checkDuplicate(user.id, hash);
   }
 
   // ========================================

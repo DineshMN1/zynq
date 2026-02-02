@@ -88,4 +88,9 @@ export class AuthService {
     const payload = { sub: user.id, email: user.email, role: user.role };
     return this.jwtService.sign(payload);
   }
+
+  async needsSetup(): Promise<boolean> {
+    const userCount = await this.userService.count();
+    return userCount === 0;
+  }
 }

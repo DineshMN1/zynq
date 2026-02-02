@@ -42,7 +42,7 @@ export class AuthController {
     });
 
     const { password_hash: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return { ...userWithoutPassword, token };
   }
 
   @Post('login')
@@ -79,5 +79,11 @@ export class AuthController {
   getProfile(@CurrentUser() user: User) {
     const { password_hash: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
+  }
+
+  @Get('setup-status')
+  async getSetupStatus() {
+    const needsSetup = await this.authService.needsSetup();
+    return { needsSetup };
   }
 }
