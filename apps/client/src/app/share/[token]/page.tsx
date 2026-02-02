@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Loader2, Cloud, Download, File } from 'lucide-react';
 import { formatBytes } from '@/lib/auth';
+import { publicApi } from '@/lib/api';
 
 interface SharedFile {
   name: string;
   mimeType: string;
   size: number;
-  downloadUrl: string;
+  downloadUrl: string | null;
   owner: string;
   createdAt: string;
 }
@@ -24,9 +25,7 @@ export default function PublicSharePage() {
 
   const fetchFile = useCallback(async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'}/public/share/${token}`);
-      if (!res.ok) throw new Error('File not found');
-      const data = await res.json();
+      const data = await publicApi.getShare(token);
       setFile(data);
     } catch {
       setError('This link is invalid or has expired.');

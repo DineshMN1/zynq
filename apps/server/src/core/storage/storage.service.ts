@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 @Injectable()
 export class StorageService {
   private s3Client: S3Client;
+  private s3PublicClient: S3Client;
   private bucket: string;
   private internalEndpoint: string;
   private publicEndpoint: string;
@@ -22,20 +23,37 @@ export class StorageService {
     this.publicEndpoint =
       this.configService.get('S3_PUBLIC_ENDPOINT') || this.internalEndpoint;
 
+    console.log('[Storage] Initializing with config:');
+    console.log('  Bucket:', this.bucket);
+    console.log('  Internal Endpoint:', this.internalEndpoint);
+    console.log('  Public Endpoint:', this.publicEndpoint);
+
+    const credentials = {
+      accessKeyId: this.configService.get('S3_ACCESS_KEY_ID'),
+      secretAccessKey: this.configService.get('S3_SECRET_ACCESS_KEY'),
+    };
+
+    const region = this.configService.get('S3_REGION');
+    const forcePathStyle = this.configService.get('S3_FORCE_PATH_STYLE') === 'true';
+
+    console.log('  Region:', region);
+    console.log('  Force Path Style:', forcePathStyle);
+
+    // Client for internal operations (server-to-S3)
     this.s3Client = new S3Client({
       endpoint: this.internalEndpoint,
-      region: this.configService.get('S3_REGION'),
-      credentials: {
-        accessKeyId: this.configService.get('S3_ACCESS_KEY_ID'),
-        secretAccessKey: this.configService.get('S3_SECRET_ACCESS_KEY'),
-      },
-      forcePathStyle: this.configService.get('S3_FORCE_PATH_STYLE') === 'true',
+      region,
+      credentials,
+      forcePathStyle,
     });
-  }
 
-  private toPublicUrl(url: string): string {
-    // Replace internal endpoint with public endpoint for browser access
-    return url.replace(this.internalEndpoint, this.publicEndpoint);
+    // Client for generating presigned URLs (browser-to-S3)
+    this.s3PublicClient = new S3Client({
+      endpoint: this.publicEndpoint,
+      region,
+      credentials,
+      forcePathStyle,
+    });
   }
 
   async getPresignedUploadUrl(
@@ -49,24 +67,30 @@ export class StorageService {
       ContentType: mimeType,
     });
 
-    const internalUrl = await getSignedUrl(this.s3Client, command, {
+    // Use public client so the signature matches the public endpoint
+    const uploadUrl = await getSignedUrl(this.s3PublicClient, command, {
       expiresIn: 3600,
     });
 
-    return { uploadUrl: this.toPublicUrl(internalUrl), storagePath };
+    return { uploadUrl, storagePath };
   }
 
   async getPresignedDownloadUrl(storagePath: string): Promise<string> {
+    console.log('[Storage] Generating presigned download URL for:', storagePath);
+    console.log('[Storage] Using public endpoint:', this.publicEndpoint);
+
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: storagePath,
     });
 
-    const internalUrl = await getSignedUrl(this.s3Client, command, {
+    // Use public client so the signature matches the public endpoint
+    const downloadUrl = await getSignedUrl(this.s3PublicClient, command, {
       expiresIn: 3600,
     });
 
-    return this.toPublicUrl(internalUrl);
+    console.log('[Storage] Generated download URL:', downloadUrl);
+    return downloadUrl;
   }
 
   async deleteObject(storagePath: string): Promise<void> {

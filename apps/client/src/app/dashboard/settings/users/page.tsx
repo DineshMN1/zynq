@@ -22,11 +22,25 @@ import {
 import { MoreVertical, Loader2, UserPlus } from 'lucide-react';
 import { adminApi, type User } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
+import { toast } from '@/hooks/use-toast';
+import { ToastContainer } from '@/components/toast-container';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [page] = useState(1);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const loadUsers = useCallback(async () => {
     try {
@@ -44,18 +58,33 @@ export default function UsersPage() {
     loadUsers();
   }, [loadUsers]);
 
-  const handleDeleteUser = async (id: string) => {
-  if (!confirm('Are you sure you want to delete this user?')) return;
-  try {
-    await adminApi.deleteUser(id);
-    // ✅ Remove deleted user immediately
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    // Optional: re-fetch for confirmation
-    setTimeout(loadUsers, 500);
-  } catch (error) {
-    console.error('Failed to delete user:', error);
-  }
-};
+  const handleDeleteUser = (id: string) => {
+    setSelectedUserId(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!selectedUserId) return;
+    try {
+      await adminApi.deleteUser(selectedUserId);
+      setUsers((prev) => prev.filter((u) => u.id !== selectedUserId));
+      toast({
+        title: 'User deleted',
+        description: 'The user has been successfully deleted.',
+      });
+      setTimeout(loadUsers, 500);
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to delete user.',
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setSelectedUserId(null);
+    }
+  };
 
 
   return (
@@ -136,6 +165,29 @@ export default function UsersPage() {
           </Table>
         </Card>
       )}
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this user? This action cannot be undone and all their data will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteUser}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ToastContainer />
     </div>
   );
 }

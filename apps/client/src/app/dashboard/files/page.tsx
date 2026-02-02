@@ -12,6 +12,16 @@ import { FileGrid } from "@/features/file/components/file-grid";
 import { FileBreadcrumb } from "@/features/file/components/file-breadcrumb";
 import { CreateFolderDialog } from "@/features/file/components/create-folder-dialog";
 import { PublicLinkDialog } from "@/features/share/components/public-link-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface UploadProgress {
   fileName: string;
@@ -33,6 +43,8 @@ export default function FilesPage() {
   const [folderName, setFolderName] = useState("");
   const [publicLink, setPublicLink] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
   const currentFolderId = pathStack[pathStack.length - 1]?.id;
 
@@ -63,11 +75,16 @@ export default function FilesPage() {
     loadFiles();
   }, [loadFiles]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to move this file to Trash?")) return;
+  const handleDelete = (id: string) => {
+    setSelectedFileId(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedFileId) return;
     try {
-      await fileApi.delete(id);
-      setFiles(files.filter((f) => f.id !== id));
+      await fileApi.delete(selectedFileId);
+      setFiles(files.filter((f) => f.id !== selectedFileId));
       toast({
         title: "File deleted",
         description: "Moved to trash successfully.",
@@ -79,6 +96,9 @@ export default function FilesPage() {
         description: "Unable to move file to trash.",
         variant: "destructive",
       });
+    } finally {
+      setDeleteDialogOpen(false);
+      setSelectedFileId(null);
     }
   };
 
@@ -347,6 +367,24 @@ export default function FilesPage() {
           publicLink={publicLink}
           onClose={() => setPublicLink(null)}
         />
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Move to trash?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to move this file to trash? You can restore it later from the trash.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete}>
+                Move to Trash
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <ToastContainer />

@@ -136,9 +136,9 @@ export class HealthController {
       return `${mb.toFixed(2)} MB`;
     };
 
-    // Consider unhealthy if heap used > 90% of heap total
+    // Consider unhealthy if heap used > 95% of heap total
     const heapUsedRatio = memUsage.heapUsed / memUsage.heapTotal;
-    const status = heapUsedRatio < 0.9 ? 'up' : 'down';
+    const status = heapUsedRatio < 0.95 ? 'up' : 'down';
 
     return {
       status,

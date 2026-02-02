@@ -254,3 +254,16 @@ export const settingsApi = {
       body: JSON.stringify(data),
     }),
 };
+
+// Public endpoints (no authentication required)
+export const publicApi = {
+  getShare: (token: string) =>
+    fetchApi<{
+      name: string;
+      size: number;
+      mimeType: string;
+      downloadUrl: string | null;
+      owner: string;
+      createdAt: string;
+    }>(`/public/share/${token}`),
+};

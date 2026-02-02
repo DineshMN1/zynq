@@ -10,12 +10,24 @@ import { formatBytes } from '@/lib/auth';
 import { motion } from 'framer-motion';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function SharedPage() {
   const [privateShares, setPrivateShares] = useState<Share[]>([]);
   const [publicShares, setPublicShares] = useState<Share[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
+  const [selectedShareId, setSelectedShareId] = useState<string | null>(null);
 
   const loadShares = useCallback(async () => {
     try {
@@ -37,13 +49,16 @@ export default function SharedPage() {
     loadShares();
   }, [loadShares]);
 
-  const handleRevokeShare = async (shareId: string) => {
-    if (!confirm('Are you sure you want to stop sharing this file publicly? The link will no longer work.')) {
-      return;
-    }
+  const handleRevokeShare = (shareId: string) => {
+    setSelectedShareId(shareId);
+    setRevokeDialogOpen(true);
+  };
+
+  const confirmRevokeShare = async () => {
+    if (!selectedShareId) return;
     try {
-      await fileApi.revokeShare(shareId);
-      setPublicShares(publicShares.filter((s) => s.id !== shareId));
+      await fileApi.revokeShare(selectedShareId);
+      setPublicShares(publicShares.filter((s) => s.id !== selectedShareId));
       toast({
         title: 'Share revoked',
         description: 'Public link has been disabled.',
@@ -55,6 +70,9 @@ export default function SharedPage() {
         description: 'Failed to revoke the share.',
         variant: 'destructive',
       });
+    } finally {
+      setRevokeDialogOpen(false);
+      setSelectedShareId(null);
     }
   };
 
@@ -211,6 +229,27 @@ export default function SharedPage() {
           )}
         </>
       )}
+
+      {/* Revoke Share Confirmation Dialog */}
+      <AlertDialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Stop sharing this file?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to stop sharing this file publicly? The link will no longer work and anyone with the link will lose access.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRevokeShare}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Stop Sharing
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ToastContainer />
     </div>

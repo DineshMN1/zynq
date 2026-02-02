@@ -10,6 +10,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Trash2,
   MoreVertical,
   RotateCcw,
@@ -21,10 +31,14 @@ import {
 import { fileApi, type FileMetadata } from "@/lib/api";
 import { formatBytes } from "@/lib/auth";
 import { motion } from "framer-motion";
+import { toast } from "@/hooks/use-toast";
 
 export default function TrashPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [emptyTrashDialogOpen, setEmptyTrashDialogOpen] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
   useEffect(() => {
     loadTrash();
@@ -52,29 +66,53 @@ export default function TrashPage() {
   };
 
   const handlePermanentDelete = async (id: string) => {
-    if (!confirm("Permanently delete this file?")) return;
+    setSelectedFileId(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmPermanentDelete = async () => {
+    if (!selectedFileId) return;
     try {
-      await fileApi.permanentDelete(id);
-      setFiles(files.filter((f) => f.id !== id)); // remove from UI instantly
+      await fileApi.permanentDelete(selectedFileId);
+      setFiles(files.filter((f) => f.id !== selectedFileId)); // remove from UI instantly
+      toast({
+        title: "File deleted",
+        description: "The file has been permanently deleted.",
+      });
     } catch (error) {
       console.error("Failed to permanently delete file:", error);
-      alert("Error deleting file permanently");
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete file permanently.",
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setSelectedFileId(null);
     }
   };
 
-  const handleEmptyTrash = async () => {
-    if (
-      !confirm(
-        "Are you sure you want to empty the trash? This cannot be undone."
-      )
-    )
-      return;
+  const handleEmptyTrash = () => {
+    setEmptyTrashDialogOpen(true);
+  };
+
+  const confirmEmptyTrash = async () => {
     try {
       await fileApi.emptyTrash();
       setFiles([]); // clear UI
+      toast({
+        title: "Trash emptied",
+        description: "All files have been permanently deleted.",
+      });
     } catch (error) {
       console.error("Failed to empty trash:", error);
-      alert("Error emptying trash");
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to empty trash.",
+      });
+    } finally {
+      setEmptyTrashDialogOpen(false);
     }
   };
 
@@ -166,6 +204,48 @@ export default function TrashPage() {
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete this file?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the file from the server.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmPermanentDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Empty Trash Confirmation Dialog */}
+      <AlertDialog open={emptyTrashDialogOpen} onOpenChange={setEmptyTrashDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Empty trash?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to empty the trash? This will permanently delete all files and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmEmptyTrash}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Empty Trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
