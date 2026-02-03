@@ -118,25 +118,15 @@ export function FileCard({
 }: FileCardProps) {
   const handleDownload = async () => {
     try {
-      const res = await fileApi.download(file.id);
-      if (res.url) {
-        const response = await fetch(res.url);
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = file.name || "download";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-      } else {
-        toast({
-          title: "Download failed",
-          description: "File URL not available.",
-          variant: "destructive",
-        });
-      }
+      const { blob, fileName } = await fileApi.download(file.id);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName || file.name || "download";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error("Download failed:", err);
       toast({

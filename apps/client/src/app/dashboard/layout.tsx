@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
-import { Header } from '@/components/Header';
 import { authApi, type User } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 
@@ -33,7 +32,7 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -44,14 +43,11 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-screen flex overflow-hidden bg-background">
       <Sidebar user={user} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header user={user} />
-        <main className="flex-1 overflow-auto transition-colors duration-200">
-          {children}
-        </main>
-      </div>
+      <main className="flex-1 overflow-auto transition-colors duration-200">
+        {children}
+      </main>
     </div>
   );
 }

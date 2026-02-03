@@ -75,6 +75,33 @@ export interface PaginatedResponse<T> {
   };
 }
 
+export interface StorageOverview {
+  system: {
+    totalBytes: number;
+    usedBytes: number;
+    freeBytes: number;
+    usedPercentage: number;
+  };
+  user: {
+    usedBytes: number;
+    quotaBytes: number;
+    freeBytes: number;
+    usedPercentage: number;
+    isUnlimited: boolean;
+  };
+}
+
+export interface UserStorageInfo {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  usedBytes: number;
+  quotaBytes: number;
+  usedPercentage: number;
+  isUnlimited: boolean;
+}
+
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('token');
@@ -100,7 +127,6 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     try {
       errorData = JSON.parse(text);
     } catch {
-      // If not JSON, use text as message
       errorData = { message: text };
     }
 
@@ -112,12 +138,10 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     );
   }
 
-  // Handle 204 No Content or empty responses safely
   if (response.status === 204 || response.headers.get('Content-Length') === '0') {
     return {} as T;
   }
 
-  // Try parsing JSON only if body exists
   const text = await response.text();
   return text ? JSON.parse(text) : ({} as T);
 }
@@ -177,6 +201,39 @@ export const fileApi = {
       }
     ),
 
+  upload: async (fileId: string, file: File): Promise<FileMetadata> => {
+    const token = getAuthToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/files/${fileId}/upload`, {
+      method: 'PUT',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      let errorData: any = {};
+      try {
+        errorData = JSON.parse(text);
+      } catch {
+        errorData = { message: text };
+      }
+      throw new ApiError(
+        errorData.message || 'Upload failed',
+        response.status,
+        errorData.errorCode,
+        errorData
+      );
+    }
+
+    return response.json();
+  },
+
   checkDuplicate: (hash: string) =>
     fetchApi<{ isDuplicate: boolean; files: FileMetadata[] }>(`/files/check-duplicate/${hash}`),
 
@@ -225,7 +282,32 @@ export const fileApi = {
       method: 'DELETE',
     }),
 
-  download: (id: string) => fetchApi<{ url: string }>(`/files/${id}/download`),
+  download: async (id: string) => {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/files/${id}/download`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new ApiError('Download failed', response.status);
+    }
+
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let fileName = 'download';
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="?([^"]+)"?/);
+      if (match) {
+        fileName = decodeURIComponent(match[1]);
+      }
+    }
+
+    return { blob, fileName };
+  },
+
   trash: (params: { page?: number; limit?: number }) => {
     const query = new URLSearchParams();
     if (params.page) query.append("page", params.page.toString());
@@ -286,4 +368,61 @@ export const settingsApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+};
+
+// Storage endpoints
+export const storageApi = {
+  getOverview: () => fetchApi<StorageOverview>('/storage/overview'),
+
+  getUserStorage: (userId: string) =>
+    fetchApi<UserStorageInfo & { actualUsedBytes: number; freeBytes: number }>(
+      `/storage/users/${userId}`
+    ),
+
+  getAllUsersStorage: () => fetchApi<UserStorageInfo[]>('/storage/users'),
+
+  updateUserQuota: (userId: string, quotaBytes: number) =>
+    fetchApi<{ userId: string; name: string; quotaBytes: number; usedBytes: number }>(
+      `/storage/users/${userId}/quota`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ storage_quota: quotaBytes }),
+      }
+    ),
+};
+
+// Public share endpoints
+export const publicApi = {
+  getShare: (token: string) =>
+    fetchApi<{
+      id: string;
+      name: string;
+      size: number;
+      mimeType: string;
+      owner: string;
+      ownerId: string;
+      createdAt: string;
+      isFolder: boolean;
+      hasContent: boolean;
+    }>(`/public/share/${token}`),
+
+  downloadShare: async (token: string) => {
+    const response = await fetch(`${API_BASE_URL}/public/share/${token}/download`);
+
+    if (!response.ok) {
+      throw new ApiError('Download failed', response.status);
+    }
+
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let fileName = 'download';
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="?([^"]+)"?/);
+      if (match) {
+        fileName = decodeURIComponent(match[1]);
+      }
+    }
+
+    return { blob, fileName };
+  },
 };
