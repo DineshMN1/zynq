@@ -40,7 +40,6 @@ export default function LoginPage() {
     try {
       const response = await authApi.checkSetupStatus();
       if (response.needsSetup) {
-        // Redirect to setup page
         router.push("/setup");
       }
     } catch (error) {

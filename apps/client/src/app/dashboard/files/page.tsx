@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +23,10 @@ import {
   File as FileIcon,
   Folder,
   Link as LinkIcon,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  HardDrive,
 } from "lucide-react";
 import { fileApi, type FileMetadata, ApiError } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -32,6 +38,8 @@ import { PublicLinkDialog } from "@/features/share/components/public-link-dialog
 import { DuplicateWarningDialog } from "@/features/file/components/duplicate-warning-dialog";
 import { DropZoneOverlay } from "@/features/file/components/drop-zone-overlay";
 import { calculateContentHash } from "@/lib/file-hash";
+import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface UploadProgress {
   id: string;
@@ -134,7 +142,6 @@ export default function FilesPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "a") {
-        // Only capture if not inside an input/textarea
         const tag = (e.target as HTMLElement).tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
         e.preventDefault();
@@ -168,9 +175,7 @@ export default function FilesPage() {
     setSelectedIds(new Set(files.map((f) => f.id)));
   };
 
-  // Card click handler: supports Shift+click for range, Ctrl+click for toggle, plain click for folder open
   const handleCardClick = (id: string, e: React.MouseEvent) => {
-    // Shift+click: range selection
     if (e.shiftKey && lastClickedId.current) {
       const lastIdx = files.findIndex((f) => f.id === lastClickedId.current);
       const curIdx = files.findIndex((f) => f.id === id);
@@ -188,13 +193,11 @@ export default function FilesPage() {
       }
     }
 
-    // Ctrl/Cmd+click: toggle single item
     if (e.ctrlKey || e.metaKey) {
       toggleSelect(id);
       return;
     }
 
-    // Plain click: if it's a folder, open it; otherwise toggle select
     const file = files.find((f) => f.id === id);
     if (file?.is_folder) {
       handleOpenFolder(file);
@@ -388,7 +391,6 @@ export default function FilesPage() {
     }
   };
 
-  // Multi-file upload with hash-based duplicate detection
   const uploadMultipleFiles = async (
     fileEntries: { file: File; parentId?: string }[]
   ) => {
@@ -407,16 +409,13 @@ export default function FilesPage() {
       const progressId = progressIds[i];
 
       try {
-        // Calculate hash for duplicate detection
         updateUploadProgress(progressId, { status: "checking" });
         const fileHash = await calculateContentHash(file);
 
-        // Try upload with hash - server will reject duplicates with 409
         await proceedWithUploadForId(file, fileHash, false, progressId, parentId);
         uploaded++;
       } catch (err) {
         if (err instanceof ApiError && err.statusCode === 409) {
-          // Duplicate detected - mark and skip
           duplicatesSkipped++;
           updateUploadProgress(progressId, {
             status: "duplicate",
@@ -433,7 +432,6 @@ export default function FilesPage() {
 
     await loadFiles();
 
-    // Summary toast
     const parts: string[] = [];
     if (uploaded > 0) parts.push(`${uploaded} uploaded`);
     if (duplicatesSkipped > 0) parts.push(`${duplicatesSkipped} duplicates skipped`);
@@ -445,7 +443,6 @@ export default function FilesPage() {
       variant: errors > 0 && uploaded === 0 ? "destructive" : undefined,
     });
 
-    // Auto-clear completed/duplicate items after 3s
     setTimeout(() => {
       setUploadQueue((prev) =>
         prev.filter(
@@ -457,12 +454,10 @@ export default function FilesPage() {
     }, 3000);
   };
 
-  // Handles single file upload (with duplicate dialog for single file)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
-    // Multi-file upload: use bulk path with hash detection
     if (fileList.length > 1) {
       const entries = Array.from(fileList).map((file) => ({
         file,
@@ -473,7 +468,6 @@ export default function FilesPage() {
       return;
     }
 
-    // Single file: show duplicate dialog if conflict
     const file = fileList[0];
     let fileHash = "";
     const progressId = addUploadProgress(file.name);
@@ -563,7 +557,6 @@ export default function FilesPage() {
     });
   };
 
-  // Find existing folder by name in a parent, returns its ID or undefined
   const findExistingFolderId = async (
     name: string,
     parentId?: string
@@ -592,7 +585,6 @@ export default function FilesPage() {
 
     const allFiles = Array.from(fileList);
 
-    // Extract unique folder paths from webkitRelativePath, sorted by depth
     const folderPaths = new Set<string>();
     for (const file of allFiles) {
       const relPath = file.webkitRelativePath;
@@ -609,7 +601,6 @@ export default function FilesPage() {
       return depthA - depthB;
     });
 
-    // Create folders sequentially, check for existing duplicates first
     const folderIdMap = new Map<string, string>();
     const baseParentId = currentFolderId || undefined;
 
@@ -622,7 +613,6 @@ export default function FilesPage() {
         ? folderIdMap.get(parentPath)
         : baseParentId;
 
-      // Check if folder with same name already exists in parent
       const existingId = await findExistingFolderId(name, parentId);
       if (existingId) {
         folderIdMap.set(folderPath, existingId);
@@ -648,7 +638,6 @@ export default function FilesPage() {
       }
     }
 
-    // Map each file to its parent folder ID
     const fileEntries: { file: File; parentId?: string }[] = allFiles.map(
       (file) => {
         const relPath = file.webkitRelativePath;
@@ -670,7 +659,6 @@ export default function FilesPage() {
   const handleCreateFolder = async () => {
     if (!folderName.trim()) return;
 
-    // Check for existing folder with same name
     const existingId = await findExistingFolderId(
       folderName.trim(),
       currentFolderId || undefined
@@ -794,10 +782,26 @@ export default function FilesPage() {
     files.length > 0 && files.every((f) => selectedIds.has(f.id));
   const someSelected = selectedIds.size > 0;
 
+  // Get upload status icon
+  const getStatusIcon = (status: UploadProgress["status"]) => {
+    switch (status) {
+      case "completed":
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case "error":
+        return <AlertCircle className="h-4 w-4 text-destructive" />;
+      case "duplicate":
+        return <AlertCircle className="h-4 w-4 text-amber-500" />;
+      case "checking":
+        return <Clock className="h-4 w-4 text-muted-foreground animate-pulse" />;
+      default:
+        return <Upload className="h-4 w-4 text-primary" />;
+    }
+  };
+
   return (
     <>
       <div
-        className="p-6 space-y-6 relative"
+        className="p-4 sm:p-6 space-y-6 relative min-h-[calc(100vh-4rem)]"
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -806,170 +810,219 @@ export default function FilesPage() {
         <DropZoneOverlay isActive={isDragActive} />
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">My Files</h1>
-            <p className="text-muted-foreground mt-1">
-              {total} {total === 1 ? "item" : "items"}
-            </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">My Files</h1>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <HardDrive className="h-4 w-4" />
+                  {total} {total === 1 ? "item" : "items"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button
+                variant="outline"
+                onClick={() => setShowNewFolderDialog(true)}
+                className="flex-1 sm:flex-none h-10"
+              >
+                <FolderPlus className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">New Folder</span>
+                <span className="sm:hidden">Folder</span>
+              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="flex-1 sm:flex-none h-10">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={handleUploadFileClick} className="gap-2">
+                    <FileIcon className="h-4 w-4" />
+                    Upload Files
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleUploadFolderClick} className="gap-2">
+                    <Folder className="h-4 w-4" />
+                    Upload Folder
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                multiple
+              />
+              <input
+                type="file"
+                ref={folderInputRef}
+                onChange={handleFolderChange}
+                className="hidden"
+                {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
+              />
+            </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowNewFolderDialog(true)}
-            >
-              <FolderPlus className="mr-2 h-4 w-4" />
-              New Folder
-            </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload
-                  <ChevronDown className="ml-2 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleUploadFileClick}>
-                  <FileIcon className="mr-2 h-4 w-4" />
-                  Upload Files
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleUploadFolderClick}>
-                  <Folder className="mr-2 h-4 w-4" />
-                  Upload Folder
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              multiple
-            />
-            <input
-              type="file"
-              ref={folderInputRef}
-              onChange={handleFolderChange}
-              className="hidden"
-              {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
-            />
-          </div>
+          {/* Breadcrumb */}
+          <FileBreadcrumb
+            pathStack={pathStack}
+            onBreadcrumbClick={handleBreadcrumbClick}
+            onGoBack={handleGoBack}
+          />
         </div>
 
         {/* Upload Progress Queue */}
-        {uploadQueue.length > 0 && (
-          <div className="space-y-2">
-            {uploadQueue.map((item) => (
-              <div
-                key={item.id}
-                className="bg-card border rounded-lg p-3 shadow-sm"
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <Upload className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium truncate max-w-[200px]">
-                      {item.fileName}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">
-                      {item.status === "completed"
-                        ? "Completed"
-                        : item.status === "error"
-                          ? "Failed"
-                          : item.status === "checking"
-                            ? "Checking..."
-                            : item.status === "queued"
-                              ? "Queued"
-                              : item.status === "duplicate"
-                                ? "Skipped"
-                                : `${item.progress}%`}
-                    </span>
-                    <button
-                      onClick={() => removeUploadProgress(item.id)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
+        <AnimatePresence>
+          {uploadQueue.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="space-y-2"
+            >
+              <Card className="p-4 border-primary/20 bg-primary/5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Upload className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">
+                    Uploading {uploadQueue.length} {uploadQueue.length === 1 ? "file" : "files"}
+                  </span>
                 </div>
-                <Progress
-                  value={item.progress}
-                  className={`h-1.5 ${
-                    item.status === "error"
-                      ? "[&>div]:bg-destructive"
-                      : item.status === "completed"
-                        ? "[&>div]:bg-green-500"
-                        : item.status === "duplicate"
-                          ? "[&>div]:bg-yellow-500"
-                          : ""
-                  }`}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Breadcrumb */}
-        <FileBreadcrumb
-          pathStack={pathStack}
-          onBreadcrumbClick={handleBreadcrumbClick}
-          onGoBack={handleGoBack}
-        />
+                <div className="space-y-2">
+                  {uploadQueue.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-background rounded-lg p-3 border"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {getStatusIcon(item.status)}
+                          <span className="text-sm font-medium truncate">
+                            {item.fileName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Badge
+                            variant={
+                              item.status === "completed"
+                                ? "default"
+                                : item.status === "error"
+                                  ? "destructive"
+                                  : item.status === "duplicate"
+                                    ? "secondary"
+                                    : "outline"
+                            }
+                            className={cn(
+                              "text-xs",
+                              item.status === "completed" && "bg-green-500",
+                              item.status === "duplicate" && "bg-amber-500 text-white"
+                            )}
+                          >
+                            {item.status === "completed"
+                              ? "Done"
+                              : item.status === "error"
+                                ? "Failed"
+                                : item.status === "checking"
+                                  ? "Checking"
+                                  : item.status === "queued"
+                                    ? "Queued"
+                                    : item.status === "duplicate"
+                                      ? "Skipped"
+                                      : `${item.progress}%`}
+                          </Badge>
+                          <button
+                            onClick={() => removeUploadProgress(item.id)}
+                            className="text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <Progress
+                        value={item.progress}
+                        className={cn(
+                          "h-1.5",
+                          item.status === "error" && "[&>div]:bg-destructive",
+                          item.status === "completed" && "[&>div]:bg-green-500",
+                          item.status === "duplicate" && "[&>div]:bg-amber-500"
+                        )}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Search */}
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search files..."
+            placeholder="Search files and folders..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-10 h-11 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-colors"
           />
         </div>
 
         {/* Selection Toolbar */}
-        {someSelected && (
-          <div className="flex items-center gap-4 bg-muted/50 border rounded-lg px-4 py-2">
-            <Checkbox
-              checked={allSelected}
-              onCheckedChange={(checked) => {
-                if (checked) {
-                  selectAll();
-                } else {
-                  clearSelection();
-                }
-              }}
-            />
-            <span className="text-sm font-medium">
-              {selectedIds.size}{" "}
-              {selectedIds.size === 1 ? "item" : "items"} selected
-            </span>
-            <Button variant="ghost" size="sm" onClick={clearSelection}>
-              Clear
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBulkShare}
+        <AnimatePresence>
+          {someSelected && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
             >
-              <LinkIcon className="mr-2 h-4 w-4" />
-              Share Selected
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkDelete}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Selected
-            </Button>
-          </div>
-        )}
+              <Card className="flex flex-wrap items-center gap-3 sm:gap-4 p-3 sm:px-4 sm:py-3 bg-primary/5 border-primary/20">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        selectAll();
+                      } else {
+                        clearSelection();
+                      }
+                    }}
+                  />
+                  <span className="text-sm font-medium">
+                    {selectedIds.size} {selectedIds.size === 1 ? "item" : "items"} selected
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button variant="ghost" size="sm" onClick={clearSelection}>
+                    Clear
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBulkShare}
+                    className="gap-2"
+                  >
+                    <LinkIcon className="h-4 w-4" />
+                    <span className="hidden sm:inline">Share</span>
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="hidden sm:inline">Delete</span>
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Files Grid */}
         <FileGrid

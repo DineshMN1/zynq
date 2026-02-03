@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -18,6 +19,13 @@ import {
   File,
   Folder,
   Link as LinkIcon,
+  Image,
+  FileText,
+  FileCode,
+  FileArchive,
+  FileAudio,
+  FileVideo,
+  FileSpreadsheet,
 } from "lucide-react";
 import { type FileMetadata, fileApi } from "@/lib/api";
 import { formatBytes } from "@/lib/auth";
@@ -33,6 +41,69 @@ interface FileCardProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onCardClick?: (id: string, e: React.MouseEvent) => void;
+}
+
+// Get appropriate icon based on mime type
+function getFileIcon(mimeType: string, isFolder: boolean) {
+  if (isFolder) return Folder;
+
+  if (mimeType.startsWith("image/")) return Image;
+  if (mimeType.startsWith("video/")) return FileVideo;
+  if (mimeType.startsWith("audio/")) return FileAudio;
+  if (mimeType.includes("pdf")) return FileText;
+  if (mimeType.includes("zip") || mimeType.includes("rar") || mimeType.includes("tar") || mimeType.includes("gz"))
+    return FileArchive;
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel") || mimeType.includes("csv"))
+    return FileSpreadsheet;
+  if (
+    mimeType.includes("javascript") ||
+    mimeType.includes("typescript") ||
+    mimeType.includes("json") ||
+    mimeType.includes("html") ||
+    mimeType.includes("css") ||
+    mimeType.includes("xml")
+  )
+    return FileCode;
+  if (mimeType.includes("text") || mimeType.includes("document") || mimeType.includes("word"))
+    return FileText;
+
+  return File;
+}
+
+// Get icon color based on file type
+function getIconColor(mimeType: string, isFolder: boolean) {
+  if (isFolder) return "text-amber-500 dark:text-amber-400";
+
+  if (mimeType.startsWith("image/")) return "text-pink-500 dark:text-pink-400";
+  if (mimeType.startsWith("video/")) return "text-purple-500 dark:text-purple-400";
+  if (mimeType.startsWith("audio/")) return "text-green-500 dark:text-green-400";
+  if (mimeType.includes("pdf")) return "text-red-500 dark:text-red-400";
+  if (mimeType.includes("zip") || mimeType.includes("rar") || mimeType.includes("tar"))
+    return "text-orange-500 dark:text-orange-400";
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel"))
+    return "text-emerald-500 dark:text-emerald-400";
+  if (mimeType.includes("javascript") || mimeType.includes("typescript") || mimeType.includes("json"))
+    return "text-yellow-500 dark:text-yellow-400";
+
+  return "text-blue-500 dark:text-blue-400";
+}
+
+// Get icon background color
+function getIconBgColor(mimeType: string, isFolder: boolean) {
+  if (isFolder) return "bg-amber-100 dark:bg-amber-900/30";
+
+  if (mimeType.startsWith("image/")) return "bg-pink-100 dark:bg-pink-900/30";
+  if (mimeType.startsWith("video/")) return "bg-purple-100 dark:bg-purple-900/30";
+  if (mimeType.startsWith("audio/")) return "bg-green-100 dark:bg-green-900/30";
+  if (mimeType.includes("pdf")) return "bg-red-100 dark:bg-red-900/30";
+  if (mimeType.includes("zip") || mimeType.includes("rar") || mimeType.includes("tar"))
+    return "bg-orange-100 dark:bg-orange-900/30";
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel"))
+    return "bg-emerald-100 dark:bg-emerald-900/30";
+  if (mimeType.includes("javascript") || mimeType.includes("typescript") || mimeType.includes("json"))
+    return "bg-yellow-100 dark:bg-yellow-900/30";
+
+  return "bg-blue-100 dark:bg-blue-900/30";
 }
 
 export function FileCard({
@@ -77,7 +148,9 @@ export function FileCard({
   };
 
   const hasSelect = !!onToggleSelect;
-  const IconComponent = file.is_folder ? Folder : File;
+  const IconComponent = getFileIcon(file.mime_type, file.is_folder);
+  const iconColor = getIconColor(file.mime_type, file.is_folder);
+  const iconBgColor = getIconBgColor(file.mime_type, file.is_folder);
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (onCardClick) {
@@ -93,34 +166,47 @@ export function FileCard({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
+      transition={{ duration: 0.3, delay: index * 0.03 }}
     >
       <Card
         className={cn(
-          "p-4 hover:border-primary/50 transition-colors cursor-pointer",
-          isSelected && "border-primary bg-primary/5"
+          "group relative p-4 transition-all duration-200 cursor-pointer",
+          "hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5",
+          "active:translate-y-0 active:shadow-sm",
+          isSelected && "border-primary bg-primary/5 shadow-md ring-1 ring-primary/20"
         )}
         onClick={handleCardClick}
       >
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            {hasSelect && (
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelect(file.id);
-                }}
-                className="flex items-center"
-              >
-                <Checkbox
-                  checked={isSelected}
-                  className="h-4 w-4"
-                  tabIndex={-1}
-                />
-              </div>
+        {/* Selection checkbox overlay */}
+        {hasSelect && (
+          <div
+            className={cn(
+              "absolute top-3 left-3 z-10 transition-opacity duration-200",
+              isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             )}
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <IconComponent className="h-5 w-5 text-primary" />
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(file.id);
+            }}
+          >
+            <div className="bg-background/80 backdrop-blur-sm rounded-md p-0.5">
+              <Checkbox
+                checked={isSelected}
+                className="h-5 w-5 border-2"
+                tabIndex={-1}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "h-12 w-12 rounded-xl flex items-center justify-center transition-transform duration-200",
+              "group-hover:scale-105",
+              iconBgColor
+            )}>
+              <IconComponent className={cn("h-6 w-6", iconColor)} />
             </div>
           </div>
           <DropdownMenu>
@@ -128,46 +214,60 @@ export function FileCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className={cn(
+                  "h-8 w-8 transition-opacity duration-200",
+                  "opacity-0 group-hover:opacity-100 focus:opacity-100"
+                )}
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
               {!file.is_folder && (
-                <DropdownMenuItem onClick={handleDownload}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Download
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={handleDownload} className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Download
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
               )}
 
-              <DropdownMenuItem onClick={() => onShare(file.id)}>
-                <LinkIcon className="mr-2 h-4 w-4" />
+              <DropdownMenuItem onClick={() => onShare(file.id)} className="gap-2">
+                <LinkIcon className="h-4 w-4" />
                 Get Public Link
               </DropdownMenuItem>
 
+              <DropdownMenuSeparator />
+
               <DropdownMenuItem
                 onClick={() => onDelete(file.id)}
-                className="text-destructive"
+                className="gap-2 text-destructive focus:text-destructive"
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
+                <Trash2 className="h-4 w-4" />
+                Move to Trash
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
-        <div>
-          <p className="font-medium truncate" title={file.name}>
+        <div className="space-y-1.5">
+          <p
+            className="font-medium truncate text-sm leading-tight"
+            title={file.name}
+          >
             {file.name}
           </p>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2">
             <p className="text-xs text-muted-foreground">
               {formatBytes(file.size)}
             </p>
             {file.is_folder && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge
+                variant="secondary"
+                className="text-[10px] px-1.5 py-0 h-5 font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-0"
+              >
                 Folder
               </Badge>
             )}
