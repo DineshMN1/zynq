@@ -20,54 +20,12 @@ services:
     networks:
       - zynqcloud-network
 
-  minio:
-    image: minio/minio:latest
-    container_name: zynqcloud-minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-      MINIO_API_CORS_ALLOW_ORIGIN: "*"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - zynqcloud-network
-
-  minio-init:
-    image: minio/mc:latest
-    container_name: zynqcloud-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      sleep 10;
-      mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      mc mb myminio/zynq-cloud --ignore-existing;
-      mc anonymous set download myminio/zynq-cloud;
-      mc admin config set myminio api cors_allow_origin='*';
-      mc admin service restart myminio || true;
-      exit 0;
-      "
-    networks:
-      - zynqcloud-network
-
   backend:
     build: ./apps/server
     container_name: zynqcloud-backend
     restart: unless-stopped
     depends_on:
       postgres:
-        condition: service_healthy
-      minio:
         condition: service_healthy
     environment:
       NODE_ENV: production
@@ -79,20 +37,21 @@ services:
       DATABASE_PASSWORD: supersecret_db_pass
       DATABASE_NAME: zynqcloud
       JWT_SECRET: ${JWT_SECRET:-zynqcloud_dev_secret_change_in_production_32chars}
-      S3_REGION: us-east-1
-      S3_BUCKET: zynq-cloud
-      S3_ENDPOINT: http://minio:9000
-      S3_PUBLIC_ENDPOINT: http://localhost:9000
-      S3_ACCESS_KEY_ID: minioadmin
-      S3_SECRET_ACCESS_KEY: minioadmin
-      S3_FORCE_PATH_STYLE: "true"
+      # Local file storage
+      FILE_STORAGE_PATH: /data/files
+      # Encryption master key (32 bytes base64 encoded) - CHANGE IN PRODUCTION!
+      FILE_ENCRYPTION_MASTER_KEY: ${FILE_ENCRYPTION_MASTER_KEY:-YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=}
+      # Email settings
       SMTP_HOST: smtp.gmail.com
       SMTP_PORT: 587
       SMTP_USER: your-email@gmail.com
       SMTP_PASS: your-app-password
       CORS_ORIGIN: http://localhost:3000
+      FRONTEND_URL: http://localhost:3000
     ports:
       - "4000:4000"
+    volumes:
+      - zynq_files:/data/files
     networks:
       - zynqcloud-network
 
@@ -111,8 +70,12 @@ services:
 volumes:
   postgres_data:
     driver: local
-  minio_data:
+  zynq_files:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ZYNQ_DATA_PATH:-./data/files}
 
 networks:
   zynqcloud-network:
