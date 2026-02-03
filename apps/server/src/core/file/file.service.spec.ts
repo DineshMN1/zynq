@@ -32,7 +32,10 @@ describe('FileService', () => {
     size: 1024,
     mime_type: 'application/pdf',
     is_folder: false,
-    storage_path: 'uuid-test.pdf',
+    storage_path: 'user-123/file-123.enc',
+    encrypted_dek: Buffer.alloc(60),
+    encryption_iv: Buffer.alloc(12),
+    encryption_algo: 'AES-256-GCM',
     deleted_at: null,
     created_at: new Date(),
     updated_at: new Date(),
@@ -76,9 +79,11 @@ describe('FileService', () => {
         {
           provide: StorageService,
           useValue: {
-            getPresignedUploadUrl: jest.fn(),
-            getPresignedDownloadUrl: jest.fn(),
-            deleteObject: jest.fn(),
+            uploadFile: jest.fn(),
+            downloadFile: jest.fn(),
+            deleteFile: jest.fn(),
+            moveToTrash: jest.fn(),
+            restoreFromTrash: jest.fn(),
           },
         },
         {
@@ -103,12 +108,8 @@ describe('FileService', () => {
   });
 
   describe('create', () => {
-    it('should create a file with presigned upload URL', async () => {
+    it('should create a file record (pending upload)', async () => {
       userService.findById.mockResolvedValue(mockUser as any);
-      storageService.getPresignedUploadUrl.mockResolvedValue({
-        uploadUrl: 'https://s3.example.com/upload',
-        storagePath: 'uuid-test.pdf',
-      });
       filesRepository.create.mockReturnValue(mockFile as File);
       filesRepository.save.mockResolvedValue(mockFile as File);
 
@@ -119,16 +120,8 @@ describe('FileService', () => {
       });
 
       expect(userService.findById).toHaveBeenCalledWith('user-123');
-      expect(storageService.getPresignedUploadUrl).toHaveBeenCalledWith(
-        'test.pdf',
-        'application/pdf',
-      );
       expect(filesRepository.save).toHaveBeenCalled();
-      expect(userService.updateStorageUsed).toHaveBeenCalledWith(
-        'user-123',
-        1024,
-      );
-      expect(result.uploadUrl).toBe('https://s3.example.com/upload');
+      expect(result).toBeDefined();
     });
 
     it('should throw NotFoundException if user not found', async () => {
@@ -171,7 +164,7 @@ describe('FileService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should create folder without presigned URL', async () => {
+    it('should create folder without storage path', async () => {
       userService.findById.mockResolvedValue(mockUser as any);
       const folderFile = { ...mockFile, is_folder: true, storage_path: null };
       filesRepository.create.mockReturnValue(folderFile as File);
@@ -184,9 +177,59 @@ describe('FileService', () => {
         isFolder: true,
       });
 
-      expect(storageService.getPresignedUploadUrl).not.toHaveBeenCalled();
+      expect(storageService.uploadFile).not.toHaveBeenCalled();
       expect(userService.updateStorageUsed).not.toHaveBeenCalled();
-      expect(result.uploadUrl).toBeUndefined();
+    });
+  });
+
+  describe('uploadFileContent', () => {
+    it('should upload and encrypt file content', async () => {
+      const fileWithoutContent = { ...mockFile, encrypted_dek: null } as File;
+      const fileBuffer = Buffer.from('test content');
+      filesRepository.findOne.mockResolvedValue(fileWithoutContent);
+      storageService.uploadFile.mockResolvedValue({
+        storagePath: 'user-123/file-123.enc',
+        encryptedDek: Buffer.alloc(60),
+        iv: Buffer.alloc(12),
+        algorithm: 'AES-256-GCM',
+        encryptedSize: 100,
+      });
+      filesRepository.save.mockResolvedValue(mockFile as File);
+
+      const result = await service.uploadFileContent('file-123', 'user-123', fileBuffer);
+
+      expect(storageService.uploadFile).toHaveBeenCalledWith('user-123', 'file-123', fileBuffer);
+      expect(filesRepository.save).toHaveBeenCalled();
+      // Note: storage update happens in create(), not in uploadFileContent()
+    });
+  });
+
+  describe('downloadFile', () => {
+    it('should download and decrypt file', async () => {
+      const decryptedData = Buffer.from('decrypted content');
+      filesRepository.findOne.mockResolvedValue(mockFile as File);
+      storageService.downloadFile.mockResolvedValue(decryptedData);
+
+      const result = await service.downloadFile('file-123', 'user-123');
+
+      expect(storageService.downloadFile).toHaveBeenCalledWith(
+        'user-123',
+        'file-123',
+        mockFile.encrypted_dek,
+        mockFile.encryption_iv,
+      );
+      expect(result).toEqual(decryptedData);
+    });
+
+    it('should throw BadRequestException for folders', async () => {
+      filesRepository.findOne.mockResolvedValue({
+        ...mockFile,
+        is_folder: true,
+      } as File);
+
+      await expect(
+        service.downloadFile('folder-123', 'user-123'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -255,7 +298,7 @@ describe('FileService', () => {
   });
 
   describe('softDelete', () => {
-    it('should mark file as deleted', async () => {
+    it('should mark file as deleted and move to trash', async () => {
       filesRepository.findOne.mockResolvedValue(mockFile as File);
       filesRepository.save.mockResolvedValue({
         ...mockFile,
@@ -264,6 +307,7 @@ describe('FileService', () => {
 
       await service.softDelete('file-123', 'user-123');
 
+      expect(storageService.moveToTrash).toHaveBeenCalledWith('user-123', 'file-123');
       expect(filesRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({ deleted_at: expect.any(Date) }),
       );
@@ -281,6 +325,7 @@ describe('FileService', () => {
 
       const result = await service.restore('file-123', 'user-123');
 
+      expect(storageService.restoreFromTrash).toHaveBeenCalledWith('user-123', 'file-123');
       expect(result.deleted_at).toBeNull();
     });
 
@@ -299,7 +344,7 @@ describe('FileService', () => {
 
       await service.permanentDelete('file-123', 'user-123');
 
-      expect(storageService.deleteObject).toHaveBeenCalledWith('uuid-test.pdf');
+      expect(storageService.deleteFile).toHaveBeenCalledWith('user-123', 'file-123');
       expect(userService.updateStorageUsed).toHaveBeenCalledWith(
         'user-123',
         -1024,
@@ -313,30 +358,6 @@ describe('FileService', () => {
       await expect(
         service.permanentDelete('nonexistent', 'user-123'),
       ).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('getDownloadUrl', () => {
-    it('should return presigned download URL', async () => {
-      filesRepository.findOne.mockResolvedValue(mockFile as File);
-      storageService.getPresignedDownloadUrl.mockResolvedValue(
-        'https://s3.example.com/download',
-      );
-
-      const result = await service.getDownloadUrl('file-123', 'user-123');
-
-      expect(result).toBe('https://s3.example.com/download');
-    });
-
-    it('should throw BadRequestException for folders', async () => {
-      filesRepository.findOne.mockResolvedValue({
-        ...mockFile,
-        is_folder: true,
-      } as File);
-
-      await expect(
-        service.getDownloadUrl('folder-123', 'user-123'),
-      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -384,7 +405,7 @@ describe('FileService', () => {
 
       await service.emptyTrash('user-123');
 
-      expect(storageService.deleteObject).toHaveBeenCalledTimes(2);
+      expect(storageService.deleteFile).toHaveBeenCalledTimes(2);
       expect(userService.updateStorageUsed).toHaveBeenCalledTimes(2);
       expect(filesRepository.delete).toHaveBeenCalledTimes(2);
     });

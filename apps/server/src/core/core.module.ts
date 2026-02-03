@@ -6,9 +6,11 @@ import { ShareModule } from './share/share.module';
 import { InvitationModule } from './invitation/invitation.module';
 import { StorageModule } from './storage/storage.module';
 import { SettingModule } from './setting/setting.module';
+import { EncryptionModule } from './encryption/encryption.module';
 
 @Module({
   imports: [
+    EncryptionModule,
     AuthModule,
     UserModule,
     FileModule,
@@ -18,6 +20,7 @@ import { SettingModule } from './setting/setting.module';
     SettingModule,
   ],
   exports: [
+    EncryptionModule,
     AuthModule,
     UserModule,
     FileModule,
