@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -23,9 +22,6 @@ import {
   File as FileIcon,
   Folder,
   Link as LinkIcon,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
   HardDrive,
 } from "lucide-react";
 import { fileApi, type FileMetadata, ApiError } from "@/lib/api";
@@ -36,9 +32,9 @@ import { FileBreadcrumb } from "@/features/file/components/file-breadcrumb";
 import { CreateFolderDialog } from "@/features/file/components/create-folder-dialog";
 import { PublicLinkDialog } from "@/features/share/components/public-link-dialog";
 import { DuplicateWarningDialog } from "@/features/file/components/duplicate-warning-dialog";
+import { FolderUploadDialog } from "@/features/file/components/folder-upload-dialog";
 import { DropZoneOverlay } from "@/features/file/components/drop-zone-overlay";
 import { calculateContentHash } from "@/lib/file-hash";
-import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface UploadProgress {
@@ -49,6 +45,36 @@ interface UploadProgress {
 }
 
 let uploadIdCounter = 0;
+
+const KNOWN_MIME_PREFIXES = [
+  "image/",
+  "video/",
+  "audio/",
+  "text/",
+  "application/",
+  "font/",
+  "model/",
+  "chemical/",
+  "x-conference/",
+  "message/",
+  "multipart/",
+  "inode/",
+];
+
+function getSafeMimeType(file: File): string {
+  const type = file.type;
+  if (!type) return "application/octet-stream";
+  if (KNOWN_MIME_PREFIXES.some((prefix) => type.startsWith(prefix))) return type;
+  return "application/octet-stream";
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
 
 export default function FilesPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
@@ -70,6 +96,15 @@ export default function FilesPage() {
   const [pendingUpload, setPendingUpload] = useState<{
     file: File;
     hash: string;
+  } | null>(null);
+
+  // Folder upload confirmation state
+  const [showFolderUploadDialog, setShowFolderUploadDialog] = useState(false);
+  const [pendingFolderUpload, setPendingFolderUpload] = useState<{
+    files: File[];
+    folderName: string;
+    totalSize: number;
+    fileCount: number;
   } | null>(null);
 
   // Multi-select state
@@ -373,10 +408,12 @@ export default function FilesPage() {
 
     const parentId = targetParentId ?? currentFolderId ?? undefined;
 
+    const safeMime = getSafeMimeType(file);
+
     const created = await fileApi.create({
       name: file.name,
       size: file.size,
-      mimeType: file.type || "application/octet-stream",
+      mimeType: safeMime,
       parentId,
       isFolder: false,
       fileHash: skipDuplicateCheck ? undefined : fileHash,
@@ -386,7 +423,7 @@ export default function FilesPage() {
       await uploadFileWithProgress(
         created.uploadUrl,
         file,
-        file.type || "application/octet-stream",
+        safeMime,
         progressId
       );
     } else {
@@ -580,13 +617,35 @@ export default function FilesPage() {
     }
   };
 
-  const handleFolderChange = async (
+  const handleFolderChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
     const allFiles = Array.from(fileList);
+
+    // Extract folder name from the first file's relative path
+    const firstPath = allFiles[0]?.webkitRelativePath || "";
+    const rootFolderName = firstPath.split("/")[0] || "Unknown Folder";
+
+    const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
+
+    setPendingFolderUpload({
+      files: allFiles,
+      folderName: rootFolderName,
+      totalSize,
+      fileCount: allFiles.length,
+    });
+    setShowFolderUploadDialog(true);
+    e.target.value = "";
+  };
+
+  const handleFolderUploadProceed = async () => {
+    setShowFolderUploadDialog(false);
+    if (!pendingFolderUpload) return;
+
+    const allFiles = pendingFolderUpload.files;
 
     const folderPaths = new Set<string>();
     for (const file of allFiles) {
@@ -656,7 +715,16 @@ export default function FilesPage() {
 
     await uploadMultipleFiles(fileEntries);
     await loadFiles();
-    e.target.value = "";
+    setPendingFolderUpload(null);
+  };
+
+  const handleFolderUploadCancel = () => {
+    setShowFolderUploadDialog(false);
+    setPendingFolderUpload(null);
+    toast({
+      title: "Folder upload cancelled",
+      description: "Folder upload was cancelled.",
+    });
   };
 
   const handleCreateFolder = async () => {
@@ -785,21 +853,17 @@ export default function FilesPage() {
     files.length > 0 && files.every((f) => selectedIds.has(f.id));
   const someSelected = selectedIds.size > 0;
 
-  // Get upload status icon
-  const getStatusIcon = (status: UploadProgress["status"]) => {
-    switch (status) {
-      case "completed":
-        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-      case "error":
-        return <AlertCircle className="h-4 w-4 text-destructive" />;
-      case "duplicate":
-        return <AlertCircle className="h-4 w-4 text-amber-500" />;
-      case "checking":
-        return <Clock className="h-4 w-4 text-muted-foreground animate-pulse" />;
-      default:
-        return <Upload className="h-4 w-4 text-primary" />;
-    }
-  };
+  // Aggregate upload progress for the inline indicator
+  const activeUploads = uploadQueue.filter(
+    (u) => u.status === "uploading" || u.status === "checking" || u.status === "queued"
+  );
+  const isUploading = activeUploads.length > 0;
+  const aggregateProgress =
+    activeUploads.length > 0
+      ? Math.round(
+          activeUploads.reduce((sum, u) => sum + u.progress, 0) / activeUploads.length
+        )
+      : 100;
 
   return (
     <>
@@ -879,90 +943,28 @@ export default function FilesPage() {
             onBreadcrumbClick={handleBreadcrumbClick}
             onGoBack={handleGoBack}
           />
-        </div>
 
-        {/* Upload Progress Queue */}
-        <AnimatePresence>
-          {uploadQueue.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="space-y-2"
-            >
-              <Card className="p-4 border-primary/20 bg-primary/5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Upload className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">
-                    Uploading {uploadQueue.length} {uploadQueue.length === 1 ? "file" : "files"}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {uploadQueue.map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-background rounded-lg p-3 border"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {getStatusIcon(item.status)}
-                          <span className="text-sm font-medium truncate">
-                            {item.fileName}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <Badge
-                            variant={
-                              item.status === "completed"
-                                ? "default"
-                                : item.status === "error"
-                                  ? "destructive"
-                                  : item.status === "duplicate"
-                                    ? "secondary"
-                                    : "outline"
-                            }
-                            className={cn(
-                              "text-xs",
-                              item.status === "completed" && "bg-green-500",
-                              item.status === "duplicate" && "bg-amber-500 text-white"
-                            )}
-                          >
-                            {item.status === "completed"
-                              ? "Done"
-                              : item.status === "error"
-                                ? "Failed"
-                                : item.status === "checking"
-                                  ? "Checking"
-                                  : item.status === "queued"
-                                    ? "Queued"
-                                    : item.status === "duplicate"
-                                      ? "Skipped"
-                                      : `${item.progress}%`}
-                          </Badge>
-                          <button
-                            onClick={() => removeUploadProgress(item.id)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                      <Progress
-                        value={item.progress}
-                        className={cn(
-                          "h-1.5",
-                          item.status === "error" && "[&>div]:bg-destructive",
-                          item.status === "completed" && "[&>div]:bg-green-500",
-                          item.status === "duplicate" && "[&>div]:bg-amber-500"
-                        )}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          {/* Inline upload indicator — thin progress line */}
+          <AnimatePresence>
+            {isUploading && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center gap-2"
+              >
+                <Upload className="h-3 w-3 text-muted-foreground animate-pulse" />
+                <span className="text-xs text-muted-foreground">
+                  Uploading{activeUploads.length > 1 ? ` ${activeUploads.length} files` : ""}…
+                </span>
+                <Progress
+                  value={aggregateProgress}
+                  className="h-[2px] flex-1 max-w-[160px]"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Search */}
         <div className="relative max-w-md">
@@ -1060,6 +1062,17 @@ export default function FilesPage() {
           existingFile={duplicateFile}
           onUploadAnyway={handleDuplicateProceed}
           onCancel={handleDuplicateCancel}
+        />
+
+        <FolderUploadDialog
+          open={showFolderUploadDialog}
+          onOpenChange={setShowFolderUploadDialog}
+          folderName={pendingFolderUpload?.folderName || ""}
+          fileCount={pendingFolderUpload?.fileCount || 0}
+          totalSize={formatBytes(pendingFolderUpload?.totalSize || 0)}
+          destination={pathStack[pathStack.length - 1]?.name || "Home"}
+          onUpload={handleFolderUploadProceed}
+          onCancel={handleFolderUploadCancel}
         />
       </div>
 
