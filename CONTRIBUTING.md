@@ -60,13 +60,13 @@ cd zynq
 docker-compose up -d postgres minio minio-init
 
 # Install and run backend
-cd backend
+cd apps/server
 cp .env.example .env
 npm install
 npm run start:dev
 
 # In another terminal, install and run frontend
-cd frontend
+cd apps/client
 cp .env.local.example .env.local
 npm install
 npm run dev
@@ -79,9 +79,10 @@ See [docs/INSTALLATION.md](docs/INSTALLATION.md) for detailed instructions.
 ### Project Structure
 
 ```
-zynqcloud/
-├── frontend/          # Next.js frontend
-├── backend/           # NestJS backend
+zynq/
+├── apps/
+│   ├── client/        # Next.js frontend
+│   └── server/        # NestJS backend
 ├── docs/              # Documentation
 └── .github/           # GitHub templates and workflows
 ```
@@ -173,20 +174,58 @@ Prefixes:
 - `test:` - Adding or updating tests
 - `chore:` - Maintenance tasks
 
+## Running CI Checks Locally
+
+Before submitting a PR, run these checks locally to ensure CI passes. All commands should be run from the project root.
+
+### Quick Check (All at once)
+
+```bash
+# Backend: lint + tests
+cd apps/server && npm run lint && npm run test
+
+# Frontend: lint + build
+cd apps/client && npm run lint && npm run build
+```
+
+### Step-by-Step
+
+#### Backend
+
+```bash
+cd apps/server
+
+# 1. Lint check (must pass with zero errors)
+npm run lint
+
+# 2. Run all unit tests
+npm run test
+```
+
+#### Frontend
+
+```bash
+cd apps/client
+
+# 1. Lint check (warnings are OK, errors are not)
+npm run lint
+
+# 2. Build check (must compile successfully)
+npm run build
+```
+
+> **Note:** The CI pipeline runs these exact commands. If they pass locally, your PR should pass CI.
+
 ## Testing
 
 ### Running Tests
 
 ```bash
 # Backend tests
-cd backend
+cd apps/server
 npm run test          # Unit tests
 npm run test:e2e      # E2E tests
 npm run test:cov      # Coverage report
-
-# Frontend tests (when available)
-cd frontend
-npm run test
 ```
 
 ### Writing Tests
@@ -208,13 +247,13 @@ npm run test
    - Add tests if applicable
    - Update documentation
 
-3. **Test your changes**
+3. **Test your changes** (see [Running CI Checks Locally](#running-ci-checks-locally))
    ```bash
    # Backend
-   cd backend && npm run test && npm run lint
+   cd apps/server && npm run lint && npm run test
 
    # Frontend
-   cd frontend && npm run lint
+   cd apps/client && npm run lint && npm run build
    ```
 
 4. **Commit your changes**

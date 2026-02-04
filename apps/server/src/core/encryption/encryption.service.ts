@@ -6,7 +6,7 @@ import {
   randomBytes,
   CipherGCMTypes,
 } from 'crypto';
-import { Readable, Transform } from 'stream';
+import { Transform } from 'stream';
 
 export interface EncryptionResult {
   encryptedDek: Buffer;

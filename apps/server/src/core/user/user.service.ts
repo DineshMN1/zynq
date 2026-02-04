@@ -77,8 +77,7 @@ export class UserService {
       .createQueryBuilder()
       .update()
       .set({
-        storage_used: () =>
-          `GREATEST(0, COALESCE(storage_used, 0) + ${delta})`,
+        storage_used: () => `GREATEST(0, COALESCE(storage_used, 0) + ${delta})`,
       })
       .where('id = :id', { id: userId })
       .execute();

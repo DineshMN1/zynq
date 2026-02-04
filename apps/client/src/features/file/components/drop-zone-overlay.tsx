@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Upload, Cloud, FileUp } from "lucide-react";
+import { Cloud, FileUp } from "lucide-react";
 
 interface DropZoneOverlayProps {
   isActive: boolean;

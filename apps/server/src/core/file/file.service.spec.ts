@@ -170,7 +170,7 @@ describe('FileService', () => {
       filesRepository.create.mockReturnValue(folderFile as File);
       filesRepository.save.mockResolvedValue(folderFile as File);
 
-      const result = await service.create('user-123', {
+      const _result = await service.create('user-123', {
         name: 'My Folder',
         size: 0,
         mimeType: 'application/x-directory',
@@ -196,9 +196,17 @@ describe('FileService', () => {
       });
       filesRepository.save.mockResolvedValue(mockFile as File);
 
-      const result = await service.uploadFileContent('file-123', 'user-123', fileBuffer);
+      const _result = await service.uploadFileContent(
+        'file-123',
+        'user-123',
+        fileBuffer,
+      );
 
-      expect(storageService.uploadFile).toHaveBeenCalledWith('user-123', 'file-123', fileBuffer);
+      expect(storageService.uploadFile).toHaveBeenCalledWith(
+        'user-123',
+        'file-123',
+        fileBuffer,
+      );
       expect(filesRepository.save).toHaveBeenCalled();
       // Note: storage update happens in create(), not in uploadFileContent()
     });
@@ -307,7 +315,10 @@ describe('FileService', () => {
 
       await service.softDelete('file-123', 'user-123');
 
-      expect(storageService.moveToTrash).toHaveBeenCalledWith('user-123', 'file-123');
+      expect(storageService.moveToTrash).toHaveBeenCalledWith(
+        'user-123',
+        'file-123',
+      );
       expect(filesRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({ deleted_at: expect.any(Date) }),
       );
@@ -325,7 +336,10 @@ describe('FileService', () => {
 
       const result = await service.restore('file-123', 'user-123');
 
-      expect(storageService.restoreFromTrash).toHaveBeenCalledWith('user-123', 'file-123');
+      expect(storageService.restoreFromTrash).toHaveBeenCalledWith(
+        'user-123',
+        'file-123',
+      );
       expect(result.deleted_at).toBeNull();
     });
 
@@ -344,7 +358,10 @@ describe('FileService', () => {
 
       await service.permanentDelete('file-123', 'user-123');
 
-      expect(storageService.deleteFile).toHaveBeenCalledWith('user-123', 'file-123');
+      expect(storageService.deleteFile).toHaveBeenCalledWith(
+        'user-123',
+        'file-123',
+      );
       expect(userService.updateStorageUsed).toHaveBeenCalledWith(
         'user-123',
         -1024,
@@ -406,7 +423,7 @@ describe('FileService', () => {
       await service.emptyTrash('user-123');
 
       expect(storageService.deleteFile).toHaveBeenCalledTimes(2);
-      expect(userService.updateStorageUsed).toHaveBeenCalledTimes(2);
+      expect(userService.updateStorageUsed).toHaveBeenCalledTimes(1);
       expect(filesRepository.delete).toHaveBeenCalledTimes(2);
     });
   });

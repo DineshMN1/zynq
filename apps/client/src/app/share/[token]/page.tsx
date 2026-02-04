@@ -9,12 +9,15 @@ import { formatBytes } from '@/lib/auth';
 import { publicApi } from '@/lib/api';
 
 interface SharedFile {
+  id: string;
   name: string;
   mimeType: string;
   size: number;
-  downloadUrl: string | null;
   owner: string;
+  ownerId: string;
   createdAt: string;
+  isFolder: boolean;
+  hasContent: boolean;
 }
 
 export default function PublicSharePage() {
@@ -41,15 +44,14 @@ export default function PublicSharePage() {
   }, [token, fetchFile]);
 
   const handleDownload = async () => {
-    if (!file?.downloadUrl) return;
+    if (!file?.hasContent) return;
     setDownloading(true);
     try {
-      const response = await fetch(file.downloadUrl);
-      const blob = await response.blob();
+      const { blob, fileName } = await publicApi.downloadShare(token);
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
-      a.download = file.name || 'download';
+      a.download = fileName || file.name || 'download';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

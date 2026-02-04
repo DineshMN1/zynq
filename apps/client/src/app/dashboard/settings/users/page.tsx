@@ -79,9 +79,6 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page] = useState(1);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [quotaValue, setQuotaValue] = useState('');

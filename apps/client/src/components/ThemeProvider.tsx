@@ -22,10 +22,8 @@ function getInitialTheme(): Theme {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     // Sync with whatever the inline script already applied
     const isDark = document.documentElement.classList.contains('dark');
     setThemeState(isDark ? 'dark' : 'light');

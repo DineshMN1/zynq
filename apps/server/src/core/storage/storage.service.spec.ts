@@ -40,7 +40,9 @@ describe('StorageService', () => {
           provide: EncryptionService,
           useValue: {
             createFileEncryption: jest.fn().mockReturnValue(mockEncryption),
-            encryptBuffer: jest.fn((data) => Buffer.concat([data, Buffer.from('encrypted')])),
+            encryptBuffer: jest.fn((data) =>
+              Buffer.concat([data, Buffer.from('encrypted')]),
+            ),
             decryptBuffer: jest.fn((data) => data.subarray(0, -9)), // Remove 'encrypted' suffix
             decryptDek: jest.fn().mockReturnValue(mockEncryption.dek),
             createEncryptStream: jest.fn(),
@@ -89,7 +91,10 @@ describe('StorageService', () => {
 
       // Verify file was written
       const filePath = path.join(testDir, userId, `${fileId}.enc`);
-      const fileExists = await fs.access(filePath).then(() => true).catch(() => false);
+      const fileExists = await fs
+        .access(filePath)
+        .then(() => true)
+        .catch(() => false);
       expect(fileExists).toBe(true);
     });
 
@@ -101,7 +106,10 @@ describe('StorageService', () => {
       await service.uploadFile(userId, fileId, data);
 
       const userDir = path.join(testDir, userId);
-      const dirExists = await fs.access(userDir).then(() => true).catch(() => false);
+      const dirExists = await fs
+        .access(userDir)
+        .then(() => true)
+        .catch(() => false);
       expect(dirExists).toBe(true);
     });
   });
@@ -113,7 +121,11 @@ describe('StorageService', () => {
       const originalData = Buffer.from('test file content');
 
       // First upload a file
-      const uploadResult = await service.uploadFile(userId, fileId, originalData);
+      const uploadResult = await service.uploadFile(
+        userId,
+        fileId,
+        originalData,
+      );
 
       // Then download it
       const downloaded = await service.downloadFile(
@@ -131,7 +143,10 @@ describe('StorageService', () => {
     it('should throw NotFoundException if file does not exist', async () => {
       const userId = 'user-123';
       const fileId = 'nonexistent';
-      const encryptedDek = Buffer.concat([mockEncryption.dekIv, mockEncryption.encryptedDek]);
+      const encryptedDek = Buffer.concat([
+        mockEncryption.dekIv,
+        mockEncryption.encryptedDek,
+      ]);
 
       await expect(
         service.downloadFile(userId, fileId, encryptedDek, mockEncryption.iv),
@@ -148,12 +163,18 @@ describe('StorageService', () => {
       await service.uploadFile(userId, fileId, data);
 
       const filePath = path.join(testDir, userId, `${fileId}.enc`);
-      let fileExists = await fs.access(filePath).then(() => true).catch(() => false);
+      let fileExists = await fs
+        .access(filePath)
+        .then(() => true)
+        .catch(() => false);
       expect(fileExists).toBe(true);
 
       await service.deleteFile(userId, fileId);
 
-      fileExists = await fs.access(filePath).then(() => true).catch(() => false);
+      fileExists = await fs
+        .access(filePath)
+        .then(() => true)
+        .catch(() => false);
       expect(fileExists).toBe(false);
     });
 
@@ -177,8 +198,14 @@ describe('StorageService', () => {
       const originalPath = path.join(testDir, userId, `${fileId}.enc`);
       const trashPath = path.join(testDir, userId, '.trash', `${fileId}.enc`);
 
-      const originalExists = await fs.access(originalPath).then(() => true).catch(() => false);
-      const trashExists = await fs.access(trashPath).then(() => true).catch(() => false);
+      const originalExists = await fs
+        .access(originalPath)
+        .then(() => true)
+        .catch(() => false);
+      const trashExists = await fs
+        .access(trashPath)
+        .then(() => true)
+        .catch(() => false);
 
       expect(originalExists).toBe(false);
       expect(trashExists).toBe(true);
@@ -198,8 +225,14 @@ describe('StorageService', () => {
       const originalPath = path.join(testDir, userId, `${fileId}.enc`);
       const trashPath = path.join(testDir, userId, '.trash', `${fileId}.enc`);
 
-      const originalExists = await fs.access(originalPath).then(() => true).catch(() => false);
-      const trashExists = await fs.access(trashPath).then(() => true).catch(() => false);
+      const originalExists = await fs
+        .access(originalPath)
+        .then(() => true)
+        .catch(() => false);
+      const trashExists = await fs
+        .access(trashPath)
+        .then(() => true)
+        .catch(() => false);
 
       expect(originalExists).toBe(true);
       expect(trashExists).toBe(false);

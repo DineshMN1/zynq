@@ -16,7 +16,6 @@ import {
   Upload,
   Search,
   FolderPlus,
-  X,
   ChevronDown,
   Trash2,
   File as FileIcon,
@@ -332,9 +331,6 @@ export default function FilesPage() {
         description: "Unable to move item to trash.",
         variant: "destructive",
       });
-    } finally {
-      setDeleteDialogOpen(false);
-      setSelectedFileId(null);
     }
   };
 

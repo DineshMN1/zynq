@@ -126,8 +126,7 @@ export class HealthController {
     } catch (error) {
       return {
         status: 'down',
-        error:
-          error instanceof Error ? error.message : 'Storage access failed',
+        error: error instanceof Error ? error.message : 'Storage access failed',
       };
     }
   }

@@ -20,7 +20,6 @@ import {
   Sun,
   Server,
 } from 'lucide-react';
-import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import {

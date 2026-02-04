@@ -391,7 +391,9 @@ export class FileService {
     };
   }
 
-  async downloadPublicFile(token: string): Promise<{ data: Buffer; file: File }> {
+  async downloadPublicFile(
+    token: string,
+  ): Promise<{ data: Buffer; file: File }> {
     const share = await this.sharesRepository.findOne({
       where: { share_token: token, is_public: true },
       relations: ['file'],
@@ -494,28 +496,6 @@ export class FileService {
     return {
       isDuplicate: duplicates.length > 0,
       files: duplicates,
-    };
-  }
-
-  async checkDuplicate(
-    userId: string,
-    fileHash: string,
-  ): Promise<{ isDuplicate: boolean; existingFile?: File }> {
-    if (!fileHash) {
-      return { isDuplicate: false };
-    }
-
-    const existingFile = await this.filesRepository.findOne({
-      where: {
-        owner_id: userId,
-        file_hash: fileHash,
-        deleted_at: IsNull(),
-      },
-    });
-
-    return {
-      isDuplicate: !!existingFile,
-      existingFile: existingFile || undefined,
     };
   }
 }

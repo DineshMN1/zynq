@@ -1,11 +1,10 @@
 import { Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EncryptionService } from '../encryption/encryption.service';
-import { createReadStream, createWriteStream, promises as fs, statfsSync } from 'fs';
+import { createWriteStream, promises as fs, statfsSync } from 'fs';
 import { join } from 'path';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
-import { v4 as uuidv4 } from 'uuid';
 
 export interface UploadResult {
   storagePath: string;
@@ -29,7 +28,8 @@ export class StorageService implements OnModuleInit {
     private configService: ConfigService,
     private encryptionService: EncryptionService,
   ) {
-    this.basePath = this.configService.get('FILE_STORAGE_PATH') || '/data/files';
+    this.basePath =
+      this.configService.get('FILE_STORAGE_PATH') || '/data/files';
   }
 
   async onModuleInit() {
@@ -196,12 +196,7 @@ export class StorageService implements OnModuleInit {
     // For now, we'll read the entire file and decrypt it
     // A more memory-efficient streaming approach would require
     // a custom chunked encryption format
-    const decrypted = await this.downloadFile(
-      userId,
-      fileId,
-      encryptedDek,
-      iv,
-    );
+    const decrypted = await this.downloadFile(userId, fileId, encryptedDek, iv);
     return Readable.from(decrypted);
   }
 

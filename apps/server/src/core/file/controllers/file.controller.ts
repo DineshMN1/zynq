@@ -13,7 +13,6 @@ import {
   Res,
   UseInterceptors,
   UploadedFile,
-  StreamableFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -24,7 +23,6 @@ import { User } from '../../user/entities/user.entity';
 import { CreateFileDto } from '../dto/create-file.dto';
 import { BulkDeleteFilesDto } from '../dto/bulk-delete-files.dto';
 import { ShareFileDto } from '../../share/dto/share-file.dto';
-import { Readable } from 'stream';
 
 @Controller('files')
 @UseGuards(JwtAuthGuard)
@@ -116,18 +114,12 @@ export class FileController {
 
   @Delete('bulk')
   @HttpCode(HttpStatus.OK)
-  async bulkDelete(
-    @CurrentUser() user: User,
-    @Body() dto: BulkDeleteFilesDto,
-  ) {
+  async bulkDelete(@CurrentUser() user: User, @Body() dto: BulkDeleteFilesDto) {
     return this.fileService.bulkSoftDelete(dto.ids, user.id);
   }
 
   @Get('check-duplicate/:hash')
-  async checkDuplicate(
-    @CurrentUser() user: User,
-    @Param('hash') hash: string,
-  ) {
+  async checkDuplicate(@CurrentUser() user: User, @Param('hash') hash: string) {
     return this.fileService.checkDuplicate(user.id, hash);
   }
 

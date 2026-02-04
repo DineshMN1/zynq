@@ -35,7 +35,10 @@ export class AddEncryptionColumns1738500000000 implements MigrationInterface {
     );
 
     // Ensure storage_quota column exists on users table with proper default (5GB)
-    const hasStorageQuota = await queryRunner.hasColumn('users', 'storage_quota');
+    const hasStorageQuota = await queryRunner.hasColumn(
+      'users',
+      'storage_quota',
+    );
     if (!hasStorageQuota) {
       await queryRunner.addColumn(
         'users',
