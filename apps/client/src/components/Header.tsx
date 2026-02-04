@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Button } from './ui/button';
 import {
@@ -16,6 +15,8 @@ import { LogOut, User as UserIcon, Moon, Sun } from 'lucide-react';
 import { authApi, type User } from '@/lib/api';
 import { getInitials } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
   user: User | null;
@@ -25,16 +26,17 @@ export function Header({ user }: HeaderProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { logout } = useAuth();
 
   const handleLogout = async () => {
     setLoading(true);
     try {
       await authApi.logout();
-      router.push('/login');
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
       setLoading(false);
+      logout();
     }
   };
 

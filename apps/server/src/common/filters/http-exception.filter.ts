@@ -18,6 +18,7 @@ interface ErrorResponse {
   timestamp: string;
   path: string;
   stack?: string;
+  [key: string]: unknown;
 }
 
 // Map common error types to error codes
@@ -47,6 +48,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let errorName = 'InternalServerErrorException';
+    const extraFields: Record<string, unknown> = {};
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -63,6 +65,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = (responseObj.message as string) || message;
         if (Array.isArray(responseObj.message)) {
           message = responseObj.message.join(', ');
+        }
+
+        // Preserve extra properties (e.g. duplicates) from the exception response
+        const reservedKeys = new Set(['message', 'statusCode', 'error']);
+        for (const [key, value] of Object.entries(responseObj)) {
+          if (!reservedKeys.has(key)) {
+            extraFields[key] = value;
+          }
         }
       }
     } else if (exception instanceof Error) {
@@ -83,6 +93,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       requestId,
       timestamp: new Date().toISOString(),
       path: request.url,
+      ...extraFields,
     };
 
     // Add stack trace in development

@@ -34,6 +34,19 @@ export class File extends BaseEntity {
   @Column({ default: false })
   is_folder: boolean;
 
+  @Column({ nullable: true })
+  file_hash: string;
+
+  // Encryption fields
+  @Column({ type: 'bytea', nullable: true })
+  encrypted_dek: Buffer;
+
+  @Column({ type: 'bytea', nullable: true })
+  encryption_iv: Buffer;
+
+  @Column({ nullable: true, default: 'AES-256-GCM' })
+  encryption_algo: string;
+
   @Column({ type: 'timestamptz', nullable: true })
   deleted_at: Date;
 

@@ -71,7 +71,34 @@ export class UserService {
   }
 
   async updateStorageUsed(userId: string, delta: number): Promise<void> {
-    await this.usersRepository.increment({ id: userId }, 'storage_used', delta);
+    // Use raw query to properly handle both positive and negative deltas
+    // and ensure storage_used never goes below 0
+    await this.usersRepository
+      .createQueryBuilder()
+      .update()
+      .set({
+        storage_used: () => `GREATEST(0, COALESCE(storage_used, 0) + ${delta})`,
+      })
+      .where('id = :id', { id: userId })
+      .execute();
+  }
+
+  async updateStorageLimit(userId: string, newLimit: number): Promise<User> {
+    // Use raw query to properly handle bigint values
+    await this.usersRepository
+      .createQueryBuilder()
+      .update()
+      .set({
+        storage_limit: () => `${Math.floor(newLimit)}`,
+      })
+      .where('id = :id', { id: userId })
+      .execute();
+
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
   }
 
   async count(): Promise<number> {

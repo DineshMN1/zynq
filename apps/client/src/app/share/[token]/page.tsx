@@ -9,18 +9,22 @@ import { formatBytes } from '@/lib/auth';
 import { publicApi } from '@/lib/api';
 
 interface SharedFile {
+  id: string;
   name: string;
   mimeType: string;
   size: number;
-  downloadUrl: string | null;
   owner: string;
+  ownerId: string;
   createdAt: string;
+  isFolder: boolean;
+  hasContent: boolean;
 }
 
 export default function PublicSharePage() {
   const { token } = useParams<{ token: string }>();
   const [file, setFile] = useState<SharedFile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
 
   const fetchFile = useCallback(async () => {
@@ -38,6 +42,26 @@ export default function PublicSharePage() {
     if (!token) return;
     fetchFile();
   }, [token, fetchFile]);
+
+  const handleDownload = async () => {
+    if (!file?.hasContent) return;
+    setDownloading(true);
+    try {
+      const { blob, fileName } = await publicApi.downloadShare(token);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName || file.name || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      setError('Download failed. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -80,10 +104,15 @@ export default function PublicSharePage() {
         <Button
           size="lg"
           className="w-full"
-          onClick={() => file?.downloadUrl && window.open(file.downloadUrl, '_blank')}
+          disabled={downloading}
+          onClick={handleDownload}
         >
-          <Download className="mr-2 h-4 w-4" />
-          Download File
+          {downloading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          {downloading ? 'Downloading...' : 'Download File'}
         </Button>
 
         <p className="text-xs text-muted-foreground mt-3">

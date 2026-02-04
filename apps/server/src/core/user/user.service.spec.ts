@@ -28,6 +28,9 @@ describe('UserService', () => {
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     getOne: jest.fn(),
+    update: jest.fn().mockReturnThis(),
+    set: jest.fn().mockReturnThis(),
+    execute: jest.fn().mockResolvedValue({}),
   };
 
   beforeEach(async () => {
@@ -253,21 +256,19 @@ describe('UserService', () => {
     it('should increment storage used', async () => {
       await service.updateStorageUsed('user-123', 1000);
 
-      expect(repository.increment).toHaveBeenCalledWith(
-        { id: 'user-123' },
-        'storage_used',
-        1000,
-      );
+      expect(repository.createQueryBuilder).toHaveBeenCalled();
+      expect(mockQueryBuilder.update).toHaveBeenCalled();
+      expect(mockQueryBuilder.set).toHaveBeenCalled();
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith('id = :id', { id: 'user-123' });
+      expect(mockQueryBuilder.execute).toHaveBeenCalled();
     });
 
     it('should decrement storage used with negative delta', async () => {
       await service.updateStorageUsed('user-123', -500);
 
-      expect(repository.increment).toHaveBeenCalledWith(
-        { id: 'user-123' },
-        'storage_used',
-        -500,
-      );
+      expect(repository.createQueryBuilder).toHaveBeenCalled();
+      expect(mockQueryBuilder.update).toHaveBeenCalled();
+      expect(mockQueryBuilder.execute).toHaveBeenCalled();
     });
   });
 

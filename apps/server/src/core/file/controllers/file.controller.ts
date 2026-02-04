@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
@@ -9,12 +10,18 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { FileService } from '../file.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { User } from '../../user/entities/user.entity';
 import { CreateFileDto } from '../dto/create-file.dto';
+import { BulkDeleteFilesDto } from '../dto/bulk-delete-files.dto';
 import { ShareFileDto } from '../../share/dto/share-file.dto';
 
 @Controller('files')
@@ -105,6 +112,17 @@ export class FileController {
     return { success: true };
   }
 
+  @Delete('bulk')
+  @HttpCode(HttpStatus.OK)
+  async bulkDelete(@CurrentUser() user: User, @Body() dto: BulkDeleteFilesDto) {
+    return this.fileService.bulkSoftDelete(dto.ids, user.id);
+  }
+
+  @Get('check-duplicate/:hash')
+  async checkDuplicate(@CurrentUser() user: User, @Param('hash') hash: string) {
+    return this.fileService.checkDuplicate(user.id, hash);
+  }
+
   // ========================================
   // PARAMETERIZED ROUTES LAST
   // ========================================
@@ -114,10 +132,35 @@ export class FileController {
     return this.fileService.findById(id, user.id);
   }
 
+  @Put(':id/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFileContent(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      return { error: 'No file provided' };
+    }
+    return this.fileService.uploadFileContent(id, user.id, file.buffer);
+  }
+
   @Get(':id/download')
-  async getDownloadUrl(@CurrentUser() user: User, @Param('id') id: string) {
-    const url = await this.fileService.getDownloadUrl(id, user.id);
-    return { url };
+  async downloadFile(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.fileService.findById(id, user.id);
+    const data = await this.fileService.downloadFile(id, user.id);
+
+    res.set({
+      'Content-Type': file.mime_type || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.name)}"`,
+      'Content-Length': data.length,
+    });
+
+    res.send(data);
   }
 
   @Delete(':id')
