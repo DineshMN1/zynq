@@ -1,4 +1,6 @@
+# ===============================
 # Dependencies
+# ===============================
 node_modules/
 .pnp
 .pnp.*
@@ -8,55 +10,88 @@ node_modules/
 !.yarn/releases
 !.yarn/versions
 
-# Claude
-.claude/
-
-# Build outputs
+# ===============================
+# Build Outputs
+# ===============================
 dist/
 build/
 .next/
 out/
 
+# ===============================
 # Testing
+# ===============================
 coverage/
 .nyc_output/
 
-# Environment files
+# ===============================
+# Environment & Secrets
+# ===============================
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
 *.local
 
-# IDE
+# ===============================
+# IDE / Editors
+# ===============================
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# OS
+# ===============================
+# OS Files
+# ===============================
 .DS_Store
 Thumbs.db
+.claude
 
-# Debug logs
+# ===============================
+# Logs
+# ===============================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
 
-# Misc
+# ===============================
+# Certificates & Sensitive Files
+# ===============================
 *.pem
-*.tsbuildinfo
-next-env.d.ts
-.vercel
+*.key
+*.crt
 cookies.txt
 
-# Docker
-.docker/
+# ===============================
+# Next.js / Platform
+# ===============================
+next-env.d.ts
+.vercel
 
-# Temporary files
+# ===============================
+# Docker
+# ===============================
+.docker/
+docker-data/
+
+# ===============================
+# Local Storage (CRITICAL)
+# ===============================
+storage/
+uploads/
+data/
+
+# ===============================
+# Temp / Runtime
+# ===============================
 tmp/
 temp/
 *.tmp
+
+# ===============================
+# Internal Docs / Generated Files
+# ===============================
+.mainworkflow.md
+.users.md
+.txt

@@ -2,7 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { promises as fs } from 'fs';
 
 interface HealthCheck {
   status: 'healthy' | 'unhealthy';
@@ -32,8 +32,7 @@ interface MemoryCheck {
 
 @Controller('health')
 export class HealthController {
-  private s3Client: S3Client;
-  private bucket: string;
+  private storagePath: string;
   private startTime: number;
 
   constructor(
@@ -42,16 +41,8 @@ export class HealthController {
     private configService: ConfigService,
   ) {
     this.startTime = Date.now();
-    this.bucket = this.configService.get('S3_BUCKET') || 'zynq-cloud';
-    this.s3Client = new S3Client({
-      endpoint: this.configService.get('S3_ENDPOINT'),
-      region: this.configService.get('S3_REGION') || 'us-east-1',
-      credentials: {
-        accessKeyId: this.configService.get('S3_ACCESS_KEY_ID') || '',
-        secretAccessKey: this.configService.get('S3_SECRET_ACCESS_KEY') || '',
-      },
-      forcePathStyle: this.configService.get('S3_FORCE_PATH_STYLE') === 'true',
-    });
+    this.storagePath =
+      this.configService.get('FILE_STORAGE_PATH') || '/data/files';
   }
 
   @Get()
@@ -115,7 +106,19 @@ export class HealthController {
   private async checkStorage(): Promise<HealthCheckResult> {
     const start = Date.now();
     try {
-      await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      // Check if storage directory exists and is accessible
+      await fs.access(this.storagePath);
+
+      // Try to get stats to verify read access
+      const stats = await fs.stat(this.storagePath);
+
+      if (!stats.isDirectory()) {
+        return {
+          status: 'down',
+          error: 'Storage path is not a directory',
+        };
+      }
+
       return {
         status: 'up',
         latency: Date.now() - start,
@@ -124,7 +127,7 @@ export class HealthController {
       return {
         status: 'down',
         error:
-          error instanceof Error ? error.message : 'Storage connection failed',
+          error instanceof Error ? error.message : 'Storage access failed',
       };
     }
   }
@@ -136,9 +139,9 @@ export class HealthController {
       return `${mb.toFixed(2)} MB`;
     };
 
-    // Consider unhealthy if heap used > 95% of heap total
-    const heapUsedRatio = memUsage.heapUsed / memUsage.heapTotal;
-    const status = heapUsedRatio < 0.95 ? 'up' : 'down';
+    // Consider unhealthy if RSS > 500MB (reasonable limit for the app)
+    const rssMB = memUsage.rss / 1024 / 1024;
+    const status = rssMB < 500 ? 'up' : 'down';
 
     return {
       status,

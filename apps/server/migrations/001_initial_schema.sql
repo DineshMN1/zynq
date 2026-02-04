@@ -45,7 +45,7 @@ CREATE TABLE files (
   storage_path TEXT,
   parent_id UUID REFERENCES files(id) ON DELETE CASCADE,
   is_folder BOOLEAN DEFAULT false,
-  file_hash TEXT,
+  file_hash VARCHAR,
   deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -94,4 +94,4 @@ CREATE INDEX idx_shares_share_token ON shares(share_token);
 CREATE INDEX idx_invitations_token ON invitations(token);
 CREATE INDEX idx_invitations_status ON invitations(status);
 CREATE INDEX idx_settings_user_id_key ON settings(user_id, key);
-
+CREATE INDEX idx_files_file_hash ON files(file_hash) WHERE file_hash IS NOT NULL;
