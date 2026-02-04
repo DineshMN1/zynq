@@ -66,7 +66,7 @@ export default function FilesPage() {
   const [publicLink, setPublicLink] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<UploadProgress[]>([]);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
-  const [duplicateFiles, setDuplicateFiles] = useState<FileMetadata[]>([]);
+  const [duplicateFile, setDuplicateFile] = useState<FileMetadata | undefined>(undefined);
   const [pendingUpload, setPendingUpload] = useState<{
     file: File;
     hash: string;
@@ -490,7 +490,7 @@ export default function FilesPage() {
       if (err instanceof ApiError && err.statusCode === 409) {
         const duplicates = err.details?.duplicates || [];
         if (duplicates.length > 0) {
-          setDuplicateFiles(duplicates);
+          setDuplicateFile(duplicates[0]);
           setPendingUpload({ file, hash: fileHash });
           setShowDuplicateDialog(true);
           removeUploadProgress(progressId);
@@ -542,7 +542,7 @@ export default function FilesPage() {
         setTimeout(() => removeUploadProgress(progressId), 3000);
       } finally {
         setPendingUpload(null);
-        setDuplicateFiles([]);
+        setDuplicateFile(undefined);
       }
     }
   };
@@ -550,7 +550,7 @@ export default function FilesPage() {
   const handleDuplicateCancel = () => {
     setShowDuplicateDialog(false);
     setPendingUpload(null);
-    setDuplicateFiles([]);
+    setDuplicateFile(undefined);
     toast({
       title: "Upload cancelled",
       description: "File upload was cancelled to avoid duplicates.",
@@ -1054,8 +1054,8 @@ export default function FilesPage() {
           open={showDuplicateDialog}
           onOpenChange={setShowDuplicateDialog}
           fileName={pendingUpload?.file.name || ""}
-          duplicateFiles={duplicateFiles}
-          onProceed={handleDuplicateProceed}
+          existingFile={duplicateFile}
+          onUploadAnyway={handleDuplicateProceed}
           onCancel={handleDuplicateCancel}
         />
       </div>

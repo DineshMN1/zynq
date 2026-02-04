@@ -5,21 +5,20 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Cloud,
   Files,
-  FolderOpen,
-  Clock,
-  Star,
   Share2,
   Trash2,
   Settings,
   Users,
   Mail,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
   LogOut,
   User as UserIcon,
   MoreVertical,
   Moon,
   Sun,
+  Server,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Progress } from './ui/progress';
@@ -122,34 +121,79 @@ export function Sidebar({ user }: SidebarProps) {
         collapsed ? 'w-[68px]' : 'w-64'
       )}
     >
-      {/* Fixed Header */}
-      <div className="flex items-center h-14 px-3 border-b border-border shrink-0">
-        {!collapsed ? (
-          <Link href="/dashboard" className="flex items-center gap-2 flex-1">
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Cloud className="h-5 w-5 text-primary" />
+      {/* App-Style Header Selector */}
+      <div className="p-2 shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                'w-full flex items-center gap-2.5 rounded-lg border border-border/60 bg-card/50 px-2.5 py-2',
+                'hover:bg-secondary/80 hover:border-border active:scale-[0.98]',
+                'transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+                'shadow-sm hover:shadow',
+                collapsed && 'justify-center px-2'
+              )}
+            >
+              <div className="h-7 w-7 rounded-md bg-primary/15 flex items-center justify-center shrink-0">
+                <Cloud className="h-4 w-4 text-primary" />
+              </div>
+              {!collapsed && (
+                <>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-semibold text-foreground truncate leading-tight">
+                      ZynqCloud
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/70 truncate leading-tight">
+                      Personal Workspace
+                    </p>
+                  </div>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                </>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            side="bottom"
+            className="w-56"
+          >
+            <div className="px-2 py-2">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center">
+                  <Cloud className="h-4.5 w-4.5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold">ZynqCloud</p>
+                  <p className="text-[11px] text-muted-foreground">Personal Workspace</p>
+                </div>
+              </div>
             </div>
-            <span className="font-semibold text-foreground">ZynqCloud</span>
-          </Link>
-        ) : (
-          <div className="flex-1 flex justify-center">
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Cloud className="h-5 w-5 text-primary" />
-            </div>
-          </div>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </Button>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard" className="cursor-pointer gap-2">
+                <Server className="h-4 w-4" />
+                Dashboard
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => setCollapsed(!collapsed)}
+              className="cursor-pointer gap-2"
+            >
+              {collapsed ? (
+                <>
+                  <ChevronsRight className="h-4 w-4" />
+                  Expand Sidebar
+                </>
+              ) : (
+                <>
+                  <ChevronsLeft className="h-4 w-4" />
+                  Collapse Sidebar
+                </>
+              )}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Scrollable Navigation */}
