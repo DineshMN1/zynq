@@ -20,6 +20,11 @@ const ALLOWED_MIME_TYPES = [
   'image/svg+xml',
   'image/bmp',
   'image/tiff',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
   // Documents
   'application/pdf',
   'application/msword',
@@ -36,6 +41,11 @@ const ALLOWED_MIME_TYPES = [
   'text/css',
   'text/javascript',
   'text/markdown',
+  'text/xml',
+  'text/x-python',
+  'text/x-c',
+  'text/x-java-source',
+  'text/tab-separated-values',
   // Archives
   'application/zip',
   'application/x-rar-compressed',
@@ -49,12 +59,19 @@ const ALLOWED_MIME_TYPES = [
   'audio/webm',
   'audio/aac',
   'audio/flac',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/midi',
+  'audio/x-midi',
   // Video
   'video/mp4',
   'video/webm',
   'video/ogg',
   'video/quicktime',
   'video/x-msvideo',
+  'video/x-matroska',
+  'video/mpeg',
+  'video/3gpp',
   // Data
   'application/json',
   'application/xml',
@@ -64,6 +81,17 @@ const ALLOWED_MIME_TYPES = [
   'font/woff2',
   'font/ttf',
   'font/otf',
+  // Application (additional)
+  'application/x-httpd-php',
+  'application/sql',
+  'application/x-sql',
+  'application/typescript',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/epub+zip',
+  'application/x-bzip2',
+  'application/x-iso9660-image',
+  'application/wasm',
   // Others
   'application/octet-stream', // Generic binary - for unknown types
 ] as const;
