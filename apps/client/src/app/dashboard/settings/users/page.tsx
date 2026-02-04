@@ -80,14 +80,12 @@ export default function UsersPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [page] = useState(1);
 
-  // Quota editor state
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [quotaValue, setQuotaValue] = useState('');
   const [quotaUnit, setQuotaUnit] = useState<'GB' | 'MB' | 'TB'>('GB');
   const [savingQuota, setSavingQuota] = useState(false);
 
-  // Role editor state
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('user');
   const [savingRole, setSavingRole] = useState(false);
@@ -217,11 +215,10 @@ export default function UsersPage() {
             size="icon"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600"
           >
             <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
           </Button>
-          <Button asChild className="bg-primary hover:bg-primary/90">
+          <Button asChild>
             <Link href="/dashboard/settings/invites">
               <UserPlus className="mr-2 h-4 w-4" />
               Invite User
@@ -234,24 +231,24 @@ export default function UsersPage() {
       {storageOverview && (
         <div className="grid gap-4 md:grid-cols-3">
           {/* System Storage Card */}
-          <Card className="bg-zinc-900/50 border-zinc-800 shadow-lg">
+          <Card className="bg-card/50 border-border shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-zinc-300">System Storage</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">System Storage</CardTitle>
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <HardDrive className="h-4 w-4 text-primary" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-zinc-100">
+              <div className="text-2xl font-bold">
                 {formatBytes(storageOverview.system.usedBytes)}
               </div>
-              <p className="text-xs text-zinc-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 of {formatBytes(storageOverview.system.totalBytes)} total
               </p>
               <Progress
                 value={storageOverview.system.usedPercentage}
                 className={cn(
-                  'h-2 mt-4 bg-zinc-800',
+                  'h-2 mt-4',
                   storageOverview.system.usedPercentage >= 90 && '[&>div]:bg-red-500',
                   storageOverview.system.usedPercentage >= 75 &&
                     storageOverview.system.usedPercentage < 90 &&
@@ -259,33 +256,33 @@ export default function UsersPage() {
                   storageOverview.system.usedPercentage < 75 && '[&>div]:bg-primary'
                 )}
               />
-              <p className="text-xs text-zinc-500 mt-2">
+              <p className="text-xs text-muted-foreground mt-2">
                 {storageOverview.system.usedPercentage}% used
               </p>
             </CardContent>
           </Card>
 
           {/* Users Count Card */}
-          <Card className="bg-zinc-900/50 border-zinc-800 shadow-lg">
+          <Card className="bg-card/50 border-border shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-zinc-300">Total Users</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Users className="h-4 w-4 text-primary" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-zinc-100">{users.length}</div>
-              <p className="text-xs text-zinc-500 mt-1">
+              <div className="text-2xl font-bold">{users.length}</div>
+              <p className="text-xs text-muted-foreground mt-1">
                 {users.filter((u) => u.role === 'admin' || u.role === 'owner').length} administrators
               </p>
               <div className="flex gap-2 mt-4 flex-wrap">
-                <Badge className="bg-primary/20 text-primary border-0 hover:bg-primary/30">
+                <Badge variant="default" className="bg-primary/20 text-primary border-0">
                   {users.filter((u) => u.role === 'owner').length} owner
                 </Badge>
-                <Badge className="bg-amber-500/20 text-amber-400 border-0 hover:bg-amber-500/30">
+                <Badge variant="secondary" className="bg-amber-500/20 text-amber-500 border-0">
                   {users.filter((u) => u.role === 'admin').length} admin
                 </Badge>
-                <Badge className="bg-zinc-700/50 text-zinc-300 border-0 hover:bg-zinc-700/70">
+                <Badge variant="secondary">
                   {users.filter((u) => u.role === 'user').length} user
                 </Badge>
               </div>
@@ -293,29 +290,29 @@ export default function UsersPage() {
           </Card>
 
           {/* Free Space Card */}
-          <Card className="bg-zinc-900/50 border-zinc-800 shadow-lg">
+          <Card className="bg-card/50 border-border shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-zinc-300">Free Space</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Free Space</CardTitle>
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Database className="h-4 w-4 text-primary" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-zinc-100">
+              <div className="text-2xl font-bold">
                 {formatBytes(storageOverview.system.freeBytes)}
               </div>
-              <p className="text-xs text-zinc-500 mt-1">available for new files</p>
+              <p className="text-xs text-muted-foreground mt-1">available for new files</p>
               {storageOverview.system.usedPercentage >= 90 && (
                 <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
                   <AlertTriangle className="h-4 w-4 text-red-500" />
-                  <span className="text-xs text-red-400">Storage critically low</span>
+                  <span className="text-xs text-red-500">Storage critically low</span>
                 </div>
               )}
               {storageOverview.system.usedPercentage >= 75 &&
                 storageOverview.system.usedPercentage < 90 && (
                   <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <span className="text-xs text-amber-400">Storage running low</span>
+                    <span className="text-xs text-amber-500">Storage running low</span>
                   </div>
                 )}
             </CardContent>
@@ -324,22 +321,22 @@ export default function UsersPage() {
       )}
 
       {/* Users Table */}
-      <Card className="bg-zinc-900/50 border-zinc-800 shadow-lg overflow-hidden">
-        <CardHeader className="border-b border-zinc-800">
-          <CardTitle className="text-zinc-100">All Users</CardTitle>
+      <Card className="bg-card/50 border-border shadow-lg overflow-hidden">
+        <CardHeader className="border-b border-border">
+          <CardTitle>All Users</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="border-zinc-800 hover:bg-transparent">
-                  <TableHead className="text-zinc-400 font-medium">Name</TableHead>
-                  <TableHead className="text-zinc-400 font-medium">Email</TableHead>
-                  <TableHead className="text-zinc-400 font-medium">Role</TableHead>
-                  <TableHead className="text-zinc-400 font-medium">Storage Used</TableHead>
-                  <TableHead className="text-zinc-400 font-medium">Quota</TableHead>
-                  <TableHead className="text-zinc-400 font-medium">Usage</TableHead>
-                  <TableHead className="text-zinc-400 font-medium">Joined</TableHead>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-muted-foreground font-medium">Name</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">Email</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">Role</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">Storage Used</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">Quota</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">Usage</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">Joined</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -353,27 +350,24 @@ export default function UsersPage() {
                   return (
                     <TableRow
                       key={user.id}
-                      className="border-zinc-800 hover:bg-zinc-800/50 transition-colors"
+                      className="border-border hover:bg-secondary/50 transition-colors"
                     >
-                      <TableCell className="font-medium text-zinc-100">{user.name}</TableCell>
-                      <TableCell className="text-zinc-400">{user.email}</TableCell>
+                      <TableCell className="font-medium">{user.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{user.email}</TableCell>
                       <TableCell>
                         <Badge
+                          variant={user.role === 'owner' ? 'default' : 'secondary'}
                           className={cn(
-                            'capitalize border-0',
-                            user.role === 'owner' && 'bg-primary/20 text-primary',
-                            user.role === 'admin' && 'bg-amber-500/20 text-amber-400',
-                            user.role === 'user' && 'bg-zinc-700/50 text-zinc-300'
+                            'capitalize',
+                            user.role === 'owner' && 'bg-primary/20 text-primary border-0',
+                            user.role === 'admin' && 'bg-amber-500/20 text-amber-500 border-0'
                           )}
                         >
                           {user.role}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <span className={cn(
-                          'text-zinc-300',
-                          isOverQuota && 'text-red-400 font-medium'
-                        )}>
+                        <span className={cn(isOverQuota && 'text-red-500 font-medium')}>
                           {formatBytes(storageInfo?.usedBytes || 0)}
                         </span>
                       </TableCell>
@@ -381,7 +375,7 @@ export default function UsersPage() {
                         {storageInfo?.isUnlimited ? (
                           <span className="text-primary font-medium">Unlimited</span>
                         ) : (
-                          <span className="text-zinc-400">{formatBytes(storageInfo?.quotaBytes || 0)}</span>
+                          <span className="text-muted-foreground">{formatBytes(storageInfo?.quotaBytes || 0)}</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -389,7 +383,7 @@ export default function UsersPage() {
                           <Progress
                             value={Math.min(usedPercent, 100)}
                             className={cn(
-                              'h-2 bg-zinc-800',
+                              'h-2',
                               isOverQuota && '[&>div]:bg-red-500',
                               isNearQuota && '[&>div]:bg-amber-500',
                               !isOverQuota && !isNearQuota && '[&>div]:bg-primary'
@@ -398,16 +392,16 @@ export default function UsersPage() {
                           <span
                             className={cn(
                               'text-xs mt-1 block',
-                              isOverQuota && 'text-red-400',
-                              isNearQuota && 'text-amber-400',
-                              !isOverQuota && !isNearQuota && 'text-zinc-500'
+                              isOverQuota && 'text-red-500',
+                              isNearQuota && 'text-amber-500',
+                              !isOverQuota && !isNearQuota && 'text-muted-foreground'
                             )}
                           >
                             {usedPercent}%
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-zinc-400">
+                      <TableCell className="text-muted-foreground">
                         {user.created_at
                           ? new Date(user.created_at).toLocaleDateString()
                           : 'N/A'}
@@ -415,35 +409,26 @@ export default function UsersPage() {
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
-                            >
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            className="bg-zinc-900 border-zinc-800"
-                          >
+                          <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               onClick={() => openRoleDialog(user)}
                               disabled={user.role === 'owner'}
-                              className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100"
                             >
                               Edit Role
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => openQuotaDialog(user)}
                               disabled={user.role === 'owner'}
-                              className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100"
                             >
                               Update Quota
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleDeleteUser(user.id)}
-                              className="text-red-400 focus:bg-red-500/10 focus:text-red-400"
+                              className="text-red-500 focus:text-red-500"
                               disabled={user.role === 'owner'}
                             >
                               Delete User
@@ -462,19 +447,19 @@ export default function UsersPage() {
 
       {/* Quota Editor Dialog */}
       <Dialog open={quotaDialogOpen} onOpenChange={setQuotaDialogOpen}>
-        <DialogContent className="bg-zinc-900 border-zinc-800">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-zinc-100">Update Storage Quota</DialogTitle>
-            <DialogDescription className="text-zinc-400">
+            <DialogTitle>Update Storage Quota</DialogTitle>
+            <DialogDescription>
               Set the storage quota for {selectedUser?.name}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             {selectedUser && (
-              <div className="px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700">
-                <p className="text-sm text-zinc-400">
+              <div className="px-3 py-2 rounded-lg bg-muted border border-border">
+                <p className="text-sm text-muted-foreground">
                   Current usage:{' '}
-                  <span className="font-medium text-zinc-100">
+                  <span className="font-medium text-foreground">
                     {formatBytes(getUserStorageInfo(selectedUser.id)?.usedBytes || 0)}
                   </span>
                 </p>
@@ -486,18 +471,18 @@ export default function UsersPage() {
                 placeholder="Enter quota"
                 value={quotaValue}
                 onChange={(e) => setQuotaValue(e.target.value)}
-                className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                className="flex-1"
                 min="0"
                 step="0.01"
               />
               <Select value={quotaUnit} onValueChange={(v) => setQuotaUnit(v as typeof quotaUnit)}>
-                <SelectTrigger className="w-24 bg-zinc-800 border-zinc-700 text-zinc-100">
+                <SelectTrigger className="w-24">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800">
-                  <SelectItem value="MB" className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100">MB</SelectItem>
-                  <SelectItem value="GB" className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100">GB</SelectItem>
-                  <SelectItem value="TB" className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100">TB</SelectItem>
+                <SelectContent>
+                  <SelectItem value="MB">MB</SelectItem>
+                  <SelectItem value="GB">GB</SelectItem>
+                  <SelectItem value="TB">TB</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -511,7 +496,6 @@ export default function UsersPage() {
                     setQuotaValue(val);
                     setQuotaUnit('GB');
                   }}
-                  className="border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 hover:border-zinc-600"
                 >
                   {val} GB
                 </Button>
@@ -523,18 +507,13 @@ export default function UsersPage() {
                   setQuotaValue('1');
                   setQuotaUnit('TB');
                 }}
-                className="border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 hover:border-zinc-600"
               >
                 1 TB
               </Button>
             </div>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setQuotaDialogOpen(false)}
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-            >
+            <Button variant="outline" onClick={() => setQuotaDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleSaveQuota} disabled={savingQuota}>
@@ -547,31 +526,31 @@ export default function UsersPage() {
 
       {/* Role Editor Dialog */}
       <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
-        <DialogContent className="bg-zinc-900 border-zinc-800">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-zinc-100">Edit User Role</DialogTitle>
-            <DialogDescription className="text-zinc-400">
+            <DialogTitle>Edit User Role</DialogTitle>
+            <DialogDescription>
               Change the role for {selectedUser?.name}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Select value={selectedRole} onValueChange={setSelectedRole}>
-              <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-100">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-800">
-                <SelectItem value="user" className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100">
+              <SelectContent>
+                <SelectItem value="user">
                   <div className="flex flex-col">
                     <span>User</span>
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-muted-foreground">
                       Standard access, subject to storage quota
                     </span>
                   </div>
                 </SelectItem>
-                <SelectItem value="admin" className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100">
+                <SelectItem value="admin">
                   <div className="flex flex-col">
                     <span>Admin</span>
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-muted-foreground">
                       Can manage users and invites
                     </span>
                   </div>
@@ -580,11 +559,7 @@ export default function UsersPage() {
             </Select>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setRoleDialogOpen(false)}
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-            >
+            <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleSaveRole} disabled={savingRole}>

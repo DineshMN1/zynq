@@ -118,18 +118,18 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'flex flex-col h-full bg-zinc-950 border-r border-zinc-800 transition-all duration-300',
+        'flex flex-col h-full bg-background border-r border-border transition-all duration-300',
         collapsed ? 'w-[68px]' : 'w-64'
       )}
     >
       {/* Fixed Header */}
-      <div className="flex items-center h-14 px-3 border-b border-zinc-800 shrink-0">
+      <div className="flex items-center h-14 px-3 border-b border-border shrink-0">
         {!collapsed ? (
           <Link href="/dashboard" className="flex items-center gap-2 flex-1">
             <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <Cloud className="h-5 w-5 text-primary" />
             </div>
-            <span className="font-semibold text-zinc-100">ZynqCloud</span>
+            <span className="font-semibold text-foreground">ZynqCloud</span>
           </Link>
         ) : (
           <div className="flex-1 flex justify-center">
@@ -141,7 +141,7 @@ export function Sidebar({ user }: SidebarProps) {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary"
           onClick={() => setCollapsed(!collapsed)}
         >
           {collapsed ? (
@@ -166,8 +166,8 @@ export function Sidebar({ user }: SidebarProps) {
                 className={cn(
                   'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all',
                   isActive
-                    ? 'bg-zinc-800 text-zinc-100'
-                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50',
+                    ? 'bg-secondary text-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
                   collapsed && 'justify-center px-2'
                 )}
                 title={collapsed ? link.label : undefined}
@@ -182,11 +182,11 @@ export function Sidebar({ user }: SidebarProps) {
         {/* Settings Section */}
         <div className="space-y-1">
           {!collapsed && (
-            <p className="px-3 pb-1 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+            <p className="px-3 pb-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest">
               Settings
             </p>
           )}
-          {collapsed && <div className="border-t border-zinc-800 mx-2 my-2" />}
+          {collapsed && <div className="border-t border-border mx-2 my-2" />}
           <div className="space-y-0.5">
             {settingsLinks.map((link) => {
               const Icon = link.icon;
@@ -198,8 +198,8 @@ export function Sidebar({ user }: SidebarProps) {
                   className={cn(
                     'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all',
                     isActive
-                      ? 'bg-zinc-800 text-zinc-100'
-                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50',
+                      ? 'bg-secondary text-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
                     collapsed && 'justify-center px-2'
                   )}
                   title={collapsed ? link.label : undefined}
@@ -216,11 +216,11 @@ export function Sidebar({ user }: SidebarProps) {
         {isAdmin && (
           <div className="space-y-1">
             {!collapsed && (
-              <p className="px-3 pb-1 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+              <p className="px-3 pb-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest">
                 Admin
               </p>
             )}
-            {collapsed && <div className="border-t border-zinc-800 mx-2 my-2" />}
+            {collapsed && <div className="border-t border-border mx-2 my-2" />}
             <div className="space-y-0.5">
               {adminLinks.map((link) => {
                 const Icon = link.icon;
@@ -232,8 +232,8 @@ export function Sidebar({ user }: SidebarProps) {
                     className={cn(
                       'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all',
                       isActive
-                        ? 'bg-zinc-800 text-zinc-100'
-                        : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50',
+                        ? 'bg-secondary text-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
                       collapsed && 'justify-center px-2'
                     )}
                     title={collapsed ? link.label : undefined}
@@ -249,24 +249,24 @@ export function Sidebar({ user }: SidebarProps) {
       </nav>
 
       {/* Fixed Storage Indicator */}
-      <div className={cn('px-3 py-3 border-t border-zinc-800 shrink-0', collapsed && 'px-2')}>
+      <div className={cn('px-3 py-3 border-t border-border shrink-0', collapsed && 'px-2')}>
         {!collapsed ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-zinc-500">Storage</span>
+              <span className="text-xs text-muted-foreground/70">Storage</span>
               {!loadingStorage && storageInfo && (
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-muted-foreground">
                   {formatBytes(storageInfo.user.usedBytes)}
                 </span>
               )}
             </div>
             {loadingStorage ? (
-              <div className="h-1.5 bg-zinc-800 rounded-full animate-pulse" />
+              <div className="h-1.5 bg-secondary rounded-full animate-pulse" />
             ) : (
               <Progress
                 value={Math.min(usedPercentage, 100)}
                 className={cn(
-                  'h-1.5 bg-zinc-800',
+                  'h-1.5 bg-secondary',
                   usedPercentage >= 90 && '[&>div]:bg-red-500',
                   usedPercentage >= 75 && usedPercentage < 90 && '[&>div]:bg-amber-500',
                   usedPercentage < 75 && '[&>div]:bg-primary'
@@ -292,13 +292,13 @@ export function Sidebar({ user }: SidebarProps) {
       </div>
 
       {/* Fixed User Profile */}
-      <div className={cn('px-2 py-2 border-t border-zinc-800 shrink-0', collapsed && 'px-1')}>
+      <div className={cn('px-2 py-2 border-t border-border shrink-0', collapsed && 'px-1')}>
         {user ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 className={cn(
-                  'w-full flex items-center gap-3 p-2 rounded-md hover:bg-zinc-800 transition-colors text-left',
+                  'w-full flex items-center gap-3 p-2 rounded-md hover:bg-secondary transition-colors text-left',
                   collapsed && 'justify-center'
                 )}
               >
@@ -310,10 +310,10 @@ export function Sidebar({ user }: SidebarProps) {
                 {!collapsed && (
                   <>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-100 truncate">{user.name}</p>
-                      <p className="text-xs text-zinc-500 truncate">{user.email}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
+                      <p className="text-xs text-muted-foreground/70 truncate">{user.email}</p>
                     </div>
-                    <MoreVertical className="h-4 w-4 text-zinc-500 shrink-0" />
+                    <MoreVertical className="h-4 w-4 text-muted-foreground/70 shrink-0" />
                   </>
                 )}
               </button>
@@ -366,7 +366,7 @@ export function Sidebar({ user }: SidebarProps) {
           </DropdownMenu>
         ) : (
           <div className={cn('p-2', collapsed && 'flex justify-center')}>
-            <div className="h-8 w-8 rounded-full bg-zinc-800 animate-pulse" />
+            <div className="h-8 w-8 rounded-full bg-secondary animate-pulse" />
           </div>
         )}
       </div>
