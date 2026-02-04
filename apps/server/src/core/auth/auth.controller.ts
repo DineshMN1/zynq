@@ -25,6 +25,12 @@ export class AuthController {
     private configService: ConfigService,
   ) {}
 
+  @Get('setup-status')
+  async getSetupStatus() {
+    const needsSetup = await this.authService.needsSetup();
+    return { needsSetup };
+  }
+
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async register(

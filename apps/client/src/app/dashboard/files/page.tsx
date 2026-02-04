@@ -297,6 +297,9 @@ export default function FilesPage() {
         description: "Unable to move item to trash.",
         variant: "destructive",
       });
+    } finally {
+      setDeleteDialogOpen(false);
+      setSelectedFileId(null);
     }
   };
 

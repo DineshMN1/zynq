@@ -19,7 +19,7 @@ CREATE TABLE users (
 );
 
 -- ===========================================
--- INVITATIONS (✅ updated: added updated_at)
+-- INVITATIONS
 -- ===========================================
 CREATE TABLE invitations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -29,7 +29,7 @@ CREATE TABLE invitations (
   inviter_id UUID REFERENCES users(id) ON DELETE SET NULL,
   status TEXT DEFAULT 'pending',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),   -- ✅ required by backend
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL
 );
 
@@ -52,7 +52,7 @@ CREATE TABLE files (
 );
 
 -- ===========================================
--- SHARES (✅ includes public sharing support)
+-- SHARES (includes public sharing support)
 -- ===========================================
 CREATE TABLE shares (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -61,10 +61,10 @@ CREATE TABLE shares (
   grantee_email TEXT,
   permission TEXT DEFAULT 'read',
   created_by UUID REFERENCES users(id) ON DELETE CASCADE,
-  is_public BOOLEAN DEFAULT false,             -- ✅ public share flag
-  share_token TEXT UNIQUE,                     -- ✅ unique public link token
-  expires_at TIMESTAMPTZ,                      -- ✅ optional expiry
-  password TEXT,                               -- ✅ optional password protection
+  is_public BOOLEAN DEFAULT false,
+  share_token TEXT UNIQUE,
+  expires_at TIMESTAMPTZ,
+  password TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -87,6 +87,7 @@ CREATE TABLE settings (
 CREATE INDEX idx_files_owner_id ON files(owner_id);
 CREATE INDEX idx_files_parent_id ON files(parent_id);
 CREATE INDEX idx_files_deleted_at ON files(deleted_at);
+CREATE INDEX idx_files_file_hash ON files(file_hash);
 CREATE INDEX idx_shares_file_id ON shares(file_id);
 CREATE INDEX idx_shares_grantee_user_id ON shares(grantee_user_id);
 CREATE INDEX idx_shares_share_token ON shares(share_token);

@@ -148,6 +148,8 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 
 // Auth endpoints
 export const authApi = {
+  getSetupStatus: () => fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
+
   register: (data: { name: string; email: string; password: string; inviteToken?: string }) =>
     fetchApi<User>('/auth/register', {
       method: 'POST',

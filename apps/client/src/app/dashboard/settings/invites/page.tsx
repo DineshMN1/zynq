@@ -32,6 +32,16 @@ import {
 } from '@/components/ui/table';
 import { Mail, Loader2, Copy, Check, XCircle } from 'lucide-react';
 import { inviteApi, type Invitation } from '@/lib/api';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function InvitesPage() {
   const [invites, setInvites] = useState<Invitation[]>([]);
@@ -43,6 +53,8 @@ export default function InvitesPage() {
   const [formData, setFormData] = useState({ email: '', role: 'user' });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
+  const [selectedInviteId, setSelectedInviteId] = useState<string | null>(null);
 
   const isValidEmail = (email: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -151,12 +163,17 @@ const buildInviteLink = (invite: Invitation & { link?: string }) => {
     }
   };
 
-  const handleRevokeInvite = async (id: string) => {
+  const handleRevokeInvite = (id: string) => {
+    setSelectedInviteId(id);
+    setRevokeDialogOpen(true);
+  };
+
+  const confirmRevokeInvite = async () => {
+    if (!selectedInviteId) return;
     clearMessages();
-    if (!confirm('Are you sure you want to revoke this invite?')) return;
     try {
-      setRevokingId(id);
-      await inviteApi.revoke(id);
+      setRevokingId(selectedInviteId);
+      await inviteApi.revoke(selectedInviteId);
       setSuccessMessage('Invite revoked.');
       await loadInvites();
     } catch (err) {
@@ -164,6 +181,8 @@ const buildInviteLink = (invite: Invitation & { link?: string }) => {
       setErrorMessage('Failed to revoke invite. Check your network/auth.');
     } finally {
       setRevokingId(null);
+      setRevokeDialogOpen(false);
+      setSelectedInviteId(null);
     }
   };
 
@@ -352,6 +371,27 @@ const buildInviteLink = (invite: Invitation & { link?: string }) => {
           </Table>
         </Card>
       )}
+
+      {/* Revoke Invite Confirmation Dialog */}
+      <AlertDialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke invite?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to revoke this invite? The invitation link will no longer work.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRevokeInvite}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Revoke
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
