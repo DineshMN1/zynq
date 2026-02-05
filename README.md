@@ -1,98 +1,148 @@
+<div align="center">
+
 # zynqCloud
 
-Self-hosted file storage. Your files, your server, your control.
+**Self-hosted file storage. Your files, your server, your control.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-10-E0234E?logo=nestjs)](https://nestjs.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://typescriptlang.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://docker.com/)
+
+[Quick Start](#quick-start) • [Features](#features) • [Documentation](#documentation) • [Contributing](#contributing)
+
+</div>
+
+---
 
 ## Quick Start
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/your-username/zynq.git
 cd zynq
 docker compose up -d --build
 ```
 
-Open **http://localhost:3000** and create your admin account.
+Open **http://localhost:3000** → Create your admin account → Done!
+
+---
 
 ## Features
 
-- File upload, folders, sharing
-- Role-based access (Owner, Admin, User)
-- Invite-only registration
-- Trash with restore
-- Duplicate detection (SHA-256)
-- S3-compatible storage
-- Dark/light theme
+| Feature | Description |
+|---------|-------------|
+| **File Management** | Upload, download, organize in folders |
+| **Sharing** | Share with users or public links |
+| **Roles** | Owner, Admin, User permissions |
+| **Invites** | Invite-only registration |
+| **Trash** | Soft delete with restore |
+| **Deduplication** | SHA-256 hash prevents duplicates |
+| **Storage Quotas** | Per-user storage limits |
+| **SMTP** | Email for invites & password reset |
+| **Themes** | Dark / Light mode |
+
+---
 
 ## Tech Stack
 
-**Frontend:** Next.js 15, React 19, Tailwind CSS, shadcn/ui
-**Backend:** NestJS, TypeORM, PostgreSQL
-**Storage:** AWS S3 or MinIO
+| Layer | Technologies |
+|-------|--------------|
+| **Frontend** | Next.js 15, React 19, Tailwind CSS, shadcn/ui |
+| **Backend** | NestJS 10, TypeORM, PostgreSQL |
+| **Storage** | Local filesystem (encrypted) |
+| **Auth** | JWT + HttpOnly Cookies |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                       zynqCloud                         │
+├─────────────────────────────────────────────────────────┤
+│  ┌─────────────┐              ┌─────────────┐          │
+│  │   Next.js   │   REST API   │   NestJS    │          │
+│  │   :3000     │◄────────────►│   :4000     │          │
+│  └─────────────┘              └──────┬──────┘          │
+│                                      │                  │
+│                    ┌─────────────────┼─────────────┐   │
+│                    ▼                 ▼             ▼   │
+│              ┌──────────┐     ┌──────────┐   ┌──────┐ │
+│              │ Postgres │     │  Files   │   │ SMTP │ │
+│              │  :5432   │     │ (Local)  │   │      │ │
+│              └──────────┘     └──────────┘   └──────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## Services
 
-| Service | URL | Default Credentials |
-|---------|-----|---------------------|
+| Service | URL | Credentials |
+|---------|-----|-------------|
 | App | http://localhost:3000 | First user = Owner |
-| API | http://localhost:4000/api/v1 | - |
+| API | http://localhost:4000/api/v1 | — |
 
-## First User Setup
-
-1. Visit http://localhost:3000
-2. You'll be redirected to setup page
-3. Create admin account (name, email, password)
-4. Done - invite others from Settings > Invites
+---
 
 ## Commands
 
 ```bash
-# Start
-docker compose up -d
-
-# Stop
-docker compose down
-
-# Reset (deletes data)
-docker compose down -v && docker compose up -d --build
-
-# Logs
-docker compose logs -f backend
+docker compose up -d          # Start
+docker compose down           # Stop
+docker compose logs -f        # Logs
+docker compose down -v        # Reset (deletes data)
 ```
 
-## Environment
+---
 
-Copy `apps/server/.env.example` to `.env` and configure:
+## Configuration
 
-- `JWT_SECRET` - Strong secret (32+ chars)
-- `DATABASE_*` - PostgreSQL connection
-- `S3_*` - Storage configuration
-- `SMTP_*` - Email for invites (optional)
+Copy `apps/server/.env.example` and configure:
 
-## Project Structure
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | Auth secret (32+ chars) |
+| `DATABASE_*` | PostgreSQL connection |
+| `S3_*` | Storage (S3/MinIO) |
+| `SMTP_*` | Email settings |
 
-```
-zynq/
-├── apps/
-│   ├── client/          # Next.js frontend
-│   └── server/          # NestJS backend
-├── docker-compose.yml
-└── README.md
-```
+See [docs/INSTALLATION.md](docs/INSTALLATION.md) for full setup guide.
 
-## API Endpoints
+---
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/auth/setup-status` | Check if setup needed |
-| POST | `/auth/register` | Register (first = owner) |
-| POST | `/auth/login` | Login |
-| GET | `/files` | List files |
-| POST | `/files` | Create file/folder |
-| DELETE | `/files/:id` | Move to trash |
+## Documentation
+
+- [Installation Guide](docs/INSTALLATION.md)
+- [Contributing](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
+- [Security Policy](SECURITY.md)
+
+---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
+
+```bash
+# Development
+cd apps/server && npm run start:dev
+cd apps/client && npm run dev
+```
+
+---
 
 ## License
 
-MIT
+[MIT](LICENSE) © zynqCloud
+
+---
+
+<div align="center">
+
+**Your files. Your cloud. Your control.**
+
+⭐ Star us on GitHub if you find this useful!
+
+</div>
