@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   ConflictException,
   UnauthorizedException,
@@ -10,6 +11,8 @@ import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
 import { InvitationService } from '../invitation/invitation.service';
 import { UserRole } from '../user/entities/user.entity';
+import { PasswordReset } from './entities/password-reset.entity';
+import { EmailService } from '../../integrations/email/email.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -66,6 +69,21 @@ describe('AuthService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(PasswordReset),
+          useValue: {
+            create: jest.fn(),
+            save: jest.fn(),
+            findOne: jest.fn(),
+            update: jest.fn(),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

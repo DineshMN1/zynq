@@ -30,6 +30,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -89,6 +99,9 @@ export default function UsersPage() {
   const [selectedRole, setSelectedRole] = useState<string>('user');
   const [savingRole, setSavingRole] = useState(false);
 
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     try {
       const [usersRes, storageRes, usersStorageRes] = await Promise.all([
@@ -118,14 +131,22 @@ export default function UsersPage() {
     loadData();
   };
 
-  const handleDeleteUser = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+  const handleDeleteUser = (id: string) => {
+    setDeleteUserId(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!deleteUserId) return;
+    setDeleteDialogOpen(false);
     try {
-      await adminApi.deleteUser(id);
-      setUsers((prev) => prev.filter((u) => u.id !== id));
+      await adminApi.deleteUser(deleteUserId);
+      setUsers((prev) => prev.filter((u) => u.id !== deleteUserId));
       setTimeout(loadData, 500);
     } catch (error) {
       console.error('Failed to delete user:', error);
+    } finally {
+      setDeleteUserId(null);
     }
   };
 
@@ -568,6 +589,28 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the user account and all associated data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteUserId(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteUser}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

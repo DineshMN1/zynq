@@ -118,9 +118,12 @@ export class FileController {
     return this.fileService.bulkSoftDelete(dto.ids, user.id);
   }
 
-  @Get('check-duplicate/:hash')
-  async checkDuplicate(@CurrentUser() user: User, @Param('hash') hash: string) {
-    return this.fileService.checkDuplicate(user.id, hash);
+  @Post('check-duplicate')
+  async checkDuplicate(
+    @CurrentUser() user: User,
+    @Body() body: { fileHash: string },
+  ) {
+    return this.fileService.checkDuplicate(user.id, body.fileHash);
   }
 
   // ========================================

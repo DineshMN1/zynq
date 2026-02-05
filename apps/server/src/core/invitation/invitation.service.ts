@@ -4,6 +4,7 @@ import { Repository, LessThan } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Invitation, InvitationStatus } from './entities/invitation.entity';
 import { CreateInviteDto } from './dto/create-invite.dto';
+import { EmailService } from '../../integrations/email/email.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class InvitationService {
     @InjectRepository(Invitation)
     private invitationsRepository: Repository<Invitation>,
     private configService: ConfigService,
+    private emailService: EmailService,
   ) {}
 
   async create(
@@ -41,11 +43,9 @@ export class InvitationService {
     const link = `${frontendUrl}/register?inviteToken=${token}`;
 
     try {
-      if (process.env.EMAIL_ENABLED === 'true') {
-        const { EmailService } =
-          await import('../../integrations/email/email.service');
-        const emailService = new EmailService(this.configService);
-        await emailService.sendInvitationEmail(
+      const emailEnabled = this.configService.get('EMAIL_ENABLED') === 'true';
+      if (emailEnabled) {
+        await this.emailService.sendInvitationEmail(
           createInviteDto.email,
           link,
           inviterName,

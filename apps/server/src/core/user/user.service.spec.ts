@@ -259,7 +259,9 @@ describe('UserService', () => {
       expect(repository.createQueryBuilder).toHaveBeenCalled();
       expect(mockQueryBuilder.update).toHaveBeenCalled();
       expect(mockQueryBuilder.set).toHaveBeenCalled();
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith('id = :id', { id: 'user-123' });
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith('id = :id', {
+        id: 'user-123',
+      });
       expect(mockQueryBuilder.execute).toHaveBeenCalled();
     });
 

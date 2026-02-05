@@ -6,6 +6,7 @@ import { NotFoundException } from '@nestjs/common';
 import { InvitationService } from './invitation.service';
 import { Invitation, InvitationStatus } from './entities/invitation.entity';
 import { UserRole } from '../user/entities/user.entity';
+import { EmailService } from '../../integrations/email/email.service';
 
 jest.mock('uuid', () => ({
   v4: jest.fn().mockReturnValue('test-invite-token'),
@@ -54,6 +55,12 @@ describe('InvitationService', () => {
               };
               return config[key];
             }),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendInvitationEmail: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

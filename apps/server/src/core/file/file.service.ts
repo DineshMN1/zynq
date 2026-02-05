@@ -55,7 +55,11 @@ export class FileService {
     }
 
     // Check for duplicate content if hash is provided and not a folder
-    if (createFileDto.fileHash && !createFileDto.isFolder) {
+    if (
+      createFileDto.fileHash &&
+      !createFileDto.isFolder &&
+      !createFileDto.skipDuplicateCheck
+    ) {
       const duplicates = await this.findDuplicatesByHash(
         userId,
         createFileDto.fileHash,
@@ -491,11 +495,22 @@ export class FileService {
   async checkDuplicate(
     userId: string,
     fileHash: string,
-  ): Promise<{ isDuplicate: boolean; files: File[] }> {
-    const duplicates = await this.findDuplicatesByHash(userId, fileHash);
+  ): Promise<{ isDuplicate: boolean; existingFile?: File }> {
+    if (!fileHash) {
+      return { isDuplicate: false };
+    }
+
+    const existingFile = await this.filesRepository.findOne({
+      where: {
+        owner_id: userId,
+        file_hash: fileHash,
+        deleted_at: IsNull(),
+      },
+    });
+
     return {
-      isDuplicate: duplicates.length > 0,
-      files: duplicates,
+      isDuplicate: !!existingFile,
+      existingFile: existingFile || undefined,
     };
   }
 }
