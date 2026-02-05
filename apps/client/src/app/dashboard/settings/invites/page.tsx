@@ -43,6 +43,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+/**
+ * Render the Pending Invites management UI that lets admins create, copy, and revoke invitation links.
+ *
+ * Displays current invitations, a dialog to create a new invite (with role selection and automatic link copying),
+ * and a confirmation dialog for revoking pending invites. Handles loading state, success/error messages,
+ * and interactions with the `inviteApi` for listing, creating, and revoking invites.
+ *
+ * @returns A JSX element rendering the invites management page.
+ */
 export default function InvitesPage() {
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);

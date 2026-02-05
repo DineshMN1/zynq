@@ -7,6 +7,15 @@ interface DropZoneOverlayProps {
   isActive: boolean;
 }
 
+/**
+ * Render a full-coverage drop-zone overlay with animated visuals when active.
+ *
+ * The overlay displays an animated cloud with a floating upload indicator, a
+ * two-line instruction block, and decorative pulsing dots. It mounts and
+ * unmounts with fade animations based on the `isActive` prop.
+ *
+ * @returns A React element for the drop-zone overlay when `isActive` is true, or `null` otherwise.
+ */
 export function DropZoneOverlay({ isActive }: DropZoneOverlayProps) {
   return (
     <AnimatePresence>

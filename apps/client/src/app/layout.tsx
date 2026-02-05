@@ -8,6 +8,12 @@ export const metadata: Metadata = {
   description: "Secure, fast, and completely self-hosted file storage with role-based access control and team collaboration.",
 };
 
+/**
+ * Root layout component that initializes the persisted theme and provides authentication and theme contexts for the application.
+ *
+ * @param children - The application content to render inside the layout.
+ * @returns An HTML document tree with a head script that applies the persisted theme and a body that wraps `children` with `AuthProvider` and `ThemeProvider`.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{

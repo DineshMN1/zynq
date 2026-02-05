@@ -7,16 +7,6 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -70,6 +60,12 @@ const KNOWN_MIME_PREFIXES = [
   "inode/",
 ];
 
+/**
+ * Normalizes a File object's MIME type to a safe, recognized MIME type.
+ *
+ * @param file - The File whose MIME type should be checked.
+ * @returns The file's MIME type if it starts with a known safe prefix; otherwise `"application/octet-stream"`.
+ */
 function getSafeMimeType(file: File): string {
   const type = file.type;
   if (!type) return "application/octet-stream";
@@ -77,6 +73,12 @@ function getSafeMimeType(file: File): string {
   return "application/octet-stream";
 }
 
+/**
+ * Format a byte count into a human-readable string with an appropriate unit.
+ *
+ * @param bytes - The number of bytes to format
+ * @returns A string representing `bytes` using `Bytes`, `KB`, `MB`, or `GB`, rounded to at most two decimal places
+ */
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 Bytes";
   const k = 1024;
@@ -85,6 +87,13 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+/**
+ * Renders the main file explorer UI for browsing, searching, uploading, and managing files and folders.
+ *
+ * Provides listing and breadcrumb navigation, multi-select (ctrl/cmd and shift support), file and folder uploads (including drag-and-drop and directory uploads), per-file upload progress and aggregate progress, file-hash duplicate detection with a user confirmation dialog, bulk actions (share, delete), folder creation, and public link sharing.
+ *
+ * @returns The FilesPage React element.
+ */
 export default function FilesPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,13 +128,6 @@ export default function FilesPage() {
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastClickedId = useRef<string | null>(null);
-
-  // Delete confirmation state
-  const [deleteConfirm, setDeleteConfirm] = useState<{
-    open: boolean;
-    type: "single" | "bulk";
-    id?: string;
-  }>({ open: false, type: "single" });
 
   // Drag & drop state
   const [isDragActive, setIsDragActive] = useState(false);
@@ -257,15 +259,17 @@ export default function FilesPage() {
     }
   };
 
-  const handleBulkDelete = () => {
-    if (selectedIds.size === 0) return;
-    setDeleteConfirm({ open: true, type: "bulk" });
-  };
-
-  const confirmBulkDelete = async () => {
+  const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
     const count = ids.length;
-    setDeleteConfirm({ open: false, type: "bulk" });
+    if (
+      !confirm(
+        `Are you sure you want to move ${count} ${count === 1 ? "item" : "items"} to Trash?`
+      )
+    )
+      return;
 
     try {
       await fileApi.bulkDelete(ids);
@@ -325,15 +329,8 @@ export default function FilesPage() {
     setSelectedIds(new Set());
   };
 
-  const handleDelete = (id: string) => {
-    setDeleteConfirm({ open: true, type: "single", id });
-  };
-
-  const confirmSingleDelete = async () => {
-    const id = deleteConfirm.id;
-    setDeleteConfirm({ open: false, type: "single" });
-    if (!id) return;
-
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to move this item to Trash?")) return;
     try {
       await fileApi.delete(id);
       setFiles(files.filter((f) => f.id !== id));
@@ -362,27 +359,41 @@ export default function FilesPage() {
   const uploadFileWithProgress = (
     url: string,
     file: File,
-    _contentType: string,
+    contentType: string,
     progressId: string
   ): Promise<void> => {
-    const apiBase =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
-    const fullUrl = url.startsWith("http") ? url : `${apiBase}${url.replace(/^\/api\/v1/, "")}`;
-    const token = localStorage.getItem("token");
-
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      let uploadComplete = false;
 
       xhr.upload.addEventListener("progress", (event) => {
         if (event.lengthComputable) {
           const percent = Math.round((event.loaded / event.total) * 100);
           updateUploadProgress(progressId, { progress: percent });
+          if (percent === 100) {
+            uploadComplete = true;
+          }
         }
+      });
+
+      xhr.upload.addEventListener("load", () => {
+        uploadComplete = true;
+        updateUploadProgress(progressId, { progress: 100 });
       });
 
       xhr.addEventListener("readystatechange", () => {
         if (xhr.readyState === 4) {
-          if (xhr.status >= 200 && xhr.status < 300) {
+          if (
+            xhr.status === 200 ||
+            xhr.status === 204 ||
+            (uploadComplete && xhr.status === 0)
+          ) {
+            updateUploadProgress(progressId, {
+              progress: 100,
+              status: "completed",
+            });
+            resolve();
+          } else if (uploadComplete) {
             updateUploadProgress(progressId, {
               progress: 100,
               status: "completed",
@@ -395,14 +406,9 @@ export default function FilesPage() {
         }
       });
 
-      const formData = new FormData();
-      formData.append("file", file);
-
-      xhr.open("PUT", fullUrl);
-      if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      }
-      xhr.send(formData);
+      xhr.open("PUT", url);
+      xhr.setRequestHeader("Content-Type", contentType);
+      xhr.send(file);
     });
   };
 
@@ -425,8 +431,7 @@ export default function FilesPage() {
       mimeType: safeMime,
       parentId,
       isFolder: false,
-      fileHash: fileHash || undefined,
-      skipDuplicateCheck: skipDuplicateCheck || undefined,
+      fileHash: skipDuplicateCheck ? undefined : fileHash,
     });
 
     if (created.uploadUrl) {
@@ -519,25 +524,13 @@ export default function FilesPage() {
     }
 
     const file = fileList[0];
+    let fileHash = "";
     const progressId = addUploadProgress(file.name);
 
     try {
       updateUploadProgress(progressId, { status: "checking" });
-      const fileHash = await calculateContentHash(file);
+      fileHash = await calculateContentHash(file);
 
-      // Check for duplicates before uploading
-      const { isDuplicate, existingFile } = await fileApi.checkDuplicate(fileHash);
-
-      if (isDuplicate && existingFile) {
-        setPendingUpload({ file, hash: fileHash });
-        setDuplicateFile(existingFile);
-        setShowDuplicateDialog(true);
-        removeUploadProgress(progressId);
-        e.target.value = "";
-        return;
-      }
-
-      // No duplicate, proceed with upload
       await proceedWithUploadForId(file, fileHash, false, progressId);
       await loadFiles();
       toast({
@@ -548,6 +541,19 @@ export default function FilesPage() {
       setTimeout(() => removeUploadProgress(progressId), 2000);
     } catch (err) {
       console.error("File upload error:", err);
+
+      if (err instanceof ApiError && err.statusCode === 409) {
+        const duplicates = err.details?.duplicates || [];
+        if (duplicates.length > 0) {
+          setDuplicateFile(duplicates[0]);
+          setPendingUpload({ file, hash: fileHash });
+          setShowDuplicateDialog(true);
+          removeUploadProgress(progressId);
+          e.target.value = "";
+          return;
+        }
+      }
+
       const errorMessage =
         err instanceof ApiError ? err.message : "Unable to upload this file.";
       toast({
@@ -1083,37 +1089,6 @@ export default function FilesPage() {
           onUpload={handleFolderUploadProceed}
           onCancel={handleFolderUploadCancel}
         />
-
-        <AlertDialog
-          open={deleteConfirm.open}
-          onOpenChange={(open) =>
-            setDeleteConfirm((prev) => ({ ...prev, open }))
-          }
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Move to Trash?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {deleteConfirm.type === "bulk"
-                  ? `${selectedIds.size} ${selectedIds.size === 1 ? "item" : "items"} will be moved to Trash. You can restore them later.`
-                  : "This item will be moved to Trash. You can restore it later."}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={
-                  deleteConfirm.type === "bulk"
-                    ? confirmBulkDelete
-                    : confirmSingleDelete
-                }
-              >
-                Move to Trash
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
 
       <ToastContainer />

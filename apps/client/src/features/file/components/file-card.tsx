@@ -43,7 +43,13 @@ interface FileCardProps {
   onCardClick?: (id: string, e: React.MouseEvent) => void;
 }
 
-// Get appropriate icon based on mime type
+/**
+ * Selects the appropriate icon component for a file or folder based on its MIME type and folder status.
+ *
+ * @param mimeType - The file's MIME type string (e.g., "image/png", "application/pdf")
+ * @param isFolder - When `true`, a folder icon is always returned regardless of `mimeType`
+ * @returns The icon component corresponding to the file type (e.g., folder, image, video, audio, archive, spreadsheet, code, text, or a generic file icon)
+ */
 function getFileIcon(mimeType: string, isFolder: boolean) {
   if (isFolder) return Folder;
 
@@ -70,7 +76,13 @@ function getFileIcon(mimeType: string, isFolder: boolean) {
   return File;
 }
 
-// Get icon color based on file type
+/**
+ * Selects a Tailwind CSS text color class for a file icon based on MIME type and folder status.
+ *
+ * @param mimeType - The file's MIME type used to determine the color.
+ * @param isFolder - Whether the item is a folder; folders use an amber color scheme.
+ * @returns The CSS text color classes for light and dark themes (e.g., `"text-pink-500 dark:text-pink-400"`).
+ */
 function getIconColor(mimeType: string, isFolder: boolean) {
   if (isFolder) return "text-amber-500 dark:text-amber-400";
 
@@ -88,7 +100,13 @@ function getIconColor(mimeType: string, isFolder: boolean) {
   return "text-blue-500 dark:text-blue-400";
 }
 
-// Get icon background color
+/**
+ * Selects the background color CSS classes for a file icon based on MIME type or folder status.
+ *
+ * @param mimeType - The file's MIME type (for example, "image/png" or "application/pdf")
+ * @param isFolder - Whether the item represents a folder
+ * @returns The Tailwind CSS class string to use as the icon background (includes dark-mode variant)
+ */
 function getIconBgColor(mimeType: string, isFolder: boolean) {
   if (isFolder) return "bg-amber-100 dark:bg-amber-900/30";
 
@@ -106,6 +124,24 @@ function getIconBgColor(mimeType: string, isFolder: boolean) {
   return "bg-blue-100 dark:bg-blue-900/30";
 }
 
+/**
+ * Renders a file or folder card with icon, metadata, selection support, and an actions menu.
+ *
+ * The card displays an icon (derived from the file's mime type or folder state), file name, size,
+ * and a Folder badge for folders. Actions available in the menu include download (files only),
+ * get public link, and move to trash. If `onToggleSelect` is provided a selection checkbox is shown;
+ * `onCardClick` takes precedence for clicks on the card, otherwise clicking a folder invokes `onOpenFolder`.
+ *
+ * @param file - File metadata to render (name, id, mime_type, size, is_folder, etc.).
+ * @param index - Zero-based index used to stagger entrance animation.
+ * @param onOpenFolder - Called when a folder card is opened.
+ * @param onDelete - Called to request deleting (moving to trash) the file or folder; receives the item id.
+ * @param onShare - Called to request a public link for the file; receives the item id.
+ * @param isSelected - If true, the card is rendered in a selected state.
+ * @param onToggleSelect - If provided, enables the selection checkbox and is called with the item id when toggled.
+ * @param onCardClick - Optional custom click handler for the card; receives the item id and mouse event. If provided it is called instead of the default folder-opening behavior.
+ * @returns A JSX element representing the interactive file or folder card.
+ */
 export function FileCard({
   file,
   index,

@@ -6,6 +6,15 @@ import { Sidebar } from '@/components/Sidebar';
 import { authApi, type User } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 
+/**
+ * Layout that enforces authentication and renders the dashboard UI for an authenticated user.
+ *
+ * While mounting, the component verifies the current user; it shows a centered loading indicator during verification,
+ * redirects to `/login` if authentication fails, and renders nothing if no user is present after loading.
+ *
+ * @param children - Content to display in the main dashboard area to the right of the sidebar.
+ * @returns The dashboard layout element when a user is authenticated, `null` when unauthenticated, or a loading indicator element while authentication is in progress.
+ */
 export default function DashboardLayout({
   children,
 }: {

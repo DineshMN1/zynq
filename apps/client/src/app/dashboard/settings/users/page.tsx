@@ -30,16 +30,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -59,6 +49,12 @@ import {
 import { adminApi, storageApi, type User, type StorageOverview, type UserStorageInfo } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
+/**
+ * Convert a byte count into a human-readable string with a unit suffix.
+ *
+ * @param bytes - The number of bytes (zero or positive)
+ * @returns A string formatted with up to two decimal places and a unit from `B`, `KB`, `MB`, `GB`, `TB`. Uses 1024 as the unit base; returns `'0 B'` when `bytes` is 0.
+ */
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -67,6 +63,14 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+/**
+ * Parse a human-readable storage quota string and convert it to a byte count.
+ *
+ * Accepts numeric values optionally followed by a unit (B, KB, MB, GB, TB), case-insensitive. Fractional numbers are supported and the result is rounded down to the nearest whole byte.
+ *
+ * @param value - Quota string to parse (e.g., "10 GB", "500MB", "1024")
+ * @returns The number of bytes represented by `value`, or `0` if the input is not a valid quota string
+ */
 function parseQuotaInput(value: string): number {
   const match = value.match(/^([\d.]+)\s*(B|KB|MB|GB|TB)?$/i);
   if (!match) return 0;
@@ -82,6 +86,15 @@ function parseQuotaInput(value: string): number {
   return Math.floor(num * (multipliers[unit] || 1));
 }
 
+/**
+ * Admin React page for managing users, roles, and system storage quotas.
+ *
+ * Renders a dashboard with system storage metrics, a user table showing per-user storage and quotas,
+ * and dialogs for updating a user's quota and role. Fetches users and storage data on mount and
+ * periodically refreshes it; provides actions to refresh data and delete users.
+ *
+ * @returns A React element rendering the Users & Storage administration UI.
+ */
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [usersStorage, setUsersStorage] = useState<UserStorageInfo[]>([]);
@@ -98,9 +111,6 @@ export default function UsersPage() {
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('user');
   const [savingRole, setSavingRole] = useState(false);
-
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -131,22 +141,14 @@ export default function UsersPage() {
     loadData();
   };
 
-  const handleDeleteUser = (id: string) => {
-    setDeleteUserId(id);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDeleteUser = async () => {
-    if (!deleteUserId) return;
-    setDeleteDialogOpen(false);
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this user?')) return;
     try {
-      await adminApi.deleteUser(deleteUserId);
-      setUsers((prev) => prev.filter((u) => u.id !== deleteUserId));
+      await adminApi.deleteUser(id);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
       setTimeout(loadData, 500);
     } catch (error) {
       console.error('Failed to delete user:', error);
-    } finally {
-      setDeleteUserId(null);
     }
   };
 
@@ -589,28 +591,6 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete User?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the user account and all associated data. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteUserId(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDeleteUser}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

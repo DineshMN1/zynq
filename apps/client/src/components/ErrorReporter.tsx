@@ -8,6 +8,16 @@ type ReporterProps = {
   reset?: () => void;
 };
 
+/**
+ * Renders a global error UI and, when running inside an iframe, instruments the page to capture
+ * runtime errors, unhandled promise rejections, and Next.js dev overlay messages and forwards
+ * them to the parent window via postMessage.
+ *
+ * @param error - Optional error object shown in the UI. If present, this component renders a global
+ *   error page and includes `message`, `stack`, `name`, and optional `digest` in postMessage payloads.
+ * @param reset - Optional reset function provided by the caller (not used by this component).
+ * @returns A React element for the global error page when `error` is provided, or `null` otherwise.
+ */
 export default function ErrorReporter({ error, reset: _reset }: ReporterProps) {
   /* ─ instrumentation shared by every route ─ */
   const lastOverlayMsg = useRef("");

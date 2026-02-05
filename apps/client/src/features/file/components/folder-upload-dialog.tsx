@@ -22,6 +22,19 @@ interface FolderUploadDialogProps {
   onCancel: () => void;
 }
 
+/**
+ * Renders a confirmation dialog showing folder upload details and actions.
+ *
+ * @param open - Whether the dialog is visible
+ * @param onOpenChange - Callback invoked when the dialog open state changes
+ * @param folderName - Name of the folder to be uploaded
+ * @param fileCount - Number of files contained in the folder
+ * @param totalSize - Human-readable total size of the folder contents
+ * @param destination - Target path or location where the folder will be uploaded
+ * @param onUpload - Callback invoked when the user confirms the upload
+ * @param onCancel - Callback invoked when the user cancels the dialog
+ * @returns A JSX element rendering an AlertDialog that displays the folder details and provides Cancel and Upload actions
+ */
 export function FolderUploadDialog({
   open,
   onOpenChange,

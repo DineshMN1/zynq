@@ -33,6 +33,11 @@ import { formatBytes } from "@/lib/auth";
 import { motion } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
 
+/**
+ * Render the Trash page UI that lists trashed files and provides restore, permanent delete, and empty-trash actions with confirmation dialogs and toast feedback.
+ *
+ * @returns A React element representing the Trash page.
+ */
 export default function TrashPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [loading, setLoading] = useState(true);

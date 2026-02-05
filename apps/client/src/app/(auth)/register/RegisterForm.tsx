@@ -20,6 +20,15 @@ import { authApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
 
+/**
+ * Render a registration form that creates a new user account and signs the user in.
+ *
+ * The form reads an optional `invite` or `inviteToken` query parameter, validates password length (>= 8)
+ * and confirmation on the client, displays realtime password strength and match indicators, submits registration
+ * to the auth API, logs in the returned user on success, and navigates to the dashboard.
+ *
+ * @returns A React element containing the registration UI.
+ */
 export default function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();

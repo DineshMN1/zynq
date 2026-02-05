@@ -20,6 +20,15 @@ interface SharedFile {
   hasContent: boolean;
 }
 
+/**
+ * Render the public share page for a file identified by the route token.
+ *
+ * Fetches shared file metadata when the token is present, displays a loading
+ * indicator or an error view as appropriate, and provides a client-side
+ * download action when the shared file contains downloadable content.
+ *
+ * @returns The React element for the public share page showing the file preview, loading state, or error message.
+ */
 export default function PublicSharePage() {
   const { token } = useParams<{ token: string }>();
   const [file, setFile] = useState<SharedFile | null>(null);

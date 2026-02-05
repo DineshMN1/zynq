@@ -21,6 +21,12 @@ interface DuplicateWarningDialogProps {
   onCancel: () => void;
 }
 
+/**
+ * Formats a byte count into a human-readable string with appropriate unit.
+ *
+ * @param bytes - The size in bytes to format.
+ * @returns A string like "1.23 MB", using Bytes, KB, MB, or GB and displaying up to two decimal places; returns "0 Bytes" when `bytes` is 0.
+ */
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 Bytes";
   const k = 1024;
@@ -29,6 +35,12 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+/**
+ * Formats a date string into a locale-specific date with year, short month, and day.
+ *
+ * @param dateString - A string parseable by the JavaScript `Date` constructor
+ * @returns The date formatted according to the current locale with `year: "numeric"`, `month: "short"`, and `day: "numeric"`
+ */
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString(undefined, {
     year: "numeric",
@@ -37,6 +49,17 @@ function formatDate(dateString: string): string {
   });
 }
 
+/**
+ * Renders a confirmation dialog warning that a file with identical content already exists and offers actions to cancel or proceed with the upload.
+ *
+ * @param open - Whether the dialog is visible
+ * @param onOpenChange - Callback invoked when the dialog open state changes
+ * @param fileName - Name of the file being uploaded
+ * @param existingFile - Optional metadata for the existing file with identical content
+ * @param onUploadAnyway - Callback invoked when the user confirms uploading despite the duplicate
+ * @param onCancel - Callback invoked when the user cancels the upload
+ * @returns The React element for the duplicate-file warning dialog
+ */
 export function DuplicateWarningDialog({
   open,
   onOpenChange,

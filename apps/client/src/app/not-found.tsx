@@ -4,6 +4,11 @@ import Link from "next/link";
 import { Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Render a centered 404 page UI for missing routes.
+ *
+ * @returns The 404 page as a React element containing an application header, a "404 : Page Not Found" heading, a brief explanatory paragraph, and a "Go Home" button that navigates to the root path.
+ */
 export default function NotFoundPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-center p-6 bg-gradient-to-br from-background to-primary/5">

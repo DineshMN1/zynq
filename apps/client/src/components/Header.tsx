@@ -22,6 +22,15 @@ interface HeaderProps {
   user: User | null;
 }
 
+/**
+ * Render the application header with a theme toggle and a user menu.
+ *
+ * The user menu shows the user's name, email, role, avatar initials, a link to the profile, and a logout action.
+ * Invoking profile navigates to the profile route; invoking logout initiates the auth logout flow and delegates finalization to the Auth context.
+ *
+ * @param user - The authenticated user to display; if `null`, the header is not rendered.
+ * @returns A header element containing the theme toggle and user menu, or `null` if `user` is `null`.
+ */
 export function Header({ user }: HeaderProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);

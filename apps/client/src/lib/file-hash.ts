@@ -4,8 +4,10 @@
  */
 
 /**
- * Calculate SHA-256 hash of a file
- * Works with any file type by reading raw bytes
+ * Compute the SHA-256 hash of a file's raw bytes and return it as a hexadecimal string.
+ *
+ * @returns The SHA-256 digest encoded as a lowercase hexadecimal `string`.
+ * @throws If reading the file or computing the hash fails.
  */
 export async function calculateFileHash(file: File): Promise<string> {
   try {
@@ -27,8 +29,10 @@ export async function calculateFileHash(file: File): Promise<string> {
 }
 
 /**
- * Calculate hash for text content
- * Useful for extracting text from documents before hashing
+ * Compute the SHA-256 hash of the provided text and return it as a hexadecimal string.
+ *
+ * @param text - Input text to hash (encoded as UTF-8)
+ * @returns The SHA-256 digest of `text` represented as a lowercase hexadecimal string
  */
 export async function calculateTextHash(text: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -39,9 +43,14 @@ export async function calculateTextHash(text: string): Promise<string> {
 }
 
 /**
- * Extract text content from supported document formats
- * For advanced parsing of .docx and .pdf, this is a basic implementation
- * Production apps should use libraries like mammoth.js for .docx or pdf.js for .pdf
+ * Extracts textual content from supported file formats.
+ *
+ * For text-based MIME types (e.g., text/plain, application/json, application/xml, text/csv, text/html)
+ * the file's text is returned. For binary or unsupported formats (for example PDFs or DOCX) this
+ * function returns `null`.
+ *
+ * @param file - The file to extract text from
+ * @returns The extracted text as a `string` when available, `null` when extraction is not supported
  */
 export async function extractTextContent(file: File): Promise<string | null> {
   const fileType = file.type || getFileTypeFromExtension(file.name);
@@ -64,7 +73,10 @@ export async function extractTextContent(file: File): Promise<string | null> {
 }
 
 /**
- * Get MIME type from file extension
+ * Determines the MIME type for a filename based on its extension.
+ *
+ * @param filename - The filename or path whose extension will be used to infer the MIME type
+ * @returns The corresponding MIME type for the file extension, or `application/octet-stream` if unknown
  */
 function getFileTypeFromExtension(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();
@@ -83,8 +95,13 @@ function getFileTypeFromExtension(filename: string): string {
 }
 
 /**
- * Calculate content hash with optional text extraction
- * For text-based files, normalizes content before hashing
+ * Compute a content hash for a file, preferring normalized text when available.
+ *
+ * Attempts to extract text from the provided file; if text is available it is normalized
+ * (trimmed and line endings standardized) and hashed, otherwise the raw file bytes are hashed.
+ *
+ * @param file - The file whose content will be hashed; text extraction is attempted for text-based formats
+ * @returns The SHA-256 hex digest representing the file's content (normalized text when applicable)
  */
 export async function calculateContentHash(file: File): Promise<string> {
   // Try to extract text content for supported formats
@@ -101,12 +118,10 @@ export async function calculateContentHash(file: File): Promise<string> {
 }
 
 /**
- * Alias for calculateContentHash
- */
-export const computeFileHash = calculateContentHash;
-
-/**
- * Format file size for display
+ * Convert a byte count into a human-readable file size string.
+ *
+ * @param bytes - The number of bytes to format (0 or greater)
+ * @returns The formatted size using units `Bytes`, `KB`, `MB`, or `GB`, rounded to two decimal places
  */
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 Bytes';
@@ -119,7 +134,10 @@ export function formatFileSize(bytes: number): string {
 }
 
 /**
- * Format date for display
+ * Format a Date or ISO date string into a human-readable en-US timestamp.
+ *
+ * @param date - The input date as a Date object or a date string parseable by Date
+ * @returns A formatted date/time string like "Feb 5, 2026, 02:34 PM" (en-US, short month, numeric year/day, two-digit hour and minute)
  */
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;

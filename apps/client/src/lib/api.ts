@@ -102,11 +102,24 @@ export interface UserStorageInfo {
   isUnlimited: boolean;
 }
 
+/**
+ * Retrieve the stored authentication token from localStorage if available.
+ *
+ * @returns The token string from localStorage, or `null` if not running in a browser environment or no token is stored.
+ */
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('token');
 }
 
+/**
+ * Performs an HTTP request against the configured API base URL and returns the parsed JSON response.
+ *
+ * @param endpoint - The API path to append to the base URL (e.g., "/files"). Should include a leading slash.
+ * @param options - Optional fetch options; an Authorization header is added when an auth token is available and credentials are sent with the request.
+ * @returns The parsed JSON response typed as `T`. If the response has no content (204 or Content-Length: 0) an empty object is returned.
+ * @throws ApiError when the response status is not OK; the error includes `statusCode`, optional `errorCode`, and `details` from the server error body.
+ */
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getAuthToken();
 
@@ -170,18 +183,6 @@ export const authApi = {
   me: () => fetchApi<User>('/auth/me'),
 
   checkSetupStatus: () => fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
-
-  forgotPassword: (data: { email: string }) =>
-    fetchApi<{ message: string }>('/auth/forgot-password', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  resetPassword: (data: { token: string; password: string }) =>
-    fetchApi<{ message: string }>('/auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
 };
 
 // File endpoints
@@ -202,7 +203,6 @@ export const fileApi = {
     parentId?: string;
     isFolder?: boolean;
     fileHash?: string;
-    skipDuplicateCheck?: boolean;
   }) =>
     fetchApi<FileMetadata & {
       uploadUrl?: string;
@@ -249,14 +249,8 @@ export const fileApi = {
     return response.json();
   },
 
-  checkDuplicate: (fileHash: string) =>
-    fetchApi<{ isDuplicate: boolean; existingFile?: FileMetadata }>(
-      '/files/check-duplicate',
-      {
-        method: 'POST',
-        body: JSON.stringify({ fileHash }),
-      }
-    ),
+  checkDuplicate: (hash: string) =>
+    fetchApi<{ isDuplicate: boolean; files: FileMetadata[] }>(`/files/check-duplicate/${hash}`),
 
   get: (id: string) => fetchApi<FileMetadata>(`/files/${id}`),
 
@@ -388,38 +382,6 @@ export const settingsApi = {
     fetchApi<Record<string, unknown>>('/settings', {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
-};
-
-// SMTP Settings endpoints
-export const smtpApi = {
-  getSettings: () =>
-    fetchApi<{
-      smtp_host: string;
-      smtp_port: number;
-      smtp_secure: boolean;
-      smtp_user: string;
-      smtp_pass: string;
-      smtp_from: string;
-      has_password: boolean;
-    }>('/settings/smtp'),
-
-  updateSettings: (data: {
-    smtp_host: string;
-    smtp_port: number;
-    smtp_secure: boolean;
-    smtp_user?: string;
-    smtp_pass?: string;
-    smtp_from: string;
-  }) =>
-    fetchApi<Record<string, unknown>>('/settings/smtp', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-
-  testConnection: () =>
-    fetchApi<{ success: boolean; message: string }>('/settings/smtp/test', {
-      method: 'POST',
     }),
 };
 

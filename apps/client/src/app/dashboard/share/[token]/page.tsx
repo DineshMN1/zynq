@@ -20,6 +20,13 @@ interface SharedFile {
   hasContent: boolean;
 }
 
+/**
+ * Render a public file share page that fetches shared file metadata by token and provides a download action when content is available.
+ *
+ * Displays a centered loader while fetching, an error message if the share is invalid/expired or if download fails, and a card with file details and a download button (disabled when the file has no content).
+ *
+ * @returns A React element representing the public share page.
+ */
 export default function PublicSharePage() {
   const { token } = useParams<{ token: string }>();
   const [file, setFile] = useState<SharedFile | null>(null);

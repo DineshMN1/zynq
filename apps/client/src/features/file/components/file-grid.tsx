@@ -17,6 +17,21 @@ interface FileGridProps {
   onCardClick?: (id: string, e: React.MouseEvent) => void;
 }
 
+/**
+ * Render a responsive grid of folders and files and handle loading and empty states.
+ *
+ * Renders a loading indicator when `loading` is true, an animated empty state when `files` is empty, and otherwise displays folders first and regular files in separate sections. Selection state and interaction callbacks provided via props are forwarded to each file card.
+ *
+ * @param files - Array of file metadata to display; items with `is_folder` are shown in the folders section.
+ * @param loading - Whether to show the loading indicator instead of the grid.
+ * @param onOpenFolder - Callback invoked with a folder `FileMetadata` when a folder card is opened.
+ * @param onDelete - Callback invoked with a file id to delete that item.
+ * @param onShare - Callback invoked with a file id to share that item.
+ * @param selectedIds - Optional set of selected file ids; used to mark cards as selected.
+ * @param onToggleSelect - Optional callback invoked with a file id to toggle its selection state.
+ * @param onCardClick - Optional callback invoked with a file id and the click event when a card is clicked.
+ * @returns A React element containing the file grid UI.
+ */
 export function FileGrid({
   files,
   loading,

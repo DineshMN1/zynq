@@ -19,7 +19,6 @@ import {
   Moon,
   Sun,
   Server,
-  Send,
 } from 'lucide-react';
 import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -40,6 +39,12 @@ interface SidebarProps {
   user: User | null;
 }
 
+/**
+ * Format a byte count into a human-readable string with an appropriate unit suffix.
+ *
+ * @param bytes - The number of bytes to format
+ * @returns The formatted size (e.g., `0 B`, `1.2 MB`, `512 KB`)
+ */
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -48,6 +53,11 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+/**
+ * Produce up to two uppercase initials derived from the provided name.
+ *
+ * @returns A string containing up to two uppercase initials extracted from the name (the first letters of the first two words)
+ */
 function getInitials(name: string): string {
   return name
     .split(' ')
@@ -57,6 +67,18 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+/**
+ * Render the application's left sidebar containing navigation, storage usage, and the user menu.
+ *
+ * The component displays primary, settings, and conditional admin navigation; shows storage usage
+ * (fetched when a user is present); and exposes user actions including profile, settings,
+ * theme toggle, and logout.
+ *
+ * @param user - The currently authenticated user, or `null` when unauthenticated. When present,
+ *               the sidebar shows the user's profile and fetches storage overview; users with
+ *               role `"admin"` or `"owner"` see additional admin links.
+ * @returns The sidebar React element for the application's layout.
+ */
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -109,7 +131,6 @@ export function Sidebar({ user }: SidebarProps) {
     ? [
         { href: '/dashboard/settings/users', label: 'Users', icon: Users },
         { href: '/dashboard/settings/invites', label: 'Invites', icon: Mail },
-        { href: '/dashboard/settings/email', label: 'Email', icon: Send },
       ]
     : [];
 

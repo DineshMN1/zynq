@@ -21,6 +21,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+/**
+ * Displays and manages files shared with the user and files the user has shared publicly.
+ *
+ * Loads shared items on mount, shows loading and empty states, renders separate
+ * sections for public links and items shared with the user, and provides actions
+ * to copy public share links to the clipboard and revoke public shares via a confirmation dialog.
+ *
+ * @returns The rendered Shared Files page as a JSX element.
+ */
 export default function SharedPage() {
   const [privateShares, setPrivateShares] = useState<Share[]>([]);
   const [publicShares, setPublicShares] = useState<Share[]>([]);

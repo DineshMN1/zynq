@@ -14,6 +14,11 @@ import { ToastContainer } from "@/components/toast-container";
 import { Loader2, ShieldCheck, CheckCircle2, Cloud, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 
+/**
+ * Renders the initial administrator setup page and manages the setup flow (status check, form validation, registration, login, and redirects).
+ *
+ * @returns The React element for the initial administrator setup UI.
+ */
 export default function SetupPage() {
   const router = useRouter();
   const { login } = useAuth();
