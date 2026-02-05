@@ -17,7 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Cloud, Loader2 } from "lucide-react";
-import { authApi } from "@/lib/api";
+import { authApi, ApiError } from "@/lib/api";
 import { motion } from "framer-motion";
 
 export default function LoginPage() {
@@ -59,8 +59,19 @@ export default function LoginPage() {
       login(data);
       router.push("/dashboard");
     } catch (err) {
-      console.error("Login failed:", err);
-      setError(err instanceof Error ? err.message : "Login failed");
+      if (err instanceof ApiError) {
+        if (err.statusCode === 401) {
+          setError("Invalid email or password. Please try again.");
+        } else if (err.statusCode === 429) {
+          setError("Too many login attempts. Please wait and try again.");
+        } else {
+          setError(err.message || "Login failed. Please try again.");
+        }
+      } else if (err instanceof TypeError && err.message === "Failed to fetch") {
+        setError("Unable to connect to the server. Please check your connection.");
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -152,6 +163,15 @@ export default function LoginPage() {
                     )}
                   </button>
                 </div>
+              </div>
+
+              <div className="flex justify-end">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-primary hover:underline"
+                >
+                  Forgot your password?
+                </Link>
               </div>
             </CardContent>
 

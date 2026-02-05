@@ -42,10 +42,13 @@ services:
       # Encryption master key (32 bytes base64 encoded) - CHANGE IN PRODUCTION!
       FILE_ENCRYPTION_MASTER_KEY: ${FILE_ENCRYPTION_MASTER_KEY:-YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=}
       # Email settings
+      EMAIL_ENABLED: "true"
       SMTP_HOST: smtp.gmail.com
       SMTP_PORT: 587
+      SMTP_SECURE: "false"
       SMTP_USER: your-email@gmail.com
       SMTP_PASS: your-app-password
+      SMTP_FROM: "ZynqCloud <no-reply@yourdomain.com>"
       CORS_ORIGIN: http://localhost:3000
       FRONTEND_URL: http://localhost:3000
     ports:

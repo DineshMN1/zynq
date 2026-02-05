@@ -14,6 +14,8 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
@@ -72,6 +74,23 @@ export class AuthController {
     return { ...userWithoutPassword, token };
   }
 
+  @Post('forgot-password')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto.email);
+  }
+
+  @Post('reset-password')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.password,
+    );
+  }
+
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -85,11 +104,5 @@ export class AuthController {
   getProfile(@CurrentUser() user: User) {
     const { password_hash: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
-  }
-
-  @Get('setup-status')
-  async getSetupStatus() {
-    const needsSetup = await this.authService.needsSetup();
-    return { needsSetup };
   }
 }

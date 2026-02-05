@@ -170,6 +170,18 @@ export const authApi = {
   me: () => fetchApi<User>('/auth/me'),
 
   checkSetupStatus: () => fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
+
+  forgotPassword: (data: { email: string }) =>
+    fetchApi<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  resetPassword: (data: { token: string; password: string }) =>
+    fetchApi<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // File endpoints
@@ -190,6 +202,7 @@ export const fileApi = {
     parentId?: string;
     isFolder?: boolean;
     fileHash?: string;
+    skipDuplicateCheck?: boolean;
   }) =>
     fetchApi<FileMetadata & {
       uploadUrl?: string;
@@ -236,8 +249,14 @@ export const fileApi = {
     return response.json();
   },
 
-  checkDuplicate: (hash: string) =>
-    fetchApi<{ isDuplicate: boolean; files: FileMetadata[] }>(`/files/check-duplicate/${hash}`),
+  checkDuplicate: (fileHash: string) =>
+    fetchApi<{ isDuplicate: boolean; existingFile?: FileMetadata }>(
+      '/files/check-duplicate',
+      {
+        method: 'POST',
+        body: JSON.stringify({ fileHash }),
+      }
+    ),
 
   get: (id: string) => fetchApi<FileMetadata>(`/files/${id}`),
 
@@ -369,6 +388,38 @@ export const settingsApi = {
     fetchApi<Record<string, unknown>>('/settings', {
       method: 'PUT',
       body: JSON.stringify(data),
+    }),
+};
+
+// SMTP Settings endpoints
+export const smtpApi = {
+  getSettings: () =>
+    fetchApi<{
+      smtp_host: string;
+      smtp_port: number;
+      smtp_secure: boolean;
+      smtp_user: string;
+      smtp_pass: string;
+      smtp_from: string;
+      has_password: boolean;
+    }>('/settings/smtp'),
+
+  updateSettings: (data: {
+    smtp_host: string;
+    smtp_port: number;
+    smtp_secure: boolean;
+    smtp_user?: string;
+    smtp_pass?: string;
+    smtp_from: string;
+  }) =>
+    fetchApi<Record<string, unknown>>('/settings/smtp', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  testConnection: () =>
+    fetchApi<{ success: boolean; message: string }>('/settings/smtp/test', {
+      method: 'POST',
     }),
 };
 

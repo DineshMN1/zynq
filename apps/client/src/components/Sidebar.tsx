@@ -19,6 +19,7 @@ import {
   Moon,
   Sun,
   Server,
+  Send,
 } from 'lucide-react';
 import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -108,6 +109,7 @@ export function Sidebar({ user }: SidebarProps) {
     ? [
         { href: '/dashboard/settings/users', label: 'Users', icon: Users },
         { href: '/dashboard/settings/invites', label: 'Invites', icon: Mail },
+        { href: '/dashboard/settings/email', label: 'Email', icon: Send },
       ]
     : [];
 

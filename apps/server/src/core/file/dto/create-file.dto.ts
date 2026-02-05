@@ -133,6 +133,10 @@ export class CreateFileDto {
   @IsOptional()
   @IsString()
   fileHash?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  skipDuplicateCheck?: boolean;
 }
 
 export { ALLOWED_MIME_TYPES, BLOCKED_EXTENSIONS_REGEX };

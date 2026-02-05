@@ -101,6 +101,11 @@ export async function calculateContentHash(file: File): Promise<string> {
 }
 
 /**
+ * Alias for calculateContentHash
+ */
+export const computeFileHash = calculateContentHash;
+
+/**
  * Format file size for display
  */
 export function formatFileSize(bytes: number): string {

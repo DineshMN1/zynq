@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Setting } from './entities/setting.entity';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
@@ -49,12 +49,43 @@ export class SettingService {
 
   async getGlobalSettings(): Promise<Record<string, any>> {
     const settings = await this.settingsRepository.find({
-      where: { user_id: null },
+      where: { user_id: IsNull() as any },
     });
 
     return settings.reduce((acc, setting) => {
       acc[setting.key] = setting.value;
       return acc;
     }, {});
+  }
+
+  async getGlobalSetting(key: string): Promise<any | null> {
+    const setting = await this.settingsRepository.findOne({
+      where: { user_id: IsNull() as any, key },
+    });
+    return setting?.value ?? null;
+  }
+
+  async updateGlobalSettings(
+    settings: Record<string, any>,
+  ): Promise<Record<string, any>> {
+    for (const [key, value] of Object.entries(settings)) {
+      let setting = await this.settingsRepository.findOne({
+        where: { user_id: IsNull() as any, key },
+      });
+
+      if (setting) {
+        setting.value = value;
+      } else {
+        setting = this.settingsRepository.create({
+          user_id: null,
+          key,
+          value,
+        });
+      }
+
+      await this.settingsRepository.save(setting);
+    }
+
+    return this.getGlobalSettings();
   }
 }
