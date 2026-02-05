@@ -78,9 +78,9 @@ docker-data/
 # ===============================
 # Local Storage (CRITICAL)
 # ===============================
-storage/
-uploads/
-data/
+/storage/
+/uploads/
+/data/
 
 # ===============================
 # Temp / Runtime
@@ -90,8 +90,14 @@ temp/
 *.tmp
 
 # ===============================
+# Turborepo
+# ===============================
+.turbo/
+
+# ===============================
 # Internal Docs / Generated Files
 # ===============================
 .mainworkflow.md
 .users.md
 .txt
+test.md
