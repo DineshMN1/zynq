@@ -4,6 +4,9 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import { useRouter } from 'next/navigation';
 import { authApi, type User } from '@/lib/api';
 
+/**
+ * Authentication context type with user state and auth methods.
+ */
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -18,6 +21,10 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
 });
 
+/**
+ * Provides authentication state to the app.
+ * Persists token in localStorage and auto-fetches user on mount.
+ */
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -57,4 +64,5 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
+/** Hook to access auth context. Must be used within AuthProvider. */
 export const useAuth = () => useContext(AuthContext);

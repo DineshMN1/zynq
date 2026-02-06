@@ -12,6 +12,10 @@ interface SmtpConfig {
   from: string;
 }
 
+/**
+ * Handles SMTP email sending for invitations and password resets.
+ * Supports DB-first config with env var fallback. Caches transporter.
+ */
 @Injectable()
 export class EmailService {
   private cachedTransporter: nodemailer.Transporter | null = null;
@@ -71,17 +75,20 @@ export class EmailService {
     return this.cachedTransporter;
   }
 
+  /** Tests SMTP connection. Throws if connection fails. */
   async testConnection(): Promise<boolean> {
     const transporter = await this.getTransporter();
     await transporter.verify();
     return true;
   }
 
+  /** Clears cached transporter. Call after SMTP config changes. */
   invalidateTransporter(): void {
     this.cachedTransporter = null;
     this.cachedConfigHash = null;
   }
 
+  /** Sends invitation email with styled HTML template. */
   async sendInvitationEmail(
     email: string,
     inviteLink: string,
@@ -151,6 +158,7 @@ If you did not request this invite, ignore this email.
     });
   }
 
+  /** Sends password reset email with styled HTML template. */
   async sendPasswordResetEmail(
     email: string,
     resetLink: string,

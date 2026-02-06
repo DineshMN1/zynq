@@ -18,6 +18,10 @@ import { LoginDto } from './dto/login.dto';
 import { User, UserRole } from '../user/entities/user.entity';
 import { PasswordReset } from './entities/password-reset.entity';
 
+/**
+ * Handles user authentication, registration, and password management.
+ * Manages JWT token generation, login/logout, and password reset flows.
+ */
 @Injectable()
 export class AuthService {
   constructor(
@@ -30,6 +34,14 @@ export class AuthService {
     private emailService: EmailService,
   ) {}
 
+  /**
+   * Registers a new user. First user becomes OWNER automatically.
+   * Subsequent users require invitation or PUBLIC_REGISTRATION=true.
+   * @param registerDto - Registration data (name, email, password, optional inviteToken)
+   * @returns Created user entity
+   * @throws ConflictException if email already exists
+   * @throws ForbiddenException if registration is closed and no valid invite
+   */
   async register(registerDto: RegisterDto): Promise<User> {
     const existingUser = await this.userService.findByEmail(registerDto.email);
     if (existingUser) {
@@ -75,6 +87,12 @@ export class AuthService {
     });
   }
 
+  /**
+   * Authenticates user with email and password.
+   * @param loginDto - Login credentials
+   * @returns User entity if credentials are valid
+   * @throws UnauthorizedException if credentials are invalid
+   */
   async login(loginDto: LoginDto): Promise<User> {
     const user = await this.userService.findByEmail(loginDto.email);
     if (!user) {
@@ -93,16 +111,31 @@ export class AuthService {
     return user;
   }
 
+  /**
+   * Generates a JWT token for authenticated user.
+   * @param user - User entity to generate token for
+   * @returns Signed JWT token string
+   */
   generateJwtToken(user: User): string {
     const payload = { sub: user.id, email: user.email, role: user.role };
     return this.jwtService.sign(payload);
   }
 
+  /**
+   * Checks if initial setup is required (no users exist).
+   * @returns true if no users in database, false otherwise
+   */
   async needsSetup(): Promise<boolean> {
     const userCount = await this.userService.count();
     return userCount === 0;
   }
 
+  /**
+   * Initiates password reset flow. Creates reset token and sends email.
+   * Always returns success message to prevent email enumeration.
+   * @param email - User's email address
+   * @returns Generic success message regardless of email existence
+   */
   async forgotPassword(email: string): Promise<{ message: string }> {
     const user = await this.userService.findByEmail(email);
 
@@ -156,6 +189,14 @@ export class AuthService {
     };
   }
 
+  /**
+   * Resets user password using valid reset token.
+   * Token is invalidated after use. Password is hashed with bcrypt.
+   * @param token - Password reset token from email
+   * @param newPassword - New password to set
+   * @returns Success message
+   * @throws UnauthorizedException if token is invalid or expired
+   */
   async resetPassword(
     token: string,
     newPassword: string,

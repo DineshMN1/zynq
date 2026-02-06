@@ -30,6 +30,7 @@ describe('UserService', () => {
     getOne: jest.fn(),
     update: jest.fn().mockReturnThis(),
     set: jest.fn().mockReturnThis(),
+    setParameter: jest.fn().mockReturnThis(),
     execute: jest.fn().mockResolvedValue({}),
   };
 
@@ -262,6 +263,7 @@ describe('UserService', () => {
       expect(mockQueryBuilder.where).toHaveBeenCalledWith('id = :id', {
         id: 'user-123',
       });
+      expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith('delta', 1000);
       expect(mockQueryBuilder.execute).toHaveBeenCalled();
     });
 
@@ -270,6 +272,7 @@ describe('UserService', () => {
 
       expect(repository.createQueryBuilder).toHaveBeenCalled();
       expect(mockQueryBuilder.update).toHaveBeenCalled();
+      expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith('delta', -500);
       expect(mockQueryBuilder.execute).toHaveBeenCalled();
     });
   });
