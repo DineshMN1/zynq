@@ -366,6 +366,17 @@ export const inviteApi = {
     }),
 };
 
+export interface StorageSettings {
+  default_storage_limit: number;
+  max_storage_limit: number;
+}
+
+export interface BulkUpdateResult {
+  success: boolean;
+  updatedCount: number;
+  appliedLimit: number;
+}
+
 /** Admin API: user management (admin/owner only) */
 export const adminApi = {
   listUsers: (params: { page?: number; limit?: number }) => {
@@ -384,6 +395,24 @@ export const adminApi = {
   deleteUser: (id: string) =>
     fetchApi<{ success: boolean }>(`/admin/users/${id}`, {
       method: 'DELETE',
+    }),
+
+  getStorageSettings: () =>
+    fetchApi<StorageSettings>('/admin/settings/storage'),
+
+  updateStorageSettings: (data: {
+    default_storage_limit?: number;
+    max_storage_limit?: number;
+  }) =>
+    fetchApi<StorageSettings>('/admin/settings/storage', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  bulkUpdateStorageLimits: (data?: { storage_limit?: number }) =>
+    fetchApi<BulkUpdateResult>('/admin/settings/storage/bulk-update', {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
     }),
 };
 
