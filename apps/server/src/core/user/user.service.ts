@@ -105,9 +105,10 @@ export class UserService {
       .createQueryBuilder()
       .update()
       .set({
-        storage_used: () => `GREATEST(0, COALESCE(storage_used, 0) + ${delta})`,
+        storage_used: () => `GREATEST(0, COALESCE(storage_used, 0) + :delta)`,
       })
       .where('id = :id', { id: userId })
+      .setParameter('delta', delta)
       .execute();
   }
 
@@ -117,13 +118,15 @@ export class UserService {
    * @throws NotFoundException if user doesn't exist
    */
   async updateStorageLimit(userId: string, newLimit: number): Promise<User> {
+    const flooredLimit = Math.floor(newLimit);
     await this.usersRepository
       .createQueryBuilder()
       .update()
       .set({
-        storage_limit: () => `${Math.floor(newLimit)}`,
+        storage_limit: () => ':newLimit',
       })
       .where('id = :id', { id: userId })
+      .setParameter('newLimit', flooredLimit)
       .execute();
 
     const user = await this.findById(userId);

@@ -344,7 +344,7 @@ export const fileApi = {
   },
 };
 
-/** Invitation API: create, list, revoke invitations (admin only) */
+/** Invitation API: create, list, revoke (admin), accept (public) */
 export const inviteApi = {
   create: (data: { email: string; role: string }) =>
     fetchApi<Invitation & { link: string }>('/invites', {

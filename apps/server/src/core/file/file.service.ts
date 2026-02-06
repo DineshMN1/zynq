@@ -58,35 +58,40 @@ export class FileService {
     const limit = Number(user.storage_limit);
     const size = Number(createFileDto.size);
 
-    // Check quota (owner has unlimited storage)
-    if (user.role !== 'owner' && used + size > limit) {
+    // Check quota (owner has unlimited, limit=0 means unlimited)
+    if (user.role !== 'owner' && limit > 0 && used + size > limit) {
       throw new BadRequestException('Storage limit exceeded');
     }
 
-    // Check for duplicate content if hash is provided and not a folder
-    if (
-      createFileDto.fileHash &&
-      !createFileDto.isFolder &&
-      !createFileDto.skipDuplicateCheck
-    ) {
-      const duplicates = await this.findDuplicatesByHash(
-        userId,
-        createFileDto.fileHash,
-      );
+    // Validate and check for duplicate content if hash is provided
+    if (createFileDto.fileHash && !createFileDto.isFolder) {
+      // Validate SHA-256 hash format (64 hex characters)
+      if (!/^[a-f0-9]{64}$/i.test(createFileDto.fileHash)) {
+        throw new BadRequestException(
+          'Invalid file hash format. Expected SHA-256 (64 hex characters)',
+        );
+      }
 
-      if (duplicates.length > 0) {
-        throw new ConflictException({
-          message: 'Duplicate content detected',
-          duplicates: duplicates.map((file) => ({
-            id: file.id,
-            name: file.name,
-            size: file.size,
-            mime_type: file.mime_type,
-            created_at: file.created_at,
-            parent_id: file.parent_id,
-            storage_path: file.storage_path,
-          })),
-        });
+      if (!createFileDto.skipDuplicateCheck) {
+        const duplicates = await this.findDuplicatesByHash(
+          userId,
+          createFileDto.fileHash,
+        );
+
+        if (duplicates.length > 0) {
+          throw new ConflictException({
+            message: 'Duplicate content detected',
+            duplicates: duplicates.map((file) => ({
+              id: file.id,
+              name: file.name,
+              size: file.size,
+              mime_type: file.mime_type,
+              created_at: file.created_at,
+              parent_id: file.parent_id,
+              storage_path: file.storage_path,
+            })),
+          });
+        }
       }
     }
 
@@ -521,12 +526,20 @@ export class FileService {
     });
   }
 
+  /** Checks if a file with the given SHA-256 hash already exists for the user. */
   async checkDuplicate(
     userId: string,
     fileHash: string,
   ): Promise<{ isDuplicate: boolean; existingFile?: File }> {
     if (!fileHash) {
       return { isDuplicate: false };
+    }
+
+    // Validate SHA-256 hash format
+    if (!/^[a-f0-9]{64}$/i.test(fileHash)) {
+      throw new BadRequestException(
+        'Invalid file hash format. Expected SHA-256 (64 hex characters)',
+      );
     }
 
     const existingFile = await this.filesRepository.findOne({
