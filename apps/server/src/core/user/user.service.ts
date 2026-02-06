@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole } from './entities/user.entity';
 
+/**
+ * Manages user CRUD operations, password validation, and storage quota tracking.
+ */
 @Injectable()
 export class UserService {
   constructor(
@@ -11,6 +14,11 @@ export class UserService {
     private usersRepository: Repository<User>,
   ) {}
 
+  /**
+   * Creates a new user with hashed password.
+   * @param data - User creation data
+   * @returns Created user entity
+   */
   async create(data: {
     name: string;
     email: string;
@@ -29,6 +37,11 @@ export class UserService {
     return this.usersRepository.save(user);
   }
 
+  /**
+   * Finds user by email, including password_hash for authentication.
+   * @param email - User's email address
+   * @returns User entity with password_hash or null
+   */
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository
       .createQueryBuilder('user')
@@ -37,10 +50,16 @@ export class UserService {
       .getOne();
   }
 
+  /** Finds user by ID. */
   async findById(id: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { id } });
   }
 
+  /**
+   * Returns paginated list of all users.
+   * @param page - Page number (1-indexed)
+   * @param limit - Items per page
+   */
   async findAll(
     page = 1,
     limit = 50,
@@ -53,6 +72,10 @@ export class UserService {
     return { items, total };
   }
 
+  /**
+   * Updates user fields.
+   * @throws NotFoundException if user doesn't exist
+   */
   async update(id: string, data: Partial<User>): Promise<User> {
     await this.usersRepository.update(id, data);
     const user = await this.findById(id);
@@ -62,17 +85,22 @@ export class UserService {
     return user;
   }
 
+  /** Permanently deletes a user and their data. */
   async delete(id: string): Promise<void> {
     await this.usersRepository.delete(id);
   }
 
+  /** Validates password against stored bcrypt hash. */
   async validatePassword(user: User, password: string): Promise<boolean> {
     return bcrypt.compare(password, user.password_hash);
   }
 
+  /**
+   * Adjusts user's storage_used by delta bytes. Never goes below 0.
+   * @param userId - User ID
+   * @param delta - Bytes to add (positive) or subtract (negative)
+   */
   async updateStorageUsed(userId: string, delta: number): Promise<void> {
-    // Use raw query to properly handle both positive and negative deltas
-    // and ensure storage_used never goes below 0
     await this.usersRepository
       .createQueryBuilder()
       .update()
@@ -83,8 +111,12 @@ export class UserService {
       .execute();
   }
 
+  /**
+   * Sets user's storage quota limit in bytes.
+   * @param newLimit - New storage limit in bytes (0 = unlimited)
+   * @throws NotFoundException if user doesn't exist
+   */
   async updateStorageLimit(userId: string, newLimit: number): Promise<User> {
-    // Use raw query to properly handle bigint values
     await this.usersRepository
       .createQueryBuilder()
       .update()
@@ -101,6 +133,7 @@ export class UserService {
     return user;
   }
 
+  /** Returns total number of registered users. */
   async count(): Promise<number> {
     return this.usersRepository.count();
   }

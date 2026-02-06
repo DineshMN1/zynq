@@ -1,7 +1,14 @@
-// API client for zynqCloud backend
+/**
+ * API client for zynqCloud backend.
+ * Handles authentication, file operations, sharing, and admin functions.
+ * @module api
+ */
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
-// Custom API Error class
+/**
+ * Custom error class for API errors with status code and details.
+ */
 export class ApiError extends Error {
   statusCode: number;
   errorCode?: string;
@@ -146,7 +153,7 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
   return text ? JSON.parse(text) : ({} as T);
 }
 
-// Auth endpoints
+/** Authentication API: login, register, logout, password reset */
 export const authApi = {
   getSetupStatus: () => fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
 
@@ -184,7 +191,7 @@ export const authApi = {
     }),
 };
 
-// File endpoints
+/** File API: CRUD, upload, download, share, trash operations */
 export const fileApi = {
   list: (params: { page?: number; limit?: number; search?: string; parentId?: string }) => {
     const query = new URLSearchParams();
@@ -337,7 +344,7 @@ export const fileApi = {
   },
 };
 
-// Invite endpoints
+/** Invitation API: create, list, revoke invitations (admin only) */
 export const inviteApi = {
   create: (data: { email: string; role: string }) =>
     fetchApi<Invitation & { link: string }>('/invites', {
@@ -359,7 +366,7 @@ export const inviteApi = {
     }),
 };
 
-// Admin endpoints
+/** Admin API: user management (admin/owner only) */
 export const adminApi = {
   listUsers: (params: { page?: number; limit?: number }) => {
     const query = new URLSearchParams();
@@ -380,7 +387,7 @@ export const adminApi = {
     }),
 };
 
-// Settings endpoints
+/** Settings API: user preferences */
 export const settingsApi = {
   get: () => fetchApi<Record<string, unknown>>('/settings'),
 
@@ -391,7 +398,7 @@ export const settingsApi = {
     }),
 };
 
-// SMTP Settings endpoints
+/** SMTP API: email configuration (admin only) */
 export const smtpApi = {
   getSettings: () =>
     fetchApi<{
@@ -423,7 +430,7 @@ export const smtpApi = {
     }),
 };
 
-// Storage endpoints
+/** Storage API: quota and usage information */
 export const storageApi = {
   getOverview: () => fetchApi<StorageOverview>('/storage/overview'),
 
@@ -444,7 +451,7 @@ export const storageApi = {
     ),
 };
 
-// Public share endpoints
+/** Public API: anonymous access to shared files */
 export const publicApi = {
   getShare: (token: string) =>
     fetchApi<{

@@ -15,6 +15,10 @@ import { ShareFileDto } from '../share/dto/share-file.dto';
 import { randomBytes } from 'crypto';
 import { Readable } from 'stream';
 
+/**
+ * Manages file and folder CRUD operations, uploads, downloads, sharing, and trash.
+ * Handles encryption, deduplication, and storage quota enforcement.
+ */
 @Injectable()
 export class FileService {
   constructor(
@@ -26,11 +30,16 @@ export class FileService {
     private userService: UserService,
   ) {}
 
+  /**
+   * Creates a file/folder record. For files, returns uploadUrl for content upload.
+   * Validates extension, checks quota, and detects duplicates via SHA-256 hash.
+   * @throws BadRequestException if extension blocked or quota exceeded
+   * @throws ConflictException if duplicate content detected
+   */
   async create(
     userId: string,
     createFileDto: CreateFileDto,
   ): Promise<File & { uploadUrl?: string }> {
-    // Validate file extension for security
     if (
       !createFileDto.isFolder &&
       BLOCKED_EXTENSIONS_REGEX.test(createFileDto.name)
@@ -108,6 +117,11 @@ export class FileService {
     };
   }
 
+  /**
+   * Uploads and encrypts file content from buffer.
+   * Stores encrypted data and updates file with encryption metadata.
+   * @throws BadRequestException if file is folder or already has content
+   */
   async uploadFileContent(
     fileId: string,
     userId: string,
@@ -135,6 +149,7 @@ export class FileService {
     return this.filesRepository.save(file);
   }
 
+  /** Uploads and encrypts file content from readable stream. */
   async uploadFileStream(
     fileId: string,
     userId: string,
@@ -166,6 +181,10 @@ export class FileService {
     return this.filesRepository.save(file);
   }
 
+  /**
+   * Lists user's files with pagination, search, and folder filtering.
+   * Excludes soft-deleted files. Folders sorted first.
+   */
   async findAll(
     userId: string,
     page = 1,
@@ -210,6 +229,7 @@ export class FileService {
     return file;
   }
 
+  /** Moves file to trash (soft delete). File can be restored later. */
   async softDelete(id: string, userId: string): Promise<void> {
     const file = await this.findById(id, userId);
     file.deleted_at = new Date();
@@ -221,6 +241,7 @@ export class FileService {
     }
   }
 
+  /** Moves multiple files to trash in bulk. */
   async bulkSoftDelete(
     ids: string[],
     userId: string,
@@ -249,6 +270,7 @@ export class FileService {
     return { deleted: files.length };
   }
 
+  /** Restores file from trash. */
   async restore(id: string, userId: string): Promise<File> {
     const file = await this.filesRepository.findOne({
       where: { id, owner_id: userId, deleted_at: Not(IsNull()) },
@@ -268,6 +290,7 @@ export class FileService {
     return this.filesRepository.save(file);
   }
 
+  /** Permanently deletes file from storage and database. Updates user quota. */
   async permanentDelete(id: string, userId: string): Promise<void> {
     const file = await this.filesRepository.findOne({
       where: { id, owner_id: userId },
@@ -292,6 +315,10 @@ export class FileService {
     await this.filesRepository.delete(id);
   }
 
+  /**
+   * Creates a share for a file. Can be user-to-user or public link.
+   * Public shares generate a unique token for anonymous access.
+   */
   async share(
     fileId: string,
     userId: string,
@@ -343,6 +370,7 @@ export class FileService {
     return { items, total };
   }
 
+  /** Downloads and decrypts file content. Returns decrypted buffer. */
   async downloadFile(id: string, userId: string): Promise<Buffer> {
     const file = await this.findById(id, userId);
 
@@ -446,6 +474,7 @@ export class FileService {
     await this.sharesRepository.delete(shareId);
   }
 
+  /** Permanently deletes all files in user's trash. Reclaims storage quota. */
   async emptyTrash(userId: string): Promise<void> {
     const trashedFiles = await this.filesRepository.find({
       where: { owner_id: userId, deleted_at: Not(IsNull()) },

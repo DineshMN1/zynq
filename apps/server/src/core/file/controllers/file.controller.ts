@@ -24,6 +24,10 @@ import { CreateFileDto } from '../dto/create-file.dto';
 import { BulkDeleteFilesDto } from '../dto/bulk-delete-files.dto';
 import { ShareFileDto } from '../../share/dto/share-file.dto';
 
+/**
+ * File management endpoints: CRUD, upload, download, share, trash.
+ * All routes require JWT authentication. Files are encrypted at rest.
+ */
 @Controller('files')
 @UseGuards(JwtAuthGuard)
 export class FileController {

@@ -20,6 +20,11 @@ export interface StorageStats {
   freeBytes: number;
 }
 
+/**
+ * Handles encrypted file storage on local filesystem.
+ * Files are encrypted with AES-256-GCM using per-file DEKs wrapped by master key.
+ * Supports upload/download, trash management, and storage statistics.
+ */
 @Injectable()
 export class StorageService implements OnModuleInit {
   private basePath: string;

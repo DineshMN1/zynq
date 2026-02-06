@@ -2,6 +2,10 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '../../core/user/entities/user.entity';
 
+/**
+ * Guard that checks if user has required role(s).
+ * Use with @Roles() decorator. Requires JwtAuthGuard to run first.
+ */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
