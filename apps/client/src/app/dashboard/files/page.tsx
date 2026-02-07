@@ -85,20 +85,22 @@ export default function FilesPage() {
   const [total, setTotal] = useState(0);
   const [pathStack, setPathStack] = useState<
     { id: string | null; name: string }[]
-  >(() => {
-    // Restore from history state on initial load (back/forward navigation)
-    if (typeof window !== "undefined" && window.history.state?.pathStack) {
-      return window.history.state.pathStack;
-    }
-    // If URL has a folder param but no history state, show minimal breadcrumb
-    const folderParam = typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("folder")
-      : null;
-    if (folderParam) {
-      return [{ id: null, name: "Home" }, { id: folderParam, name: "..." }];
-    }
-    return [{ id: null, name: "Home" }];
-  });
+    >([{ id: null, name: "Home" }]);
+
+  useEffect(() => {
+  // Restore from history state on initial load (back/forward navigation)
+  if (window.history.state?.pathStack) {
+    setPathStack(window.history.state.pathStack);
+    return;
+  }
+
+  // If URL has a folder param but no history state, show minimal breadcrumb
+  const folderParam = new URLSearchParams(window.location.search).get("folder");
+  if (folderParam) {
+    setPathStack([{ id: null, name: "Home" }, { id: folderParam, name: "..." }]);
+  }
+  }, []);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
