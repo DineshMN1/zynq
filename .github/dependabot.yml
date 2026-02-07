@@ -1,0 +1,47 @@
+version: 2
+
+# Dependabot handles two things:
+#   1. Version updates  — keeps deps up to date (configured below)
+#   2. Security updates — auto-PRs for CVEs (enable in repo Settings > Code security)
+
+updates:
+  # ── GitHub Actions ──
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: weekly
+    labels: ['dependencies', 'ci']
+    groups:
+      actions:
+        patterns: ['*']
+
+  # ── npm (pnpm workspace — all packages share root lockfile) ──
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: ['dependencies']
+    # Group non-security updates to reduce PR noise
+    groups:
+      # Minor + patch version bumps → single PR
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ['minor', 'patch']
+      # Security fixes grouped by severity
+      security-critical-high:
+        applies-to: security-updates
+        patterns: ['*']
+
+  # ── Docker base images ──
+  - package-ecosystem: 'docker'
+    directory: '/apps/server'
+    schedule:
+      interval: monthly
+    labels: ['dependencies', 'docker']
+
+  - package-ecosystem: 'docker'
+    directory: '/apps/client'
+    schedule:
+      interval: monthly
+    labels: ['dependencies', 'docker']

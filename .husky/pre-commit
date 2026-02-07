@@ -1,1 +1,2 @@
 pnpm turbo run lint test --filter=...[HEAD~1]
+pnpm lint-staged

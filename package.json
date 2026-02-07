@@ -16,12 +16,39 @@
     "docker:dev": "docker compose -f docker-compose.dev.yml up",
     "docker:prod": "docker compose up --build -d",
     "docker:down": "docker compose down && docker compose -f docker-compose.dev.yml down",
-    "prepare": "husky install || true"
+    "prepare": "husky"
   },
   "devDependencies": {
     "husky": "^9.0.0",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.2.4",
     "turbo": "^2.3.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --write"
+    ],
+    "*.{js,jsx,mjs,cjs}": [
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "overrides": {
+      "glob@>=10.2.0 <10.5.0": ">=10.5.0",
+      "webpack@>=5.49.0 <=5.104.0": ">=5.104.1",
+      "esbuild@<=0.25.1": ">=0.25.2",
+      "tmp@<0.2.3": ">=0.2.3",
+      "prismjs@<1.30.0": ">=1.30.0",
+      "lodash@>=4.0.0 <=4.17.22": ">=4.17.23"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "eslint": "9"
+      }
+    }
   },
   "engines": {
     "node": ">=20.0.0",

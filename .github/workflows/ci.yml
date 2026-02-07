@@ -6,10 +6,40 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint-test:
-    name: Lint & Test
+  # ── Detect which paths changed ──
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'apps/server/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+            frontend:
+              - 'apps/client/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+
+  # ── Backend ──
+  backend-lint-test:
+    name: Backend Lint & Test
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name == 'push' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -27,15 +57,44 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: pnpm turbo run lint
+        run: pnpm turbo run lint --filter=@zynqcloud/server
 
       - name: Test
-        run: pnpm turbo run test
+        run: pnpm turbo run test --filter=@zynqcloud/server
 
-  build:
-    name: Build
+  # ── Frontend ──
+  frontend-lint-test:
+    name: Frontend Lint & Test
     runs-on: ubuntu-latest
-    needs: [lint-test]
+    needs: [changes]
+    if: ${{ needs.changes.outputs.frontend == 'true' || github.event_name == 'push' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm turbo run lint --filter=@zynqcloud/client
+
+      - name: Test
+        run: pnpm turbo run test --filter=@zynqcloud/client
+
+  # ── Builds ──
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: [frontend-lint-test]
 
     steps:
       - uses: actions/checkout@v4
@@ -53,14 +112,38 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm turbo run build
+        run: pnpm turbo run build --filter=@zynqcloud/client
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
 
+  backend-build:
+    name: Backend Build
+    runs-on: ubuntu-latest
+    needs: [backend-lint-test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm turbo run build --filter=@zynqcloud/server
+
+  # ── Docker ──
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [backend-build, frontend-build]
 
     steps:
       - uses: actions/checkout@v4
