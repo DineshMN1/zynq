@@ -135,7 +135,7 @@ export function FileListRow({
 
       {/* Size */}
       <div className="hidden sm:block w-24 text-right text-sm text-muted-foreground">
-        {file.is_folder ? "—" : formatBytes(file.size)}
+        {file.is_folder ? "—" : formatBytes(Number(file.size || 0))}
       </div>
 
       {/* Modified */}

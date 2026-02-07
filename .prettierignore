@@ -1,0 +1,8 @@
+node_modules
+dist
+.next
+.turbo
+pnpm-lock.yaml
+apps/client/bun.lock
+*.min.js
+*.min.css

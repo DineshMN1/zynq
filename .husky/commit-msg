@@ -1,0 +1,11 @@
+commit_msg=$(cat "$1")
+subject=$(echo "$commit_msg" | head -1)
+pattern="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .{1,}"
+
+if ! echo "$subject" | grep -qE "$pattern"; then
+  echo "Commit message must follow Conventional Commits format:"
+  echo "  feat|fix|docs|chore|refactor|test|build|ci|...: description"
+  echo ""
+  echo "  Got: $subject"
+  exit 1
+fi
