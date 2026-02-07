@@ -87,19 +87,17 @@ export default function FilesPage() {
     { id: string | null; name: string }[]
     >([{ id: null, name: "Home" }]);
 
-  useEffect(() => {
-  // Restore from history state on initial load (back/forward navigation)
-  if (window.history.state?.pathStack) {
-    setPathStack(window.history.state.pathStack);
-    return;
-  }
-
-  // If URL has a folder param but no history state, show minimal breadcrumb
-  const folderParam = new URLSearchParams(window.location.search).get("folder");
-  if (folderParam) {
-    setPathStack([{ id: null, name: "Home" }, { id: folderParam, name: "..." }]);
-  }
-  }, []);
+    // Restore path from history state or URL on client mount
+    useEffect(() => {
+    if (window.history.state?.pathStack) {
+      setPathStack(window.history.state.pathStack);
+    } else {
+      const folderParam = new URLSearchParams(window.location.search).get("folder");
+      if (folderParam) {
+        setPathStack([{ id: null, name: "Home" }, { id: folderParam, name: "..." }]);
+      }
+    }
+    }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
