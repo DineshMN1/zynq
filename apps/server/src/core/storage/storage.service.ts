@@ -1,9 +1,8 @@
 import { Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EncryptionService } from '../encryption/encryption.service';
-import { createWriteStream, promises as fs, statfsSync } from 'fs';
+import { promises as fs, statfsSync } from 'fs';
 import { join } from 'path';
-import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 
 export interface UploadResult {
@@ -107,40 +106,6 @@ export class StorageService implements OnModuleInit {
       iv,
       algorithm,
       encryptedSize: encryptedData.length,
-    };
-  }
-
-  /**
-   * Upload and encrypt a file from a stream
-   */
-  async uploadFileStream(
-    userId: string,
-    fileId: string,
-    stream: Readable,
-  ): Promise<UploadResult> {
-    await this.ensureUserDirectories(userId);
-
-    const { dek, iv, encryptedDek, dekIv, algorithm } =
-      this.encryptionService.createFileEncryption();
-
-    const filePath = this.getFilePath(userId, fileId);
-    const writeStream = createWriteStream(filePath);
-    const encryptStream = this.encryptionService.createEncryptStream(dek, iv);
-
-    await pipeline(stream, encryptStream, writeStream);
-
-    // Get the encrypted file size
-    const stats = await fs.stat(filePath);
-
-    // Store the DEK IV with the encrypted DEK
-    const combinedEncryptedDek = Buffer.concat([dekIv, encryptedDek]);
-
-    return {
-      storagePath: `${userId}/${fileId}.enc`,
-      encryptedDek: combinedEncryptedDek,
-      iv,
-      algorithm,
-      encryptedSize: stats.size,
     };
   }
 
