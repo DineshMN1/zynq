@@ -127,7 +127,11 @@ export class FileController {
     @CurrentUser() user: User,
     @Body() body: { fileHash: string; fileName?: string },
   ) {
-    return this.fileService.checkDuplicate(user.id, body.fileHash, body.fileName);
+    return this.fileService.checkDuplicate(
+      user.id,
+      body.fileHash,
+      body.fileName,
+    );
   }
 
   // ========================================

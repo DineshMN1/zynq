@@ -13,7 +13,6 @@ import { UserService } from '../user/user.service';
 import { CreateFileDto, BLOCKED_EXTENSIONS_REGEX } from './dto/create-file.dto';
 import { ShareFileDto } from '../share/dto/share-file.dto';
 import { randomBytes } from 'crypto';
-import { Readable } from 'stream';
 
 // File types that support duplicate detection
 const DOCUMENT_EXTENSIONS = [
@@ -174,38 +173,6 @@ export class FileService {
 
     // Upload and encrypt the file
     const result = await this.storageService.uploadFile(userId, fileId, data);
-
-    // Update file with encryption metadata
-    file.storage_path = result.storagePath;
-    file.encrypted_dek = result.encryptedDek;
-    file.encryption_iv = result.iv;
-    file.encryption_algo = result.algorithm;
-
-    return this.filesRepository.save(file);
-  }
-
-  /** Uploads and encrypts file content from readable stream. */
-  async uploadFileStream(
-    fileId: string,
-    userId: string,
-    stream: Readable,
-  ): Promise<File> {
-    const file = await this.findById(fileId, userId);
-
-    if (file.is_folder) {
-      throw new BadRequestException('Cannot upload content to a folder');
-    }
-
-    if (file.encrypted_dek) {
-      throw new BadRequestException('File already has content uploaded');
-    }
-
-    // Upload and encrypt the file
-    const result = await this.storageService.uploadFileStream(
-      userId,
-      fileId,
-      stream,
-    );
 
     // Update file with encryption metadata
     file.storage_path = result.storagePath;
