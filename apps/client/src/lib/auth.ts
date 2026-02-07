@@ -19,9 +19,13 @@ export function getInitials(name: string): string {
 }
 
 export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let val = bytes;
+  let i = 0;
+  while (val >= 1024 && i < sizes.length - 1) {
+    val /= 1024;
+    i++;
+  }
+  return parseFloat(val.toFixed(1)) + ' ' + sizes[i];
 }

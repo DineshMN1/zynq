@@ -40,10 +40,11 @@ import { FileGrid } from "@/features/file/components/file-grid";
 import { FileBreadcrumb } from "@/features/file/components/file-breadcrumb";
 import { CreateFolderDialog } from "@/features/file/components/create-folder-dialog";
 import { PublicLinkDialog } from "@/features/share/components/public-link-dialog";
-import { DuplicateWarningDialog } from "@/features/file/components/duplicate-warning-dialog";
+import { DuplicateWarningDialog, type DuplicateItem } from "@/features/file/components/duplicate-warning-dialog";
 import { FolderUploadDialog } from "@/features/file/components/folder-upload-dialog";
 import { DropZoneOverlay } from "@/features/file/components/drop-zone-overlay";
 import { uploadManager } from "@/lib/upload-manager";
+import { formatBytes } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface UploadProgress {
@@ -77,14 +78,6 @@ function getSafeMimeType(file: File): string {
   return "application/octet-stream";
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
-
 export default function FilesPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +85,20 @@ export default function FilesPage() {
   const [total, setTotal] = useState(0);
   const [pathStack, setPathStack] = useState<
     { id: string | null; name: string }[]
-  >([{ id: null, name: "Home" }]);
+  >(() => {
+    // Restore from history state on initial load (back/forward navigation)
+    if (typeof window !== "undefined" && window.history.state?.pathStack) {
+      return window.history.state.pathStack;
+    }
+    // If URL has a folder param but no history state, show minimal breadcrumb
+    const folderParam = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("folder")
+      : null;
+    if (folderParam) {
+      return [{ id: null, name: "Home" }, { id: folderParam, name: "..." }];
+    }
+    return [{ id: null, name: "Home" }];
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,11 +107,7 @@ export default function FilesPage() {
   const [publicLink, setPublicLink] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<UploadProgress[]>([]);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
-  const [duplicateFile, setDuplicateFile] = useState<FileMetadata | undefined>(undefined);
-  const [pendingUpload, setPendingUpload] = useState<{
-    file: File;
-    hash: string;
-  } | null>(null);
+  const [pendingDuplicates, setPendingDuplicates] = useState<DuplicateItem[]>([]);
 
   // Folder upload confirmation state
   const [showFolderUploadDialog, setShowFolderUploadDialog] = useState(false);
@@ -132,6 +134,46 @@ export default function FilesPage() {
   const dragCounter = useRef(0);
 
   const currentFolderId = pathStack[pathStack.length - 1]?.id;
+  const skipHistoryPush = useRef(false);
+
+  // Sync folder navigation with browser history
+  useEffect(() => {
+    if (skipHistoryPush.current) {
+      skipHistoryPush.current = false;
+      return;
+    }
+    const url = currentFolderId
+      ? `/dashboard/files?folder=${currentFolderId}`
+      : "/dashboard/files";
+    // Only push if URL actually changed
+    if (window.location.pathname + window.location.search !== url) {
+      window.history.pushState({ pathStack }, "", url);
+    }
+  }, [currentFolderId, pathStack]);
+
+  // Replace initial history entry with pathStack state
+  useEffect(() => {
+    const url = currentFolderId
+      ? `/dashboard/files?folder=${currentFolderId}`
+      : "/dashboard/files";
+    window.history.replaceState({ pathStack }, "", url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const onPopState = (e: PopStateEvent) => {
+      if (e.state?.pathStack) {
+        skipHistoryPush.current = true;
+        setPathStack(e.state.pathStack);
+      } else {
+        skipHistoryPush.current = true;
+        setPathStack([{ id: null, name: "Home" }]);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // Upload queue helpers
   const addUploadProgress = (fileName: string): string => {
@@ -182,6 +224,22 @@ export default function FilesPage() {
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
+
+  // Resolve folder name if we have a "..." placeholder (direct URL load)
+  useEffect(() => {
+    const placeholder = pathStack.find((p) => p.name === "..." && p.id);
+    if (!placeholder?.id) return;
+    const folderId = placeholder.id;
+    fileApi.get(folderId).then((folder) => {
+      setPathStack((prev) =>
+        prev.map((p) => (p.id === folderId ? { ...p, name: folder.name } : p))
+      );
+    }).catch(() => {
+      // Folder not found — reset to Home
+      setPathStack([{ id: null, name: "Home" }]);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Clear selection on folder navigation or search change
   useEffect(() => {
@@ -446,70 +504,85 @@ export default function FilesPage() {
   ) => {
     if (fileEntries.length === 0) return;
 
-    const progressIds = fileEntries.map((entry) =>
-      addUploadProgress(entry.file.name)
-    );
-
-    let uploaded = 0;
-    let duplicatesSkipped = 0;
-    let errors = 0;
-
-    // Process uploads in parallel for maximum throughput
-    const uploadTasks = fileEntries.map((entry, i) => ({
-      ...entry,
-      progressId: progressIds[i],
-    }));
+    // Phase 1: Hash all files and check for duplicates
+    const duplicates: DuplicateItem[] = [];
+    const readyToUpload: { file: File; hash: string; parentId?: string }[] = [];
 
     await uploadManager.processFilesParallel(
-      uploadTasks,
-      async ({ file, parentId, progressId }) => {
+      fileEntries,
+      async (entry) => {
+        const fileHash = await uploadManager.calculateHash(entry.file);
         try {
-          updateUploadProgress(progressId, { status: "checking" });
-          // Use web worker for hash calculation (non-blocking)
-          const fileHash = await uploadManager.calculateHash(file);
-
-          await proceedWithUploadForId(file, fileHash, false, progressId, parentId);
-          uploaded++;
-        } catch (err) {
-          if (err instanceof ApiError && err.statusCode === 409) {
-            duplicatesSkipped++;
-            updateUploadProgress(progressId, {
-              status: "duplicate",
-              progress: 100,
-              fileName: `${file.name} (duplicate)`,
-            });
+          const { isDuplicate, existingFile } = await fileApi.checkDuplicate(fileHash, entry.file.name);
+          if (isDuplicate && existingFile) {
+            duplicates.push({ file: entry.file, hash: fileHash, existingFile, parentId: entry.parentId });
           } else {
-            errors++;
-            console.error(`Failed to upload ${file.name}:`, err);
-            updateUploadProgress(progressId, { status: "error" });
+            readyToUpload.push({ file: entry.file, hash: fileHash, parentId: entry.parentId });
           }
+        } catch {
+          // checkDuplicate failed — treat as non-duplicate
+          readyToUpload.push({ file: entry.file, hash: fileHash, parentId: entry.parentId });
         }
       },
-      3 // Concurrent uploads for bandwidth saturation
+      3
     );
 
-    await loadFiles();
-
-    const parts: string[] = [];
-    if (uploaded > 0) parts.push(`${uploaded} uploaded`);
-    if (duplicatesSkipped > 0) parts.push(`${duplicatesSkipped} duplicates skipped`);
-    if (errors > 0) parts.push(`${errors} failed`);
-
-    toast({
-      title: "Upload complete",
-      description: parts.join(", ") + ".",
-      variant: errors > 0 && uploaded === 0 ? "destructive" : undefined,
-    });
-
-    setTimeout(() => {
-      setUploadQueue((prev) =>
-        prev.filter(
-          (p) =>
-            !progressIds.includes(p.id) ||
-            (p.status !== "completed" && p.status !== "error" && p.status !== "duplicate")
-        )
+    // Phase 2: Upload non-duplicate files immediately
+    if (readyToUpload.length > 0) {
+      const progressIds = readyToUpload.map((entry) =>
+        addUploadProgress(entry.file.name)
       );
-    }, 3000);
+      let uploaded = 0;
+      let errors = 0;
+
+      const uploadTasks = readyToUpload.map((entry, i) => ({
+        ...entry,
+        progressId: progressIds[i],
+      }));
+
+      await uploadManager.processFilesParallel(
+        uploadTasks,
+        async ({ file, hash, parentId, progressId }) => {
+          try {
+            await proceedWithUploadForId(file, hash, true, progressId, parentId);
+            uploaded++;
+          } catch {
+            errors++;
+            updateUploadProgress(progressId, { status: "error" });
+          }
+        },
+        3
+      );
+
+      await loadFiles();
+
+      if (uploaded > 0 || errors > 0) {
+        const parts: string[] = [];
+        if (uploaded > 0) parts.push(`${uploaded} uploaded`);
+        if (errors > 0) parts.push(`${errors} failed`);
+        toast({
+          title: "Upload complete",
+          description: parts.join(", ") + ".",
+          variant: errors > 0 && uploaded === 0 ? "destructive" : undefined,
+        });
+      }
+
+      setTimeout(() => {
+        setUploadQueue((prev) =>
+          prev.filter(
+            (p) =>
+              !progressIds.includes(p.id) ||
+              (p.status !== "completed" && p.status !== "error")
+          )
+        );
+      }, 3000);
+    }
+
+    // Phase 3: Show dialog for duplicates
+    if (duplicates.length > 0) {
+      setPendingDuplicates(duplicates);
+      setShowDuplicateDialog(true);
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -538,8 +611,7 @@ export default function FilesPage() {
       const { isDuplicate, existingFile } = await fileApi.checkDuplicate(fileHash, file.name);
 
       if (isDuplicate && existingFile) {
-        setPendingUpload({ file, hash: fileHash });
-        setDuplicateFile(existingFile);
+        setPendingDuplicates([{ file, hash: fileHash, existingFile }]);
         setShowDuplicateDialog(true);
         removeUploadProgress(progressId);
         e.target.value = "";
@@ -573,45 +645,63 @@ export default function FilesPage() {
 
   const handleDuplicateProceed = async () => {
     setShowDuplicateDialog(false);
-    if (pendingUpload) {
-      const progressId = addUploadProgress(pendingUpload.file.name);
-      try {
-        await proceedWithUploadForId(
-          pendingUpload.file,
-          pendingUpload.hash,
-          true,
-          progressId
-        );
-        await loadFiles();
-        toast({
-          title: "Upload successful",
-          description: `${pendingUpload.file.name} uploaded.`,
-        });
-        setTimeout(() => removeUploadProgress(progressId), 2000);
-      } catch (err) {
-        const errorMessage =
-          err instanceof ApiError ? err.message : "Unable to upload this file.";
-        toast({
-          title: "Upload failed",
-          description: errorMessage,
-          variant: "destructive",
-        });
-        updateUploadProgress(progressId, { status: "error" });
-        setTimeout(() => removeUploadProgress(progressId), 3000);
-      } finally {
-        setPendingUpload(null);
-        setDuplicateFile(undefined);
-      }
-    }
+    const items = [...pendingDuplicates];
+    setPendingDuplicates([]);
+
+    if (items.length === 0) return;
+
+    const progressIds = items.map((item) => addUploadProgress(item.file.name));
+    let uploaded = 0;
+    let errors = 0;
+
+    const tasks = items.map((item, i) => ({ ...item, progressId: progressIds[i] }));
+
+    await uploadManager.processFilesParallel(
+      tasks,
+      async ({ file, hash, parentId, progressId }) => {
+        try {
+          await proceedWithUploadForId(file, hash, true, progressId, parentId);
+          uploaded++;
+        } catch (err) {
+          errors++;
+          const errorMessage =
+            err instanceof ApiError ? err.message : "Unable to upload this file.";
+          console.error(`Failed to upload ${file.name}:`, errorMessage);
+          updateUploadProgress(progressId, { status: "error" });
+        }
+      },
+      3
+    );
+
+    await loadFiles();
+
+    const count = items.length;
+    toast({
+      title: uploaded === count ? "Upload successful" : "Upload complete",
+      description:
+        uploaded === count
+          ? `${uploaded} file${uploaded > 1 ? "s" : ""} uploaded.`
+          : `${uploaded} uploaded, ${errors} failed.`,
+      variant: errors > 0 && uploaded === 0 ? "destructive" : undefined,
+    });
+
+    setTimeout(() => {
+      setUploadQueue((prev) =>
+        prev.filter(
+          (p) =>
+            !progressIds.includes(p.id) ||
+            (p.status !== "completed" && p.status !== "error")
+        )
+      );
+    }, 3000);
   };
 
   const handleDuplicateCancel = () => {
     setShowDuplicateDialog(false);
-    setPendingUpload(null);
-    setDuplicateFile(undefined);
+    setPendingDuplicates([]);
     toast({
       title: "Upload cancelled",
-      description: "File upload was cancelled to avoid duplicates.",
+      description: "Duplicate files were skipped.",
     });
   };
 
@@ -1197,6 +1287,29 @@ export default function FilesPage() {
           onCardClick={handleCardClick}
         />
 
+        {/* Status Bar */}
+        {!loading && files.length > 0 && (
+          <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-4">
+              {files.filter((f) => f.is_folder).length > 0 && (
+                <span className="flex items-center gap-1">
+                  <Folder className="h-3 w-3" />
+                  {files.filter((f) => f.is_folder).length} folder{files.filter((f) => f.is_folder).length !== 1 ? "s" : ""}
+                </span>
+              )}
+              {files.filter((f) => !f.is_folder).length > 0 && (
+                <span className="flex items-center gap-1">
+                  <FileIcon className="h-3 w-3" />
+                  {files.filter((f) => !f.is_folder).length} file{files.filter((f) => !f.is_folder).length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+            <span>
+              {formatBytes(files.filter((f) => !f.is_folder).reduce((sum, f) => sum + (f.size || 0), 0))}
+            </span>
+          </div>
+        )}
+
         {/* Dialogs */}
         <CreateFolderDialog
           open={showNewFolderDialog}
@@ -1214,8 +1327,7 @@ export default function FilesPage() {
         <DuplicateWarningDialog
           open={showDuplicateDialog}
           onOpenChange={setShowDuplicateDialog}
-          fileName={pendingUpload?.file.name || ""}
-          existingFile={duplicateFile}
+          duplicates={pendingDuplicates}
           onUploadAnyway={handleDuplicateProceed}
           onCancel={handleDuplicateCancel}
         />

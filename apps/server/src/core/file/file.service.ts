@@ -22,6 +22,7 @@ const DOCUMENT_EXTENSIONS = [
   'xls',
   'xlsx',
   'ppt',
+  'pptx',
   'txt',
   'md',
   'csv',
