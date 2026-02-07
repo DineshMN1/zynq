@@ -13,7 +13,30 @@ import { UserService } from '../user/user.service';
 import { CreateFileDto, BLOCKED_EXTENSIONS_REGEX } from './dto/create-file.dto';
 import { ShareFileDto } from '../share/dto/share-file.dto';
 import { randomBytes } from 'crypto';
-import { Readable } from 'stream';
+
+// File types that support duplicate detection
+const DOCUMENT_EXTENSIONS = [
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'txt',
+  'md',
+  'csv',
+];
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+const DEDUP_EXTENSIONS = [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS];
+
+/**
+ * Checks if a file type should have duplicate detection enabled.
+ * Only Documents and Images are checked for duplicates.
+ */
+function shouldCheckDuplicates(fileName: string): boolean {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  return DEDUP_EXTENSIONS.includes(ext);
+}
 
 /**
  * Manages file and folder CRUD operations, uploads, downloads, sharing, and trash.
@@ -64,6 +87,7 @@ export class FileService {
     }
 
     // Validate and check for duplicate content if hash is provided
+    // Only check duplicates for Documents and Images (not Videos, Audio, Archives, Code, etc.)
     if (createFileDto.fileHash && !createFileDto.isFolder) {
       // Validate SHA-256 hash format (64 hex characters)
       if (!/^[a-f0-9]{64}$/i.test(createFileDto.fileHash)) {
@@ -72,7 +96,12 @@ export class FileService {
         );
       }
 
-      if (!createFileDto.skipDuplicateCheck) {
+      // Only check duplicates for document and image file types
+      const checkDuplicates =
+        shouldCheckDuplicates(createFileDto.name) &&
+        !createFileDto.skipDuplicateCheck;
+
+      if (checkDuplicates) {
         const duplicates = await this.findDuplicatesByHash(
           userId,
           createFileDto.fileHash,
@@ -144,38 +173,6 @@ export class FileService {
 
     // Upload and encrypt the file
     const result = await this.storageService.uploadFile(userId, fileId, data);
-
-    // Update file with encryption metadata
-    file.storage_path = result.storagePath;
-    file.encrypted_dek = result.encryptedDek;
-    file.encryption_iv = result.iv;
-    file.encryption_algo = result.algorithm;
-
-    return this.filesRepository.save(file);
-  }
-
-  /** Uploads and encrypts file content from readable stream. */
-  async uploadFileStream(
-    fileId: string,
-    userId: string,
-    stream: Readable,
-  ): Promise<File> {
-    const file = await this.findById(fileId, userId);
-
-    if (file.is_folder) {
-      throw new BadRequestException('Cannot upload content to a folder');
-    }
-
-    if (file.encrypted_dek) {
-      throw new BadRequestException('File already has content uploaded');
-    }
-
-    // Upload and encrypt the file
-    const result = await this.storageService.uploadFileStream(
-      userId,
-      fileId,
-      stream,
-    );
 
     // Update file with encryption metadata
     file.storage_path = result.storagePath;
@@ -526,12 +523,22 @@ export class FileService {
     });
   }
 
-  /** Checks if a file with the given SHA-256 hash already exists for the user. */
+  /**
+   * Checks if a file with the given SHA-256 hash already exists for the user.
+   * Only checks duplicates for document and image file types.
+   * @param fileName - Required to determine if duplicate checking applies to this file type
+   */
   async checkDuplicate(
     userId: string,
     fileHash: string,
+    fileName?: string,
   ): Promise<{ isDuplicate: boolean; existingFile?: File }> {
     if (!fileHash) {
+      return { isDuplicate: false };
+    }
+
+    // Only check duplicates for document and image file types
+    if (fileName && !shouldCheckDuplicates(fileName)) {
       return { isDuplicate: false };
     }
 

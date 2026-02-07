@@ -83,6 +83,7 @@ describe('UserService', () => {
         email: 'new@example.com',
         password_hash: 'hashed_password',
         role: UserRole.USER,
+        storage_limit: 10737418240,
       });
       expect(repository.save).toHaveBeenCalled();
       expect(result).toEqual(mockUser);
@@ -113,6 +114,7 @@ describe('UserService', () => {
         email: 'admin@example.com',
         password_hash: 'hashed_password',
         role: UserRole.ADMIN,
+        storage_limit: 0,
       });
     });
   });

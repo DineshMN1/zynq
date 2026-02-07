@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole } from './entities/user.entity';
 
+const DEFAULT_STORAGE_LIMIT = 10 * 1024 * 1024 * 1024; // 10GB in bytes
+
 /**
  * Manages user CRUD operations, password validation, and storage quota tracking.
  */
@@ -26,12 +28,20 @@ export class UserService {
     role?: UserRole;
   }): Promise<User> {
     const password_hash = await bcrypt.hash(data.password, 12);
+    const userRole = data.role ?? UserRole.USER;
+
+    // Admin and Owner get unlimited storage (0), regular users get default limit
+    const storageLimit =
+      userRole === UserRole.ADMIN || userRole === UserRole.OWNER
+        ? 0 // Unlimited for admins
+        : DEFAULT_STORAGE_LIMIT;
 
     const user = this.usersRepository.create({
       name: data.name,
       email: data.email,
       password_hash,
-      role: data.role ?? UserRole.USER,
+      role: userRole,
+      storage_limit: storageLimit,
     });
 
     return this.usersRepository.save(user);

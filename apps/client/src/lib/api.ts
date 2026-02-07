@@ -189,6 +189,18 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  updateProfile: (data: { name: string }) =>
+    fetchApi<User>('/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    fetchApi<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 /** File API: CRUD, upload, download, share, trash operations */
@@ -256,12 +268,12 @@ export const fileApi = {
     return response.json();
   },
 
-  checkDuplicate: (fileHash: string) =>
+  checkDuplicate: (fileHash: string, fileName?: string) =>
     fetchApi<{ isDuplicate: boolean; existingFile?: FileMetadata }>(
       '/files/check-duplicate',
       {
         method: 'POST',
-        body: JSON.stringify({ fileHash }),
+        body: JSON.stringify({ fileHash, fileName }),
       }
     ),
 
@@ -368,6 +380,13 @@ export const inviteApi = {
 
 /** Admin API: user management (admin/owner only) */
 export const adminApi = {
+  getUsers: (params?: { page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', params.page.toString());
+    if (params?.limit) query.append('limit', params.limit.toString());
+    return fetchApi<PaginatedResponse<User>>(`/admin/users?${query}`);
+  },
+
   listUsers: (params: { page?: number; limit?: number }) => {
     const query = new URLSearchParams();
     if (params.page) query.append('page', params.page.toString());

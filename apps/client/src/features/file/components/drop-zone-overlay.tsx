@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Cloud, FileUp } from "lucide-react";
+import { Upload, FolderUp } from "lucide-react";
 
 interface DropZoneOverlayProps {
   isActive: boolean;
@@ -15,74 +15,69 @@ export function DropZoneOverlay({ isActive }: DropZoneOverlayProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="absolute inset-0 z-50 flex items-center justify-center rounded-xl border-3 border-dashed border-primary bg-gradient-to-b from-primary/10 to-primary/5 backdrop-blur-md"
+          transition={{ duration: 0.15 }}
+          className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
         >
-          <div className="flex flex-col items-center gap-4">
-            {/* Animated cloud icon */}
-            <motion.div
-              initial={{ y: 10, scale: 0.9 }}
-              animate={{ y: 0, scale: 1 }}
-              transition={{
-                duration: 0.3,
-                type: "spring",
-                stiffness: 200,
-              }}
-              className="relative"
-            >
-              <div className="h-24 w-24 rounded-2xl bg-primary/20 flex items-center justify-center">
-                <Cloud className="h-12 w-12 text-primary" />
+          {/* Nextcloud-style drop zone */}
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ duration: 0.2, type: "spring", stiffness: 300 }}
+            className="w-full max-w-md mx-8"
+          >
+            <div className="relative rounded-xl border-2 border-dashed border-primary/50 bg-primary/5 p-12">
+              {/* Animated upload icon */}
+              <div className="flex flex-col items-center gap-6">
+                <motion.div
+                  animate={{ y: [0, -8, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                  className="relative"
+                >
+                  <div className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center">
+                    <Upload className="h-10 w-10 text-primary" />
+                  </div>
+
+                  {/* Folder indicator */}
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.1, type: "spring" }}
+                    className="absolute -bottom-2 -right-2 h-8 w-8 rounded-lg bg-amber-500 flex items-center justify-center shadow-lg"
+                  >
+                    <FolderUp className="h-4 w-4 text-white" />
+                  </motion.div>
+                </motion.div>
+
+                <div className="text-center space-y-2">
+                  <h3 className="text-lg font-semibold text-foreground">
+                    Drop files here to upload
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Files and folders will be uploaded to the current location
+                  </p>
+                </div>
+
+                {/* Visual hints */}
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    Files
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    Folders
+                  </span>
+                </div>
               </div>
 
-              {/* Floating upload indicator */}
-              <motion.div
-                animate={{
-                  y: [0, -8, 0],
-                }}
-                transition={{
-                  duration: 1.5,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-                className="absolute -bottom-2 -right-2 h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg"
-              >
-                <FileUp className="h-5 w-5 text-primary-foreground" />
-              </motion.div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="text-center space-y-2"
-            >
-              <p className="text-xl font-semibold text-primary">
-                Drop files here to upload
-              </p>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                Release to upload files to the current folder
-              </p>
-            </motion.div>
-
-            {/* Decorative dots */}
-            <div className="flex gap-2 mt-2">
-              {[0, 1, 2].map((i) => (
-                <motion.div
-                  key={i}
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [0.5, 1, 0.5],
-                  }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    delay: i * 0.2,
-                  }}
-                  className="h-2 w-2 rounded-full bg-primary"
-                />
-              ))}
+              {/* Corner decorations */}
+              <div className="absolute top-3 left-3 h-4 w-4 border-l-2 border-t-2 border-primary/30 rounded-tl" />
+              <div className="absolute top-3 right-3 h-4 w-4 border-r-2 border-t-2 border-primary/30 rounded-tr" />
+              <div className="absolute bottom-3 left-3 h-4 w-4 border-l-2 border-b-2 border-primary/30 rounded-bl" />
+              <div className="absolute bottom-3 right-3 h-4 w-4 border-r-2 border-b-2 border-primary/30 rounded-br" />
             </div>
-          </div>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

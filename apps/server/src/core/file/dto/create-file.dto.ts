@@ -96,9 +96,10 @@ const ALLOWED_MIME_TYPES = [
   'application/octet-stream', // Generic binary - for unknown types
 ] as const;
 
-// Blocked file extensions (security risk)
+// Blocked file extensions (Windows executables and dangerous scripts)
+// Note: Common dev files (.js, .sh, .jar) are allowed
 const BLOCKED_EXTENSIONS_REGEX =
-  /\.(exe|bat|cmd|sh|ps1|vbs|vbe|js|jse|wsf|wsh|msc|pif|scr|reg|dll|com|msi|jar|hta|cpl|inf|lnk)$/i;
+  /\.(exe|bat|cmd|ps1|vbs|vbe|jse|wsf|wsh|msc|pif|scr|reg|dll|com|msi|hta|cpl|inf|lnk)$/i;
 
 export class CreateFileDto {
   @IsString()
