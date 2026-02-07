@@ -236,9 +236,11 @@ export class StorageService implements OnModuleInit {
       // Use Node.js built-in statfsSync for cross-platform disk stats
       const stats = statfsSync(this.basePath);
 
-      // Use frsize (fragment size) if available, otherwise fall back to bsize
-      // On macOS and some Linux systems, frsize gives more accurate results
-      const blockSize = (stats as any).frsize || stats.bsize;
+      // Node.js 22+ exposes frsize (fragment size) which is always correct.
+      // On older versions, macOS APFS reports bsize as I/O transfer size (1MB)
+      // while blocks are counted in 4KB fragments. Use platform check as fallback.
+      const frsize = (stats as any).frsize as number | undefined;
+      const blockSize = frsize || (process.platform === 'darwin' ? 4096 : stats.bsize);
 
       // Convert to BigInt for accurate calculation with large disks
       // then back to number for the response
