@@ -10,6 +10,10 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://typescriptlang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://docker.com/)
 
+[![GitHub stars](https://img.shields.io/github/stars/DineshMN1/zynq?style=social)](https://github.com/DineshMN1/zynq/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/DineshMN1/zynq?style=social)](https://github.com/DineshMN1/zynq/network/members)
+[![GitHub contributors](https://img.shields.io/github/contributors/DineshMN1/zynq)](https://github.com/DineshMN1/zynq/graphs/contributors)
+
 [Quick Start](#quick-start) • [Features](#features) • [Documentation](#documentation) • [Contributing](#contributing)
 
 </div>
@@ -19,7 +23,7 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-username/zynq.git
+git clone https://github.com/DineshMN1/zynq.git
 cd zynq
 docker compose up -d --build
 ```
@@ -89,10 +93,15 @@ Open **http://localhost:3000** → Create your admin account → Done!
 ## Commands
 
 ```bash
-docker compose up -d          # Start
+# Production
+docker compose up -d --build  # Start (build & run)
 docker compose down           # Stop
 docker compose logs -f        # Logs
 docker compose down -v        # Reset (deletes data)
+
+# Development (hot reload, no rebuild needed)
+pnpm docker:dev               # Start dev environment
+pnpm docker:down              # Stop all containers
 ```
 
 ---
@@ -126,9 +135,15 @@ See [docs/INSTALLATION.md](docs/INSTALLATION.md) for full setup guide.
 We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ```bash
-# Development
-cd apps/server && npm run start:dev
-cd apps/client && npm run dev
+# Local development (without Docker)
+pnpm install
+cd apps/server && npm run start:dev   # Backend with hot reload
+cd apps/client && npm run dev         # Frontend with hot reload
+
+# Quality checks
+pnpm turbo run lint                   # Lint all packages
+pnpm turbo run test                   # Test all packages
+pnpm turbo run build                  # Build all packages
 ```
 
 ---

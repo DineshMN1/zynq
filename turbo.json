@@ -6,9 +6,7 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
-    "lint": {
-      "dependsOn": ["^build"]
-    },
+    "lint": {},
     "dev": {
       "cache": false,
       "persistent": true
@@ -17,11 +15,13 @@
       "dependsOn": ["build"]
     },
     "test": {
-      "dependsOn": ["build"],
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     },
     "type-check": {
       "dependsOn": ["^build"]
+    },
+    "clean": {
+      "cache": false
     }
   }
 }

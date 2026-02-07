@@ -1306,7 +1306,7 @@ export default function FilesPage() {
               )}
             </div>
             <span>
-              {formatBytes(files.filter((f) => !f.is_folder).reduce((sum, f) => sum + (f.size || 0), 0))}
+              {formatBytes(files.filter((f) => !f.is_folder).reduce((sum, f) => sum + Number(f.size || 0), 0))}
             </span>
           </div>
         )}
