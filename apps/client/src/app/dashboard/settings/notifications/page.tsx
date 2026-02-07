@@ -131,6 +131,16 @@ export default function NotificationsPage() {
     }
   };
 
+  if (!user || loading) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
   if (!isAdmin) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
@@ -145,16 +155,6 @@ export default function NotificationsPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="p-6 max-w-3xl mx-auto">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
       </div>
     );
   }

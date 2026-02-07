@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { Loader2, User, Mail, Shield, Calendar, Eye, EyeOff, CheckCircle2, HardDrive } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { authApi } from '@/lib/api';
+import { formatBytes } from '@/lib/auth';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
 
@@ -32,16 +33,8 @@ function formatDate(dateString: string): string {
   });
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
-
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
@@ -91,6 +84,7 @@ export default function ProfilePage() {
     setLoading(true);
     try {
       await authApi.updateProfile({ name: name.trim() });
+      await refreshUser();
       toast({
         title: 'Profile updated',
         description: 'Your profile has been updated successfully.',

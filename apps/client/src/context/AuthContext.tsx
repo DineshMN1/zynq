@@ -11,6 +11,7 @@ interface AuthContextType {
   needsSetup: boolean | null;
   login: (user: User) => void;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType>({
   needsSetup: null,
   login: () => {},
   logout: () => {},
+  refreshUser: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -37,47 +39,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     router.push('/login');
   }, [router]);
 
-  // Check setup status and auth on initial load
+  const refreshUser = useCallback(async () => {
+    try {
+      const userData = await authApi.me();
+      setUser(userData);
+    } catch {
+      // Token is invalid, clear it
+      localStorage.removeItem('token');
+      setToken(null);
+      setUser(null);
+    }
+  }, []);
+
+  // Initialize auth on mount only
   useEffect(() => {
+    let canceled = false;
+
     const initializeAuth = async () => {
       try {
-        // First, check if setup is needed
         const setupResponse = await authApi.checkSetupStatus();
+        if (canceled) return;
         setNeedsSetup(setupResponse.needsSetup);
 
         if (setupResponse.needsSetup) {
-          // If setup is needed and we're not on setup page, redirect
-          if (pathname !== '/setup') {
-            router.replace('/setup');
-          }
           setLoading(false);
           return;
         }
 
-        // Setup is complete, check for saved token
         const savedToken = localStorage.getItem('token');
         if (savedToken) {
           setToken(savedToken);
           try {
             const userData = await authApi.me();
+            if (canceled) return;
             setUser(userData);
           } catch {
-            // Token is invalid, clear it
+            if (canceled) return;
             localStorage.removeItem('token');
             setToken(null);
           }
         }
       } catch (error) {
+        if (canceled) return;
         console.error('Failed to initialize auth:', error);
-        // On error, assume no setup needed and continue
         setNeedsSetup(false);
       } finally {
-        setLoading(false);
+        if (!canceled) {
+          setLoading(false);
+        }
       }
     };
 
     initializeAuth();
-  }, [pathname, router]);
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  // Redirect to /setup when needed
+  useEffect(() => {
+    if (needsSetup && pathname !== '/setup') {
+      router.replace('/setup');
+    }
+  }, [needsSetup, pathname, router]);
 
   const login = (user: User) => {
     if (user.token) {
@@ -89,7 +114,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, needsSetup, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, needsSetup, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

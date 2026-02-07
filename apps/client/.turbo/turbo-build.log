@@ -1,40 +1,44 @@
 
-
 > @zynqcloud/client@1.0.0 build /Users/dinesh/DINE/selfhost app/zynq/apps/client
 > next build
 
-   [1m[38;2;173;127;168m▲ Next.js 15.3.8[39m[22m
+   ▲ Next.js 15.3.8
    - Environments: .env
 
- [37m[1m [22m[39m Creating an optimized production build ...
- [32m[1m✓[22m[39m Compiled successfully in 1000ms
- [37m[1m [22m[39m Skipping linting
-[?25l [37m[1m [22m[39m Checking validity of types  [36m.[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m..[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m...[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m.[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m..[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m...[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m.[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m..[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m...[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m.[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m..[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m...[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m.[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m..[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m...[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m.[39m[2K[1G [37m[1m [22m[39m Checking validity of types  [36m..[39m[2K[1G[?25h [37m[1m [22m[39m Checking validity of types     [32m[1m✓[22m[39m Checking validity of types 
-[?25l [37m[1m [22m[39m Collecting page data  [36m.[39m[2K[1G [37m[1m [22m[39m Collecting page data  [36m..[39m[2K[1G[?25h [37m[1m [22m[39m Collecting page data     [32m[1m✓[22m[39m Collecting page data 
-[?25l [37m[1m [22m[39m Generating static pages (0/18)  [36m[    ][39m[2K[1G [37m[1m [22m[39m Generating static pages (0/18)  [36m[=   ][39m[2K[1G[?25h [32m[1m✓[22m[39m Generating static pages (18/18)
-[?25l [37m[1m [22m[39m Finalizing page optimization  [36m.[39m[?25l [37m[1m [22m[39m Collecting build traces  [36m.[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m..[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m..[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m...[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m...[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m.[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m.[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m..[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m..[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m...[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m...[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m.[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m.[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m..[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m..[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m...[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m...[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m.[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m.[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m..[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m..[39m[2K[1G [37m[1m [22m[39m Finalizing page optimization  [36m...[39m[2K[1G [37m[1m [22m[39m Collecting build traces  [36m...[39m[2K[1G[?25h [37m[1m [22m[39m Collecting build traces     [32m[1m✓[22m[39m Collecting build traces 
-[2K[1G[?25h [37m[1m [22m[39m Finalizing page optimization     [32m[1m✓[22m[39m Finalizing page optimization 
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 2000ms
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/19) ...
+   Generating static pages (4/19) 
+   Generating static pages (9/19) 
+   Generating static pages (14/19) 
+ ✓ Generating static pages (19/19)
+   Finalizing page optimization ...
+   Collecting build traces ...
 
-[4mRoute (app)[24m                                 [4mSize[24m  [4mFirst Load JS[24m  [4m[24m  [4m[24m
-┌ ○ /                                      139 B         [37m[1m101 kB[22m[39m
-├ ○ /_not-found                            139 B         [37m[1m101 kB[22m[39m
-├ ○ /dashboard                             381 B         [37m[1m102 kB[22m[39m
-├ ○ /dashboard/files                     15.9 kB         [37m[1m196 kB[22m[39m
-├ ○ /dashboard/profile                   4.45 kB         [37m[1m115 kB[22m[39m
-├ ○ /dashboard/settings                  3.85 kB         [37m[1m117 kB[22m[39m
-├ ○ /dashboard/settings/email             5.8 kB         [37m[1m119 kB[22m[39m
-├ ○ /dashboard/settings/invites          4.33 kB         [37m[1m149 kB[22m[39m
-├ ○ /dashboard/settings/users            6.72 kB         [37m[1m161 kB[22m[39m
-├ ƒ /dashboard/share/[token]              4.2 kB         [37m[1m115 kB[22m[39m
-├ ○ /dashboard/shared                    5.88 kB         [37m[1m165 kB[22m[39m
-├ ○ /dashboard/trash                     5.58 kB         [37m[1m182 kB[22m[39m
-├ ○ /forgot-password                     4.53 kB         [37m[1m155 kB[22m[39m
-├ ○ /login                               4.97 kB         [37m[1m156 kB[22m[39m
-├ ○ /register                            1.95 kB         [37m[1m157 kB[22m[39m
-├ ○ /reset-password                      5.42 kB         [37m[1m156 kB[22m[39m
-├ ○ /setup                               2.88 kB         [37m[1m157 kB[22m[39m
-└ ƒ /share/[token]                       4.26 kB         [37m[1m115 kB[22m[39m
-+ First Load JS shared by all             [37m[1m101 kB[22m[39m
+Route (app)                                 Size  First Load JS
+┌ ○ /                                      139 B         101 kB
+├ ○ /_not-found                            139 B         101 kB
+├ ○ /dashboard                             381 B         102 kB
+├ ○ /dashboard/files                     21.3 kB         201 kB
+├ ○ /dashboard/profile                   7.56 kB         122 kB
+├ ○ /dashboard/settings                   6.4 kB         117 kB
+├ ○ /dashboard/settings/invites          5.09 kB         149 kB
+├ ○ /dashboard/settings/monitoring       7.22 kB         118 kB
+├ ○ /dashboard/settings/notifications      12 kB         124 kB
+├ ○ /dashboard/settings/users            3.23 kB         160 kB
+├ ƒ /dashboard/share/[token]             3.98 kB         115 kB
+├ ○ /dashboard/shared                    5.97 kB         165 kB
+├ ○ /dashboard/trash                     3.19 kB         183 kB
+├ ○ /forgot-password                     4.63 kB         155 kB
+├ ○ /login                               5.47 kB         120 kB
+├ ○ /register                            5.61 kB         156 kB
+├ ○ /reset-password                      5.52 kB         156 kB
+├ ○ /setup                               3.42 kB         118 kB
+└ ƒ /share/[token]                       4.04 kB         115 kB
++ First Load JS shared by all             101 kB
   ├ chunks/4bd1b696-161a714655e79c73.js  53.2 kB
   ├ chunks/684-4e344e381c7a0944.js       46.1 kB
   └ other shared chunks (total)          1.92 kB
@@ -43,4 +47,3 @@
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
 
-[?25h

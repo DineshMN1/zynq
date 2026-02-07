@@ -919,7 +919,7 @@ export default function FilesPage() {
         file,
         parentId: currentFolderId || undefined,
       }));
-      uploadMultipleFiles(fileEntries);
+      await uploadMultipleFiles(fileEntries);
       return;
     }
 
@@ -944,7 +944,7 @@ export default function FilesPage() {
         file,
         parentId: currentFolderId || undefined,
       }));
-      uploadMultipleFiles(fileEntries);
+      await uploadMultipleFiles(fileEntries);
       return;
     }
 
@@ -963,7 +963,7 @@ export default function FilesPage() {
           fileEntries.push({ file, parentId: currentFolderId || undefined });
         }
       }
-      uploadMultipleFiles(fileEntries);
+      await uploadMultipleFiles(fileEntries);
       return;
     }
 
