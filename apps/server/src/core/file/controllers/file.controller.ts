@@ -125,9 +125,9 @@ export class FileController {
   @Post('check-duplicate')
   async checkDuplicate(
     @CurrentUser() user: User,
-    @Body() body: { fileHash: string },
+    @Body() body: { fileHash: string; fileName?: string },
   ) {
-    return this.fileService.checkDuplicate(user.id, body.fileHash);
+    return this.fileService.checkDuplicate(user.id, body.fileHash, body.fileName);
   }
 
   // ========================================
