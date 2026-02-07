@@ -83,8 +83,13 @@ function getFileTypeFromExtension(filename: string): string {
 }
 
 /**
- * Calculate content hash with optional text extraction
- * For text-based files, normalizes content before hashing
+ * Compute a SHA-256 hash for a file, preferring normalized extracted text when available.
+ *
+ * If textual content can be extracted from the file, the content is trimmed and CRLF pairs are
+ * converted to LF before hashing; otherwise the raw file bytes are hashed.
+ *
+ * @param file - The file whose content hash should be computed
+ * @returns Lowercase hexadecimal SHA-256 hash of the normalized text (if extracted) or of the raw file bytes
  */
 export async function calculateContentHash(file: File): Promise<string> {
   // Try to extract text content for supported formats
@@ -98,36 +103,4 @@ export async function calculateContentHash(file: File): Promise<string> {
 
   // For binary files or unsupported formats, hash the raw file
   return calculateFileHash(file);
-}
-
-/**
- * Alias for calculateContentHash
- */
-export const computeFileHash = calculateContentHash;
-
-/**
- * Format file size for display
- */
-export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
-
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-}
-
-/**
- * Format date for display
- */
-export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(d);
 }

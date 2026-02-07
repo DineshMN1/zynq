@@ -43,7 +43,7 @@ import { PublicLinkDialog } from "@/features/share/components/public-link-dialog
 import { DuplicateWarningDialog } from "@/features/file/components/duplicate-warning-dialog";
 import { FolderUploadDialog } from "@/features/file/components/folder-upload-dialog";
 import { DropZoneOverlay } from "@/features/file/components/drop-zone-overlay";
-import { calculateContentHash } from "@/lib/file-hash";
+import { uploadManager } from "@/lib/upload-manager";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface UploadProgress {
@@ -85,6 +85,19 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+/**
+ * Renders the main file manager interface with file/folder listing, search,
+ * navigation, selection, uploads (file & folder, including drag-and-drop),
+ * sharing, and deletion features.
+ *
+ * The component manages state for current folder navigation, selection, upload
+ * queue and progress, duplicate detection, and dialogs for folder creation,
+ * public links, duplicate warnings, and folder uploads. It also handles
+ * reading directory entries for recursive folder uploads and performs
+ * concurrent uploads with progress reporting.
+ *
+ * @returns The React element for the Files page UI.
+ */
 export default function FilesPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [loading, setLoading] = useState(true);
@@ -454,31 +467,39 @@ export default function FilesPage() {
     let duplicatesSkipped = 0;
     let errors = 0;
 
-    for (let i = 0; i < fileEntries.length; i++) {
-      const { file, parentId } = fileEntries[i];
-      const progressId = progressIds[i];
+    // Process uploads in parallel for maximum throughput
+    const uploadTasks = fileEntries.map((entry, i) => ({
+      ...entry,
+      progressId: progressIds[i],
+    }));
 
-      try {
-        updateUploadProgress(progressId, { status: "checking" });
-        const fileHash = await calculateContentHash(file);
+    await uploadManager.processFilesParallel(
+      uploadTasks,
+      async ({ file, parentId, progressId }) => {
+        try {
+          updateUploadProgress(progressId, { status: "checking" });
+          // Use web worker for hash calculation (non-blocking)
+          const fileHash = await uploadManager.calculateHash(file);
 
-        await proceedWithUploadForId(file, fileHash, false, progressId, parentId);
-        uploaded++;
-      } catch (err) {
-        if (err instanceof ApiError && err.statusCode === 409) {
-          duplicatesSkipped++;
-          updateUploadProgress(progressId, {
-            status: "duplicate",
-            progress: 100,
-            fileName: `${file.name} (duplicate)`,
-          });
-        } else {
-          errors++;
-          console.error(`Failed to upload ${file.name}:`, err);
-          updateUploadProgress(progressId, { status: "error" });
+          await proceedWithUploadForId(file, fileHash, false, progressId, parentId);
+          uploaded++;
+        } catch (err) {
+          if (err instanceof ApiError && err.statusCode === 409) {
+            duplicatesSkipped++;
+            updateUploadProgress(progressId, {
+              status: "duplicate",
+              progress: 100,
+              fileName: `${file.name} (duplicate)`,
+            });
+          } else {
+            errors++;
+            console.error(`Failed to upload ${file.name}:`, err);
+            updateUploadProgress(progressId, { status: "error" });
+          }
         }
-      }
-    }
+      },
+      3 // Concurrent uploads for bandwidth saturation
+    );
 
     await loadFiles();
 
@@ -523,10 +544,11 @@ export default function FilesPage() {
 
     try {
       updateUploadProgress(progressId, { status: "checking" });
-      const fileHash = await calculateContentHash(file);
+      // Use web worker for hash calculation (non-blocking)
+      const fileHash = await uploadManager.calculateHash(file);
 
-      // Check for duplicates before uploading
-      const { isDuplicate, existingFile } = await fileApi.checkDuplicate(fileHash);
+      // Check for duplicates before uploading (only for documents and images)
+      const { isDuplicate, existingFile } = await fileApi.checkDuplicate(fileHash, file.name);
 
       if (isDuplicate && existingFile) {
         setPendingUpload({ file, hash: fileHash });
@@ -841,21 +863,159 @@ export default function FilesPage() {
     e.stopPropagation();
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  // Helper to read all entries from a directory
+  const readDirectoryEntries = (
+    dirReader: FileSystemDirectoryReader
+  ): Promise<FileSystemEntry[]> => {
+    return new Promise((resolve, reject) => {
+      const entries: FileSystemEntry[] = [];
+      const readBatch = () => {
+        dirReader.readEntries(
+          (batch) => {
+            if (batch.length === 0) {
+              resolve(entries);
+            } else {
+              entries.push(...batch);
+              readBatch();
+            }
+          },
+          (err) => reject(err)
+        );
+      };
+      readBatch();
+    });
+  };
+
+  // Recursively traverse a FileSystemEntry and collect files with paths
+  const traverseEntry = async (
+    entry: FileSystemEntry,
+    path: string = ""
+  ): Promise<{ file: File; relativePath: string }[]> => {
+    if (entry.isFile) {
+      const fileEntry = entry as FileSystemFileEntry;
+      return new Promise((resolve, reject) => {
+        fileEntry.file(
+          (file) => resolve([{ file, relativePath: path + file.name }]),
+          (err) => reject(err)
+        );
+      });
+    } else if (entry.isDirectory) {
+      const dirEntry = entry as FileSystemDirectoryEntry;
+      const dirReader = dirEntry.createReader();
+      const entries = await readDirectoryEntries(dirReader);
+      const results: { file: File; relativePath: string }[] = [];
+      for (const childEntry of entries) {
+        const childResults = await traverseEntry(
+          childEntry,
+          path + entry.name + "/"
+        );
+        results.push(...childResults);
+      }
+      return results;
+    }
+    return [];
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     dragCounter.current = 0;
     setIsDragActive(false);
 
-    const droppedFiles = e.dataTransfer.files;
-    if (!droppedFiles || droppedFiles.length === 0) return;
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) {
+      // Fallback to files if items not supported
+      const droppedFiles = e.dataTransfer.files;
+      if (!droppedFiles || droppedFiles.length === 0) return;
 
-    const fileEntries = Array.from(droppedFiles).map((file) => ({
-      file,
-      parentId: currentFolderId || undefined,
-    }));
+      const fileEntries = Array.from(droppedFiles).map((file) => ({
+        file,
+        parentId: currentFolderId || undefined,
+      }));
+      uploadMultipleFiles(fileEntries);
+      return;
+    }
 
-    uploadMultipleFiles(fileEntries);
+    // Check if any item is a directory using webkitGetAsEntry
+    const entries: FileSystemEntry[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === "file") {
+        const entry = item.webkitGetAsEntry?.();
+        if (entry) {
+          entries.push(entry);
+        }
+      }
+    }
+
+    if (entries.length === 0) {
+      // No entries, fallback to regular file handling
+      const droppedFiles = e.dataTransfer.files;
+      if (!droppedFiles || droppedFiles.length === 0) return;
+
+      const fileEntries = Array.from(droppedFiles).map((file) => ({
+        file,
+        parentId: currentFolderId || undefined,
+      }));
+      uploadMultipleFiles(fileEntries);
+      return;
+    }
+
+    // Check if we have directories
+    const hasDirectories = entries.some((entry) => entry.isDirectory);
+
+    if (!hasDirectories) {
+      // All files, no directories - simple upload
+      const fileEntries: { file: File; parentId?: string }[] = [];
+      for (const entry of entries) {
+        if (entry.isFile) {
+          const fileEntry = entry as FileSystemFileEntry;
+          const file = await new Promise<File>((resolve, reject) => {
+            fileEntry.file(resolve, reject);
+          });
+          fileEntries.push({ file, parentId: currentFolderId || undefined });
+        }
+      }
+      uploadMultipleFiles(fileEntries);
+      return;
+    }
+
+    // We have directories - collect all files with their relative paths
+    const allFilesWithPaths: { file: File; relativePath: string }[] = [];
+    for (const entry of entries) {
+      const filesFromEntry = await traverseEntry(entry);
+      allFilesWithPaths.push(...filesFromEntry);
+    }
+
+    if (allFilesWithPaths.length === 0) {
+      toast({
+        title: "Empty folder",
+        description: "The dropped folder contains no files.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Get root folder name from first entry
+    const rootFolderName = entries.find((e) => e.isDirectory)?.name || "Dropped Folder";
+    const totalSize = allFilesWithPaths.reduce((sum, f) => sum + f.file.size, 0);
+
+    // Show folder upload confirmation dialog
+    setPendingFolderUpload({
+      files: allFilesWithPaths.map((f) => {
+        // Create a new File with webkitRelativePath-like path
+        const newFile = new File([f.file], f.file.name, { type: f.file.type });
+        Object.defineProperty(newFile, "webkitRelativePath", {
+          value: f.relativePath,
+          writable: false,
+        });
+        return newFile;
+      }),
+      folderName: rootFolderName,
+      totalSize,
+      fileCount: allFilesWithPaths.length,
+    });
+    setShowFolderUploadDialog(true);
   };
 
   const allSelected =

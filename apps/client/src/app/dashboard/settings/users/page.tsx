@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import {
@@ -50,15 +49,17 @@ import {
   MoreVertical,
   Loader2,
   UserPlus,
-  HardDrive,
-  Users,
-  Database,
   RefreshCw,
-  AlertTriangle,
 } from 'lucide-react';
-import { adminApi, storageApi, type User, type StorageOverview, type UserStorageInfo } from '@/lib/api';
+import { adminApi, storageApi, type User, type UserStorageInfo } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
+/**
+ * Convert a byte count into a human-readable string with unit suffix.
+ *
+ * @param bytes - Number of bytes to format.
+ * @returns A string using binary multiples (KB = 1024 B) with up to two decimal places (for example, `1.50 GB`). Returns `0 B` when `bytes` is zero.
+ */
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -82,10 +83,14 @@ function parseQuotaInput(value: string): number {
   return Math.floor(num * (multipliers[unit] || 1));
 }
 
+/**
+ * Render the Users management page with a list of users and UI for refreshing, editing roles, updating quotas, and deleting users.
+ *
+ * @returns The JSX element for the users management interface, including the users table, quota and role editor dialogs, and delete confirmation dialog.
+ */
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [usersStorage, setUsersStorage] = useState<UserStorageInfo[]>([]);
-  const [storageOverview, setStorageOverview] = useState<StorageOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page] = useState(1);
@@ -104,13 +109,11 @@ export default function UsersPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [usersRes, storageRes, usersStorageRes] = await Promise.all([
+      const [usersRes, usersStorageRes] = await Promise.all([
         adminApi.listUsers({ page, limit: 50 }),
-        storageApi.getOverview(),
         storageApi.getAllUsersStorage(),
       ]);
       setUsers(usersRes.items);
-      setStorageOverview(storageRes);
       setUsersStorage(usersStorageRes);
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -224,9 +227,9 @@ export default function UsersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Users & Storage</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Users</h1>
           <p className="text-muted-foreground mt-1">
-            Manage users, permissions, and storage quotas
+            Manage users and permissions
           </p>
         </div>
         <div className="flex gap-2">
@@ -247,99 +250,6 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Storage Dashboard */}
-      {storageOverview && (
-        <div className="grid gap-4 md:grid-cols-3">
-          {/* System Storage Card */}
-          <Card className="bg-card/50 border-border shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">System Storage</CardTitle>
-              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <HardDrive className="h-4 w-4 text-primary" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {formatBytes(storageOverview.system.usedBytes)}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                of {formatBytes(storageOverview.system.totalBytes)} total
-              </p>
-              <Progress
-                value={storageOverview.system.usedPercentage}
-                className={cn(
-                  'h-2 mt-4',
-                  storageOverview.system.usedPercentage >= 90 && '[&>div]:bg-red-500',
-                  storageOverview.system.usedPercentage >= 75 &&
-                    storageOverview.system.usedPercentage < 90 &&
-                    '[&>div]:bg-amber-500',
-                  storageOverview.system.usedPercentage < 75 && '[&>div]:bg-primary'
-                )}
-              />
-              <p className="text-xs text-muted-foreground mt-2">
-                {storageOverview.system.usedPercentage}% used
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Users Count Card */}
-          <Card className="bg-card/50 border-border shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
-              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Users className="h-4 w-4 text-primary" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{users.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {users.filter((u) => u.role === 'admin' || u.role === 'owner').length} administrators
-              </p>
-              <div className="flex gap-2 mt-4 flex-wrap">
-                <Badge variant="default" className="bg-primary/20 text-primary border-0">
-                  {users.filter((u) => u.role === 'owner').length} owner
-                </Badge>
-                <Badge variant="secondary" className="bg-amber-500/20 text-amber-500 border-0">
-                  {users.filter((u) => u.role === 'admin').length} admin
-                </Badge>
-                <Badge variant="secondary">
-                  {users.filter((u) => u.role === 'user').length} user
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Free Space Card */}
-          <Card className="bg-card/50 border-border shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Free Space</CardTitle>
-              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Database className="h-4 w-4 text-primary" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {formatBytes(storageOverview.system.freeBytes)}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">available for new files</p>
-              {storageOverview.system.usedPercentage >= 90 && (
-                <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                  <span className="text-xs text-red-500">Storage critically low</span>
-                </div>
-              )}
-              {storageOverview.system.usedPercentage >= 75 &&
-                storageOverview.system.usedPercentage < 90 && (
-                  <div className="flex items-center gap-2 mt-4 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <span className="text-xs text-amber-500">Storage running low</span>
-                  </div>
-                )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
       {/* Users Table */}
       <Card className="bg-card/50 border-border shadow-lg overflow-hidden">
         <CardHeader className="border-b border-border">
@@ -353,20 +263,12 @@ export default function UsersPage() {
                   <TableHead className="text-muted-foreground font-medium">Name</TableHead>
                   <TableHead className="text-muted-foreground font-medium">Email</TableHead>
                   <TableHead className="text-muted-foreground font-medium">Role</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Storage Used</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Quota</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Usage</TableHead>
                   <TableHead className="text-muted-foreground font-medium">Joined</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.map((user) => {
-                  const storageInfo = getUserStorageInfo(user.id);
-                  const usedPercent = storageInfo?.usedPercentage || 0;
-                  const isOverQuota = usedPercent >= 100;
-                  const isNearQuota = usedPercent >= 80 && usedPercent < 100;
-
                   return (
                     <TableRow
                       key={user.id}
@@ -385,41 +287,6 @@ export default function UsersPage() {
                         >
                           {user.role}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className={cn(isOverQuota && 'text-red-500 font-medium')}>
-                          {formatBytes(storageInfo?.usedBytes || 0)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {storageInfo?.isUnlimited ? (
-                          <span className="text-primary font-medium">Unlimited</span>
-                        ) : (
-                          <span className="text-muted-foreground">{formatBytes(storageInfo?.quotaBytes || 0)}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="w-28">
-                          <Progress
-                            value={Math.min(usedPercent, 100)}
-                            className={cn(
-                              'h-2',
-                              isOverQuota && '[&>div]:bg-red-500',
-                              isNearQuota && '[&>div]:bg-amber-500',
-                              !isOverQuota && !isNearQuota && '[&>div]:bg-primary'
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              'text-xs mt-1 block',
-                              isOverQuota && 'text-red-500',
-                              isNearQuota && 'text-amber-500',
-                              !isOverQuota && !isNearQuota && 'text-muted-foreground'
-                            )}
-                          >
-                            {usedPercent}%
-                          </span>
-                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {user.created_at
