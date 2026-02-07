@@ -226,20 +226,21 @@ export default function FilesPage() {
   }, [loadFiles]);
 
   // Resolve folder name if we have a "..." placeholder (direct URL load)
+  const resolvedRef = useRef(false);
   useEffect(() => {
+    if (resolvedRef.current) return;
     const placeholder = pathStack.find((p) => p.name === "..." && p.id);
     if (!placeholder?.id) return;
+    resolvedRef.current = true;
     const folderId = placeholder.id;
     fileApi.get(folderId).then((folder) => {
       setPathStack((prev) =>
         prev.map((p) => (p.id === folderId ? { ...p, name: folder.name } : p))
       );
     }).catch(() => {
-      // Folder not found — reset to Home
       setPathStack([{ id: null, name: "Home" }]);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pathStack]);
 
   // Clear selection on folder navigation or search change
   useEffect(() => {
