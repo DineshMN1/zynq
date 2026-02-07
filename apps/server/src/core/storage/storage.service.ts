@@ -270,9 +270,15 @@ export class StorageService implements OnModuleInit {
     try {
       // Use Node.js built-in statfsSync for cross-platform disk stats
       const stats = statfsSync(this.basePath);
-      const blockSize = stats.bsize;
-      const totalBytes = stats.blocks * blockSize;
-      const freeBytes = stats.bavail * blockSize;
+
+      // Use frsize (fragment size) if available, otherwise fall back to bsize
+      // On macOS and some Linux systems, frsize gives more accurate results
+      const blockSize = (stats as any).frsize || stats.bsize;
+
+      // Convert to BigInt for accurate calculation with large disks
+      // then back to number for the response
+      const totalBytes = Number(BigInt(stats.blocks) * BigInt(blockSize));
+      const freeBytes = Number(BigInt(stats.bavail) * BigInt(blockSize));
       const usedBytes = totalBytes - freeBytes;
 
       return {

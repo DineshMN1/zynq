@@ -1,18 +1,13 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SettingService } from './setting.service';
 import { SettingController } from './setting.controller';
 import { Setting } from './entities/setting.entity';
-import { AdminStorageController } from './controllers/admin-storage.controller';
-import { UserModule } from '../user/user.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Setting]),
-    forwardRef(() => UserModule),
-  ],
+  imports: [TypeOrmModule.forFeature([Setting])],
   providers: [SettingService],
-  controllers: [SettingController, AdminStorageController],
+  controllers: [SettingController],
   exports: [SettingService],
 })
 export class SettingModule {}

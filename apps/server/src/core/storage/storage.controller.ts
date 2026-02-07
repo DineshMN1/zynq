@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Param,
-  Body,
-  UseGuards,
-  BadRequestException,
-} from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -14,7 +6,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User, UserRole } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
 import { StorageService } from './storage.service';
-import { SettingService } from '../setting/setting.service';
 
 @Controller('storage')
 @UseGuards(JwtAuthGuard)
@@ -22,7 +13,6 @@ export class StorageController {
   constructor(
     private readonly storageService: StorageService,
     private readonly userService: UserService,
-    private readonly settingService: SettingService,
   ) {}
 
   @Get('overview')
@@ -125,16 +115,6 @@ export class StorageController {
     @Param('userId') userId: string,
     @Body('storage_quota') storageQuota: number,
   ) {
-    // Validate against max limit if set
-    const maxLimit = await this.settingService.getGlobalSetting(
-      'storage.max_limit',
-    );
-    if (maxLimit && maxLimit > 0 && storageQuota > maxLimit) {
-      throw new BadRequestException(
-        `Storage quota cannot exceed maximum limit of ${maxLimit} bytes`,
-      );
-    }
-
     const user = await this.userService.updateStorageLimit(
       userId,
       storageQuota,

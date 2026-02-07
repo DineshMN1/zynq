@@ -1,9 +1,8 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole } from './entities/user.entity';
-import { SettingService } from '../setting/setting.service';
 
 const DEFAULT_STORAGE_LIMIT = 10 * 1024 * 1024 * 1024; // 10GB in bytes
 
@@ -15,8 +14,6 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    @Inject(forwardRef(() => SettingService))
-    private settingService: SettingService,
   ) {}
 
   /**
@@ -31,18 +28,19 @@ export class UserService {
     role?: UserRole;
   }): Promise<User> {
     const password_hash = await bcrypt.hash(data.password, 12);
+    const userRole = data.role ?? UserRole.USER;
 
-    // Fetch default storage limit from settings
-    const defaultLimit = await this.settingService.getGlobalSetting(
-      'storage.default_limit',
-    );
-    const storageLimit = defaultLimit ?? DEFAULT_STORAGE_LIMIT;
+    // Admin and Owner get unlimited storage (0), regular users get default limit
+    const storageLimit =
+      userRole === UserRole.ADMIN || userRole === UserRole.OWNER
+        ? 0 // Unlimited for admins
+        : DEFAULT_STORAGE_LIMIT;
 
     const user = this.usersRepository.create({
       name: data.name,
       email: data.email,
       password_hash,
-      role: data.role ?? UserRole.USER,
+      role: userRole,
       storage_limit: storageLimit,
     });
 
