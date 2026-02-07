@@ -189,6 +189,18 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  updateProfile: (data: { name: string }) =>
+    fetchApi<User>('/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    fetchApi<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 /** File API: CRUD, upload, download, share, trash operations */
@@ -256,12 +268,12 @@ export const fileApi = {
     return response.json();
   },
 
-  checkDuplicate: (fileHash: string) =>
+  checkDuplicate: (fileHash: string, fileName?: string) =>
     fetchApi<{ isDuplicate: boolean; existingFile?: FileMetadata }>(
       '/files/check-duplicate',
       {
         method: 'POST',
-        body: JSON.stringify({ fileHash }),
+        body: JSON.stringify({ fileHash, fileName }),
       }
     ),
 
@@ -366,19 +378,15 @@ export const inviteApi = {
     }),
 };
 
-export interface StorageSettings {
-  default_storage_limit: number;
-  max_storage_limit: number;
-}
-
-export interface BulkUpdateResult {
-  success: boolean;
-  updatedCount: number;
-  appliedLimit: number;
-}
-
 /** Admin API: user management (admin/owner only) */
 export const adminApi = {
+  getUsers: (params?: { page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', params.page.toString());
+    if (params?.limit) query.append('limit', params.limit.toString());
+    return fetchApi<PaginatedResponse<User>>(`/admin/users?${query}`);
+  },
+
   listUsers: (params: { page?: number; limit?: number }) => {
     const query = new URLSearchParams();
     if (params.page) query.append('page', params.page.toString());
@@ -395,24 +403,6 @@ export const adminApi = {
   deleteUser: (id: string) =>
     fetchApi<{ success: boolean }>(`/admin/users/${id}`, {
       method: 'DELETE',
-    }),
-
-  getStorageSettings: () =>
-    fetchApi<StorageSettings>('/admin/settings/storage'),
-
-  updateStorageSettings: (data: {
-    default_storage_limit?: number;
-    max_storage_limit?: number;
-  }) =>
-    fetchApi<StorageSettings>('/admin/settings/storage', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-
-  bulkUpdateStorageLimits: (data?: { storage_limit?: number }) =>
-    fetchApi<BulkUpdateResult>('/admin/settings/storage/bulk-update', {
-      method: 'POST',
-      body: JSON.stringify(data || {}),
     }),
 };
 

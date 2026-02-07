@@ -3,24 +3,21 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Cloud,
   Files,
   Share2,
   Trash2,
   Settings,
   Users,
-  Mail,
-  ChevronDown,
-  ChevronsLeft,
-  ChevronsRight,
+  Bell,
   LogOut,
   User as UserIcon,
-  MoreVertical,
   Moon,
   Sun,
-  Server,
-  Send,
+  PanelLeftClose,
+  PanelLeft,
   HardDrive,
+  Activity,
+  UserPlus,
 } from 'lucide-react';
 import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -31,6 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import type { User, StorageOverview } from '@/lib/api';
@@ -96,229 +94,145 @@ export function Sidebar({ user }: SidebarProps) {
     }
   };
 
-  const mainLinks = [
+  // Home section links
+  const homeLinks = [
     { href: '/dashboard/files', label: 'All Files', icon: Files },
-    { href: '/dashboard/shared', label: 'Shared', icon: Share2 },
+    { href: '/dashboard/shared', label: 'Shared with me', icon: Share2 },
     { href: '/dashboard/trash', label: 'Trash', icon: Trash2 },
   ];
 
+  // Settings section links (for all users)
   const settingsLinks = [
-    { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+    { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
   ];
 
+  // Admin settings links
   const adminLinks = isAdmin
     ? [
         { href: '/dashboard/settings/users', label: 'Users', icon: Users },
-        { href: '/dashboard/settings/invites', label: 'Invites', icon: Mail },
-        { href: '/dashboard/settings/email', label: 'Email', icon: Send },
-        { href: '/dashboard/settings/storage', label: 'Storage', icon: HardDrive },
+        { href: '/dashboard/settings/invites', label: 'Invitations', icon: UserPlus },
+        { href: '/dashboard/settings/notifications', label: 'Notifications', icon: Bell },
+        { href: '/dashboard/settings/monitoring', label: 'Monitoring', icon: Activity },
       ]
     : [];
 
   const usedPercentage = storageInfo?.user.usedPercentage || 0;
+  const isUnlimited = storageInfo?.user.isUnlimited;
+
+  const isActiveLink = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
+  const NavLink = ({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) => {
+    const isActive = isActiveLink(href);
+    return (
+      <Link
+        href={href}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+          isActive
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+            : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50',
+          collapsed && 'justify-center px-2'
+        )}
+        title={collapsed ? label : undefined}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        {!collapsed && <span>{label}</span>}
+      </Link>
+    );
+  };
+
+  const SectionHeader = ({ title }: { title: string }) => (
+    <>
+      {!collapsed ? (
+        <p className="px-3 mb-2 text-xs font-medium text-sidebar-foreground/50 uppercase tracking-wider">
+          {title}
+        </p>
+      ) : (
+        <div className="border-t border-sidebar-border mx-2 my-3" />
+      )}
+    </>
+  );
 
   return (
     <aside
       className={cn(
-        'flex flex-col h-full bg-background border-r border-border transition-all duration-300',
-        collapsed ? 'w-[68px]' : 'w-64'
+        'flex flex-col h-full bg-sidebar border-r border-sidebar-border transition-all duration-200',
+        collapsed ? 'w-[60px]' : 'w-[240px]'
       )}
     >
-      {/* App-Style Header Selector */}
-      <div className="p-2 shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                'w-full flex items-center gap-2.5 rounded-lg border border-border/60 bg-card/50 px-2.5 py-2',
-                'hover:bg-secondary/80 hover:border-border active:scale-[0.98]',
-                'transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-                'shadow-sm hover:shadow',
-                collapsed && 'justify-center px-2'
-              )}
-            >
-              <div className="h-7 w-7 rounded-md bg-primary/15 flex items-center justify-center shrink-0">
-                <Cloud className="h-4 w-4 text-primary" />
-              </div>
-              {!collapsed && (
-                <>
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm font-semibold text-foreground truncate leading-tight">
-                      ZynqCloud
-                    </p>
-                    <p className="text-[10px] text-muted-foreground/70 truncate leading-tight">
-                      Personal Workspace
-                    </p>
-                  </div>
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-                </>
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            side="bottom"
-            className="w-56"
-          >
-            <div className="px-2 py-2">
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center">
-                  <Cloud className="h-4.5 w-4.5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold">ZynqCloud</p>
-                  <p className="text-[11px] text-muted-foreground">Personal Workspace</p>
-                </div>
-              </div>
+      {/* Logo Header */}
+      <div className={cn('h-14 flex items-center border-b border-sidebar-border px-3', collapsed && 'justify-center')}>
+        {!collapsed ? (
+          <Link href="/dashboard/files" className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
+              <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
             </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard" className="cursor-pointer gap-2">
-                <Server className="h-4 w-4" />
-                Dashboard
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => setCollapsed(!collapsed)}
-              className="cursor-pointer gap-2"
-            >
-              {collapsed ? (
-                <>
-                  <ChevronsRight className="h-4 w-4" />
-                  Expand Sidebar
-                </>
-              ) : (
-                <>
-                  <ChevronsLeft className="h-4 w-4" />
-                  Collapse Sidebar
-                </>
-              )}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <span className="font-semibold text-sidebar-foreground">ZynqCloud</span>
+          </Link>
+        ) : (
+          <Link href="/dashboard/files">
+            <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
+              <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
+            </div>
+          </Link>
+        )}
       </div>
 
-      {/* Scrollable Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-6">
-        {/* Primary Navigation */}
-        <div className="space-y-0.5">
-          {mainLinks.map((link) => {
-            const Icon = link.icon;
-            const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all',
-                  isActive
-                    ? 'bg-secondary text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
-                  collapsed && 'justify-center px-2'
-                )}
-                title={collapsed ? link.label : undefined}
-              >
-                <Icon className="h-[18px] w-[18px] shrink-0" />
-                {!collapsed && <span>{link.label}</span>}
-              </Link>
-            );
-          })}
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-4 px-2">
+        {/* Home Section */}
+        <div className="space-y-1">
+          <SectionHeader title="Home" />
+          {homeLinks.map((link) => (
+            <NavLink key={link.href} {...link} />
+          ))}
         </div>
 
         {/* Settings Section */}
-        <div className="space-y-1">
-          {!collapsed && (
-            <p className="px-3 pb-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest">
-              Settings
-            </p>
-          )}
-          {collapsed && <div className="border-t border-border mx-2 my-2" />}
-          <div className="space-y-0.5">
-            {settingsLinks.map((link) => {
-              const Icon = link.icon;
-              const isActive = pathname === link.href;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all',
-                    isActive
-                      ? 'bg-secondary text-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
-                    collapsed && 'justify-center px-2'
-                  )}
-                  title={collapsed ? link.label : undefined}
-                >
-                  <Icon className="h-[18px] w-[18px] shrink-0" />
-                  {!collapsed && <span>{link.label}</span>}
-                </Link>
-              );
-            })}
-          </div>
+        <div className="mt-6 space-y-1">
+          <SectionHeader title="Settings" />
+          {settingsLinks.map((link) => (
+            <NavLink key={link.href} {...link} />
+          ))}
         </div>
 
-        {/* Admin Section */}
-        {isAdmin && (
-          <div className="space-y-1">
-            {!collapsed && (
-              <p className="px-3 pb-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest">
-                Admin
-              </p>
-            )}
-            {collapsed && <div className="border-t border-border mx-2 my-2" />}
-            <div className="space-y-0.5">
-              {adminLinks.map((link) => {
-                const Icon = link.icon;
-                const isActive = pathname === link.href;
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all',
-                      isActive
-                        ? 'bg-secondary text-foreground'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
-                      collapsed && 'justify-center px-2'
-                    )}
-                    title={collapsed ? link.label : undefined}
-                  >
-                    <Icon className="h-[18px] w-[18px] shrink-0" />
-                    {!collapsed && <span>{link.label}</span>}
-                  </Link>
-                );
-              })}
-            </div>
+        {/* Admin Settings Section */}
+        {isAdmin && adminLinks.length > 0 && (
+          <div className="mt-6 space-y-1">
+            <SectionHeader title="Admin Settings" />
+            {adminLinks.map((link) => (
+              <NavLink key={link.href} {...link} />
+            ))}
           </div>
         )}
       </nav>
 
-      {/* Fixed Storage Indicator */}
-      <div className={cn('px-3 py-3 border-t border-border shrink-0', collapsed && 'px-2')}>
+      {/* Storage Indicator */}
+      <div className={cn('px-3 py-3 border-t border-sidebar-border', collapsed && 'px-2')}>
         {!collapsed ? (
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground/70">Storage</span>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-sidebar-foreground/60">Storage</span>
               {!loadingStorage && storageInfo && (
-                <span className="text-xs text-muted-foreground">
-                  {formatBytes(storageInfo.user.usedBytes)}
+                <span className="text-sidebar-foreground/80">
+                  {isUnlimited ? 'Unlimited' : `${formatBytes(storageInfo.user.usedBytes)} / ${formatBytes(storageInfo.user.quotaBytes)}`}
                 </span>
               )}
             </div>
             {loadingStorage ? (
-              <div className="h-1.5 bg-secondary rounded-full animate-pulse" />
-            ) : (
+              <div className="h-1.5 bg-sidebar-accent rounded-full animate-pulse" />
+            ) : !isUnlimited ? (
               <Progress
                 value={Math.min(usedPercentage, 100)}
                 className={cn(
-                  'h-1.5 bg-secondary',
+                  'h-1.5 bg-sidebar-accent',
                   usedPercentage >= 90 && '[&>div]:bg-red-500',
                   usedPercentage >= 75 && usedPercentage < 90 && '[&>div]:bg-amber-500',
-                  usedPercentage < 75 && '[&>div]:bg-primary'
+                  usedPercentage < 75 && '[&>div]:bg-sidebar-primary'
                 )}
               />
+            ) : (
+              <div className="h-1.5 bg-sidebar-primary/30 rounded-full" />
             )}
           </div>
         ) : (
@@ -331,89 +245,106 @@ export function Sidebar({ user }: SidebarProps) {
                 'h-2 w-2 rounded-full',
                 usedPercentage >= 90 && 'bg-red-500',
                 usedPercentage >= 75 && usedPercentage < 90 && 'bg-amber-500',
-                usedPercentage < 75 && 'bg-primary'
+                usedPercentage < 75 && 'bg-sidebar-primary'
               )}
             />
           </div>
         )}
       </div>
 
-      {/* Fixed User Profile */}
-      <div className={cn('px-2 py-2 border-t border-border shrink-0', collapsed && 'px-1')}>
+      {/* User Profile & Controls */}
+      <div className={cn('px-2 py-2 border-t border-sidebar-border', collapsed && 'px-1')}>
         {user ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className={cn(
-                  'w-full flex items-center gap-3 p-2 rounded-md hover:bg-secondary transition-colors text-left',
-                  collapsed && 'justify-center'
-                )}
-              >
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                    {getInitials(user.name)}
-                  </AvatarFallback>
-                </Avatar>
-                {!collapsed && (
-                  <>
+          <div className={cn('flex items-center gap-2', collapsed && 'flex-col')}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    'flex items-center gap-2 p-2 rounded-md hover:bg-sidebar-accent transition-colors text-left flex-1 min-w-0',
+                    collapsed && 'justify-center w-full'
+                  )}
+                >
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-medium">
+                      {getInitials(user.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  {!collapsed && (
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
-                      <p className="text-xs text-muted-foreground/70 truncate">{user.email}</p>
+                      <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
+                      <p className="text-xs text-sidebar-foreground/60 truncate">{user.email}</p>
                     </div>
-                    <MoreVertical className="h-4 w-4 text-muted-foreground/70 shrink-0" />
-                  </>
-                )}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align={collapsed ? 'center' : 'end'}
-              side="top"
-              className="w-56 mb-1"
-            >
-              <div className="px-2 py-1.5">
-                <p className="text-sm font-medium">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/profile" className="cursor-pointer">
-                  <UserIcon className="mr-2 h-4 w-4" />
-                  Profile
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings" className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={toggleTheme} className="cursor-pointer">
-                {theme === 'dark' ? (
-                  <>
-                    <Sun className="mr-2 h-4 w-4" />
-                    Light Mode
-                  </>
-                ) : (
-                  <>
-                    <Moon className="mr-2 h-4 w-4" />
-                    Dark Mode
-                  </>
-                )}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={handleLogout}
-                className="text-red-500 focus:text-red-500 cursor-pointer"
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align={collapsed ? 'center' : 'start'}
+                side="top"
+                className="w-56 mb-1"
               >
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <div className="px-2 py-1.5">
+                  <p className="text-sm font-medium">{user.name}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/profile" className="cursor-pointer">
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/settings" className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Preferences
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={toggleTheme} className="cursor-pointer">
+                  {theme === 'dark' ? (
+                    <>
+                      <Sun className="mr-2 h-4 w-4" />
+                      Light Mode
+                    </>
+                  ) : (
+                    <>
+                      <Moon className="mr-2 h-4 w-4" />
+                      Dark Mode
+                    </>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="text-red-500 focus:text-red-500 cursor-pointer"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Collapse button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setCollapsed(!collapsed)}
+              className={cn(
+                'h-8 w-8 shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                collapsed && 'mt-1'
+              )}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? (
+                <PanelLeft className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         ) : (
           <div className={cn('p-2', collapsed && 'flex justify-center')}>
-            <div className="h-8 w-8 rounded-full bg-secondary animate-pulse" />
+            <div className="h-8 w-8 rounded-full bg-sidebar-accent animate-pulse" />
           </div>
         )}
       </div>
