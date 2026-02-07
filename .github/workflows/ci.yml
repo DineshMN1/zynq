@@ -7,66 +7,64 @@ on:
     branches: [main]
 
 jobs:
-  backend-lint-test:
-    name: Backend Lint & Test
+  lint-test:
+    name: Lint & Test
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: apps/server
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/server/package-lock.json
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
-      - name: Run linter
-        run: npm run lint
+      - name: Lint
+        run: pnpm turbo run lint
 
-      - name: Run tests
-        run: npm run test
+      - name: Test
+        run: pnpm turbo run test
 
-  frontend-lint-build:
-    name: Frontend Lint & Build
+  build:
+    name: Build
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: apps/client
+    needs: [lint-test]
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/client/package-lock.json
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Run linter
-        run: npm run lint
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm turbo run build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
 
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [backend-lint-test, frontend-lint-build]
+    needs: [build]
 
     steps:
       - uses: actions/checkout@v4

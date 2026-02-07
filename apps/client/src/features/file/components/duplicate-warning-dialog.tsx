@@ -76,7 +76,7 @@ export function DuplicateWarningDialog({
                         Uploaded: {formatDate(dup.existingFile.created_at)}
                       </p>
                       <p>
-                        Size: {formatBytes(dup.existingFile.size)}
+                        Size: {formatBytes(Number(dup.existingFile.size || 0))}
                       </p>
                     </div>
                   </div>

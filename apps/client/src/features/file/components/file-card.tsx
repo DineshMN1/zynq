@@ -180,7 +180,7 @@ export function FileCard({
           </p>
           <div className="flex items-center gap-2">
             <p className="text-xs text-muted-foreground">
-              {formatBytes(file.size)}
+              {formatBytes(Number(file.size || 0))}
             </p>
             {file.is_folder && (
               <Badge
