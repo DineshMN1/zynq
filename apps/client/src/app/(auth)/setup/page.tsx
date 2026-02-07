@@ -150,7 +150,7 @@ export default function SetupPage() {
             </h1>
             <p className="text-lg text-muted-foreground max-w-md">
               Set up your administrator account to get started.
-              You'll have full control over users, storage, and security.
+              You&apos;ll have full control over users, storage, and security.
             </p>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Shield className="h-4 w-4" />

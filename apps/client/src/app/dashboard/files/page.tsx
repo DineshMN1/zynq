@@ -43,7 +43,7 @@ import { PublicLinkDialog } from "@/features/share/components/public-link-dialog
 import { DuplicateWarningDialog } from "@/features/file/components/duplicate-warning-dialog";
 import { FolderUploadDialog } from "@/features/file/components/folder-upload-dialog";
 import { DropZoneOverlay } from "@/features/file/components/drop-zone-overlay";
-import { calculateContentHash } from "@/lib/file-hash";
+import { uploadManager } from "@/lib/upload-manager";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface UploadProgress {
@@ -454,31 +454,39 @@ export default function FilesPage() {
     let duplicatesSkipped = 0;
     let errors = 0;
 
-    for (let i = 0; i < fileEntries.length; i++) {
-      const { file, parentId } = fileEntries[i];
-      const progressId = progressIds[i];
+    // Process uploads in parallel for maximum throughput
+    const uploadTasks = fileEntries.map((entry, i) => ({
+      ...entry,
+      progressId: progressIds[i],
+    }));
 
-      try {
-        updateUploadProgress(progressId, { status: "checking" });
-        const fileHash = await calculateContentHash(file);
+    await uploadManager.processFilesParallel(
+      uploadTasks,
+      async ({ file, parentId, progressId }) => {
+        try {
+          updateUploadProgress(progressId, { status: "checking" });
+          // Use web worker for hash calculation (non-blocking)
+          const fileHash = await uploadManager.calculateHash(file);
 
-        await proceedWithUploadForId(file, fileHash, false, progressId, parentId);
-        uploaded++;
-      } catch (err) {
-        if (err instanceof ApiError && err.statusCode === 409) {
-          duplicatesSkipped++;
-          updateUploadProgress(progressId, {
-            status: "duplicate",
-            progress: 100,
-            fileName: `${file.name} (duplicate)`,
-          });
-        } else {
-          errors++;
-          console.error(`Failed to upload ${file.name}:`, err);
-          updateUploadProgress(progressId, { status: "error" });
+          await proceedWithUploadForId(file, fileHash, false, progressId, parentId);
+          uploaded++;
+        } catch (err) {
+          if (err instanceof ApiError && err.statusCode === 409) {
+            duplicatesSkipped++;
+            updateUploadProgress(progressId, {
+              status: "duplicate",
+              progress: 100,
+              fileName: `${file.name} (duplicate)`,
+            });
+          } else {
+            errors++;
+            console.error(`Failed to upload ${file.name}:`, err);
+            updateUploadProgress(progressId, { status: "error" });
+          }
         }
-      }
-    }
+      },
+      3 // Concurrent uploads for bandwidth saturation
+    );
 
     await loadFiles();
 
@@ -523,7 +531,8 @@ export default function FilesPage() {
 
     try {
       updateUploadProgress(progressId, { status: "checking" });
-      const fileHash = await calculateContentHash(file);
+      // Use web worker for hash calculation (non-blocking)
+      const fileHash = await uploadManager.calculateHash(file);
 
       // Check for duplicates before uploading (only for documents and images)
       const { isDuplicate, existingFile } = await fileApi.checkDuplicate(fileHash, file.name);

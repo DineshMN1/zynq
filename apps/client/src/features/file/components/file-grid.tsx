@@ -8,7 +8,6 @@ import { FileCard } from "./file-card";
 import { FileListRow } from "./file-list-row";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
 
 interface FileGridProps {
   files: FileMetadata[];
