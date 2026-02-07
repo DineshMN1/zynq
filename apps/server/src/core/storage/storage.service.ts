@@ -237,10 +237,18 @@ export class StorageService implements OnModuleInit {
       const stats = statfsSync(this.basePath);
 
       // Node.js 22+ exposes frsize (fragment size) which is always correct.
-      // On older versions, macOS APFS reports bsize as I/O transfer size (1MB)
-      // while blocks are counted in 4KB fragments. Use platform check as fallback.
+      // On older versions, some filesystems (macOS APFS, Docker virtiofs) report
+      // bsize as I/O transfer size (1MB) while blocks are counted in 4KB fragments.
+      // Detect this by checking if bsize * blocks exceeds a sane limit (>100TB).
       const frsize = (stats as any).frsize as number | undefined;
-      const blockSize = frsize || (process.platform === 'darwin' ? 4096 : stats.bsize);
+      let blockSize = frsize || stats.bsize;
+      if (!frsize && blockSize > 4096) {
+        const naiveTotal = Number(BigInt(stats.blocks) * BigInt(blockSize));
+        if (naiveTotal > 100 * 1024 ** 4) {
+          // bsize is likely I/O size, not fragment size — fall back to 4096
+          blockSize = 4096;
+        }
+      }
 
       // Convert to BigInt for accurate calculation with large disks
       // then back to number for the response

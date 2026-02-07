@@ -10,23 +10,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AlertTriangle, X, Upload } from "lucide-react";
+import { formatBytes } from "@/lib/auth";
 import type { FileMetadata } from "@/lib/api";
+
+export interface DuplicateItem {
+  file: File;
+  hash: string;
+  existingFile: FileMetadata;
+  parentId?: string;
+}
 
 interface DuplicateWarningDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  fileName: string;
-  existingFile?: FileMetadata;
+  duplicates: DuplicateItem[];
   onUploadAnyway: () => void;
   onCancel: () => void;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
 function formatDate(dateString: string): string {
@@ -40,47 +39,56 @@ function formatDate(dateString: string): string {
 export function DuplicateWarningDialog({
   open,
   onOpenChange,
-  fileName,
-  existingFile,
+  duplicates,
   onUploadAnyway,
   onCancel,
 }: DuplicateWarningDialogProps) {
+  if (duplicates.length === 0) return null;
+
+  const single = duplicates.length === 1;
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            <AlertDialogTitle>Duplicate File Detected</AlertDialogTitle>
+            <AlertDialogTitle>
+              {single ? "Duplicate File Detected" : `${duplicates.length} Duplicate Files Detected`}
+            </AlertDialogTitle>
           </div>
           <AlertDialogDescription asChild>
             <div className="space-y-3">
               <p>
-                A file with identical content already exists in your storage.
+                {single
+                  ? "A file with identical content already exists in your storage."
+                  : "Files with identical content already exist in your storage."}
               </p>
-              {existingFile && (
-                <div className="bg-muted p-3 rounded-md text-sm space-y-1">
-                  <p>
-                    <strong>Existing file:</strong> {existingFile.name}
-                  </p>
-                  <p>
-                    <strong>Uploaded:</strong> {formatDate(existingFile.created_at)}
-                  </p>
-                  <p>
-                    <strong>Size:</strong> {formatBytes(existingFile.size)}
-                  </p>
-                </div>
-              )}
-              <p className="text-sm">
-                <strong>New file:</strong> {fileName}
-              </p>
+              <div className="max-h-60 overflow-y-auto space-y-2">
+                {duplicates.map((dup, i) => (
+                  <div key={i} className="bg-muted p-3 rounded-md text-sm space-y-1">
+                    <p className="font-medium truncate">{dup.file.name}</p>
+                    <div className="text-muted-foreground space-y-0.5">
+                      <p>
+                        Matches: <span className="text-foreground">{dup.existingFile.name}</span>
+                      </p>
+                      <p>
+                        Uploaded: {formatDate(dup.existingFile.created_at)}
+                      </p>
+                      <p>
+                        Size: {formatBytes(dup.existingFile.size)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <Button variant="outline" onClick={onCancel}>
             <X className="mr-2 h-4 w-4" />
-            Cancel Upload
+            {single ? "Cancel" : "Skip All"}
           </Button>
           <Button variant="default" onClick={onUploadAnyway}>
             <Upload className="mr-2 h-4 w-4" />

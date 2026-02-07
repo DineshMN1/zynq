@@ -29,31 +29,16 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import type { User, StorageOverview } from '@/lib/api';
 import { storageApi, authApi } from '@/lib/api';
+import { formatBytes, getInitials } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
 
 interface SidebarProps {
   user: User | null;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 }
 
 export function Sidebar({ user }: SidebarProps) {
@@ -123,7 +108,7 @@ export function Sidebar({ user }: SidebarProps) {
 
   const NavLink = ({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) => {
     const isActive = isActiveLink(href);
-    return (
+    const link = (
       <Link
         href={href}
         className={cn(
@@ -133,11 +118,19 @@ export function Sidebar({ user }: SidebarProps) {
             : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50',
           collapsed && 'justify-center px-2'
         )}
-        title={collapsed ? label : undefined}
       >
         <Icon className="h-4 w-4 shrink-0" />
         {!collapsed && <span>{label}</span>}
       </Link>
+    );
+
+    if (!collapsed) return link;
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+      </Tooltip>
     );
   };
 
@@ -234,21 +227,34 @@ export function Sidebar({ user }: SidebarProps) {
             ) : (
               <div className="h-1.5 bg-sidebar-primary/30 rounded-full" />
             )}
+            {!loadingStorage && storageInfo && isUnlimited && (
+              <p className="text-[10px] text-sidebar-foreground/40">
+                {formatBytes(storageInfo.system.freeBytes)} free of {formatBytes(storageInfo.system.totalBytes)}
+              </p>
+            )}
           </div>
         ) : (
-          <div
-            className="flex justify-center"
-            title={storageInfo ? `${formatBytes(storageInfo.user.usedBytes)} used` : 'Loading...'}
-          >
-            <div
-              className={cn(
-                'h-2 w-2 rounded-full',
-                usedPercentage >= 90 && 'bg-red-500',
-                usedPercentage >= 75 && usedPercentage < 90 && 'bg-amber-500',
-                usedPercentage < 75 && 'bg-sidebar-primary'
-              )}
-            />
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex justify-center">
+                <div
+                  className={cn(
+                    'h-2 w-2 rounded-full',
+                    usedPercentage >= 90 && 'bg-red-500',
+                    usedPercentage >= 75 && usedPercentage < 90 && 'bg-amber-500',
+                    usedPercentage < 75 && 'bg-sidebar-primary'
+                  )}
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {storageInfo
+                ? isUnlimited
+                  ? `${formatBytes(storageInfo.user.usedBytes)} used — ${formatBytes(storageInfo.system.freeBytes)} free`
+                  : `${formatBytes(storageInfo.user.usedBytes)} / ${formatBytes(storageInfo.user.quotaBytes)}`
+                : 'Loading...'}
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
 
