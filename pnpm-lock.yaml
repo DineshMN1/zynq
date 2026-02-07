@@ -248,8 +248,8 @@ importers:
         specifier: ^9.16.0
         version: 9.16.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-resizable-panels:
-        specifier: ^3.0.3
-        version: 3.0.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^4.6.2
+        version: 4.6.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-responsive-masonry:
         specifier: ^2.7.1
         version: 2.7.1
@@ -5857,6 +5857,7 @@ packages:
 
   libsql@0.5.22:
     resolution: {integrity: sha512-NscWthMQt7fpU8lqd7LXMvT9pi+KhhmTHAJWUB/Lj6MWa0MKFv0F2V4C6WKKpjCVZl0VwcDz4nOI3CyaT1DDiA==}
+    cpu: [x64, arm64, wasm32, arm]
     os: [darwin, linux, win32]
 
   lie@3.3.0:
@@ -6740,11 +6741,11 @@ packages:
       '@types/react':
         optional: true
 
-  react-resizable-panels@3.0.6:
-    resolution: {integrity: sha512-b3qKHQ3MLqOgSS+FRYKapNkJZf5EQzuf6+RLiq1/IlTHw99YrZ2NJZLk4hQIzTnnIkRg2LUqyVinu6YWWpUYew==}
+  react-resizable-panels@4.6.2:
+    resolution: {integrity: sha512-d6hyD6s7ewNAI+oINrZznR/08GUyAszrowXouUDztePEn/tQ2z/LEI2qRvrizYBe3TpgBi0cCjc10pXTTOc4jw==}
     peerDependencies:
-      react: ^16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
-      react-dom: ^16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
 
   react-responsive-masonry@2.7.1:
     resolution: {integrity: sha512-Q+u+nOH87PzjqGFd2PgTcmLpHPZnCmUPREHYoNBc8dwJv6fi51p9U6hqwG8g/T8MN86HrFjrU+uQU6yvETU7cA==}
@@ -14865,7 +14866,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.10
 
-  react-resizable-panels@3.0.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  react-resizable-panels@4.6.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
