@@ -15,6 +15,7 @@ import { InvitationService } from '../invitation/invitation.service';
 import { EmailService } from '../../integrations/email/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { User, UserRole } from '../user/entities/user.entity';
 import { PasswordReset } from './entities/password-reset.entity';
 
@@ -226,5 +227,54 @@ export class AuthService {
     await this.passwordResetRepository.save(resetRecord);
 
     return { message: 'Password has been reset successfully.' };
+  }
+
+  /**
+   * Updates user profile information.
+   * @param userId - ID of the user to update
+   * @param updateProfileDto - Profile data to update
+   * @returns Updated user entity
+   */
+  async updateProfile(
+    userId: string,
+    updateProfileDto: UpdateProfileDto,
+  ): Promise<User> {
+    return this.userService.update(userId, { name: updateProfileDto.name });
+  }
+
+  /**
+   * Changes user password after verifying current password.
+   * @param userId - ID of the user
+   * @param currentPassword - Current password for verification
+   * @param newPassword - New password to set
+   * @throws UnauthorizedException if current password is incorrect
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.userService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Get user with password hash
+    const userWithPassword = await this.userService.findByEmail(user.email);
+    if (!userWithPassword) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isPasswordValid = await this.userService.validatePassword(
+      userWithPassword,
+      currentPassword,
+    );
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.userService.update(userId, { password_hash: passwordHash } as any);
   }
 }
