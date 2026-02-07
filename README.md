@@ -34,28 +34,28 @@ Open **http://localhost:3000** → Create your admin account → Done!
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
+| Feature             | Description                           |
+| ------------------- | ------------------------------------- |
 | **File Management** | Upload, download, organize in folders |
-| **Sharing** | Share with users or public links |
-| **Roles** | Owner, Admin, User permissions |
-| **Invites** | Invite-only registration |
-| **Trash** | Soft delete with restore |
-| **Deduplication** | SHA-256 hash prevents duplicates |
-| **Storage Quotas** | Per-user storage limits |
-| **SMTP** | Email for invites & password reset |
-| **Themes** | Dark / Light mode |
+| **Sharing**         | Share with users or public links      |
+| **Roles**           | Owner, Admin, User permissions        |
+| **Invites**         | Invite-only registration              |
+| **Trash**           | Soft delete with restore              |
+| **Deduplication**   | SHA-256 hash prevents duplicates      |
+| **Storage Quotas**  | Per-user storage limits               |
+| **SMTP**            | Email for invites & password reset    |
+| **Themes**          | Dark / Light mode                     |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technologies |
-|-------|--------------|
+| Layer        | Technologies                                  |
+| ------------ | --------------------------------------------- |
 | **Frontend** | Next.js 15, React 19, Tailwind CSS, shadcn/ui |
-| **Backend** | NestJS 10, TypeORM, PostgreSQL |
-| **Storage** | Local filesystem (encrypted) |
-| **Auth** | JWT + HttpOnly Cookies |
+| **Backend**  | NestJS 10, TypeORM, PostgreSQL                |
+| **Storage**  | Local filesystem (encrypted)                  |
+| **Auth**     | JWT + HttpOnly Cookies                        |
 
 ---
 
@@ -83,10 +83,10 @@ Open **http://localhost:3000** → Create your admin account → Done!
 
 ## Services
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| App | http://localhost:3000 | First user = Owner |
-| API | http://localhost:4000/api/v1 | — |
+| Service | URL                          | Credentials        |
+| ------- | ---------------------------- | ------------------ |
+| App     | http://localhost:3000        | First user = Owner |
+| API     | http://localhost:4000/api/v1 | —                  |
 
 ---
 
@@ -110,12 +110,12 @@ pnpm docker:down              # Stop all containers
 
 Copy `apps/server/.env.example` and configure:
 
-| Variable | Description |
-|----------|-------------|
+| Variable     | Description             |
+| ------------ | ----------------------- |
 | `JWT_SECRET` | Auth secret (32+ chars) |
-| `DATABASE_*` | PostgreSQL connection |
-| `S3_*` | Storage (S3/MinIO) |
-| `SMTP_*` | Email settings |
+| `DATABASE_*` | PostgreSQL connection   |
+| `S3_*`       | Storage (S3/MinIO)      |
+| `SMTP_*`     | Email settings          |
 
 See [docs/INSTALLATION.md](docs/INSTALLATION.md) for full setup guide.
 
@@ -137,8 +137,7 @@ We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) 
 ```bash
 # Local development (without Docker)
 pnpm install
-cd apps/server && npm run start:dev   # Backend with hot reload
-cd apps/client && npm run dev         # Frontend with hot reload
+pnpm turbo run dev                    # Start all with hot reload
 
 # Quality checks
 pnpm turbo run lint                   # Lint all packages
@@ -161,4 +160,3 @@ pnpm turbo run build                  # Build all packages
 ⭐ Star us on GitHub if you find this useful!
 
 </div>
-

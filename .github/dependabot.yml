@@ -28,8 +28,8 @@ updates:
       minor-and-patch:
         applies-to: version-updates
         update-types: ['minor', 'patch']
-      # Security fixes grouped by severity
-      security-critical-high:
+      # Security fixes → single grouped PR
+      security-all:
         applies-to: security-updates
         patterns: ['*']
 
