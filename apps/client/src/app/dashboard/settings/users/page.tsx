@@ -144,7 +144,7 @@ export default function UsersPage() {
     if (invite.token)
       return `${window.location.origin}/register?inviteToken=${invite.token}`;
     if (invite.id)
-      return `${window.location.origin}/register?inviteId=${invite.id}`;
+      return `${window.location.origin}/register?invite=${invite.id}`;
     const identifier = invite.email || invite.id || invite.token || 'unknown';
     throw new Error(
       `Invite link unavailable: invite id/token/link required (invite: ${identifier}).`,
@@ -165,8 +165,12 @@ export default function UsersPage() {
         role: inviteForm.role,
       });
       await loadInvites();
-      const link = buildInviteLink(invite);
+      setInviteForm({ email: '', role: 'user' });
+      setInviteSuccess('Invite created.');
+
+      let link: string | null = null;
       try {
+        link = buildInviteLink(invite);
         if (
           navigator.clipboard &&
           typeof navigator.clipboard.writeText === 'function'
@@ -177,13 +181,13 @@ export default function UsersPage() {
           setInviteSuccess('Invite created and link copied to clipboard.');
         } else {
           window.prompt('Copy invite link', link);
-          setInviteSuccess('Invite created.');
         }
-      } catch {
-        window.prompt('Copy invite link', link);
-        setInviteSuccess('Invite created.');
+      } catch (error) {
+        console.warn('Failed to copy invite link:', error);
+        if (link) {
+          window.prompt('Copy invite link', link);
+        }
       }
-      setInviteForm({ email: '', role: 'user' });
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to create invite.';
@@ -194,8 +198,9 @@ export default function UsersPage() {
   };
 
   const handleCopyInviteLink = async (invite: Invitation) => {
+    let link: string | null = null;
     try {
-      const link = buildInviteLink(invite);
+      link = buildInviteLink(invite);
       if (
         navigator.clipboard &&
         typeof navigator.clipboard.writeText === 'function'
@@ -207,7 +212,7 @@ export default function UsersPage() {
         window.prompt('Copy invite link', link);
       }
     } catch {
-      window.prompt('Copy invite link', link);
+      window.prompt('Copy invite link', link ?? '');
     }
   };
 

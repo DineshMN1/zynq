@@ -1431,7 +1431,10 @@ export default function FilesPage() {
               <AlertDialogTitle>Create Public Link?</AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-3">
-                  <p>Anyone with the link will be able to view this file:</p>
+                  <p>
+                    Anyone with the link will be able to view this{' '}
+                    {shareConfirm.file?.is_folder ? 'folder' : 'file'}:
+                  </p>
                   {shareConfirm.file && (
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border overflow-hidden">
                       <div className="shrink-0">
