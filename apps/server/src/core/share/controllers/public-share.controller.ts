@@ -20,7 +20,8 @@ export class PublicShareController {
 
     res.set({
       'Content-Type': file.mime_type || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.name)}"`,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.name)}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      'Access-Control-Expose-Headers': 'Content-Disposition',
       'Content-Length': data.length,
     });
 

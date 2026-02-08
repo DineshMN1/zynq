@@ -15,6 +15,8 @@ import {
   Trash2,
   Link as LinkIcon,
   UserPlus,
+  Globe,
+  Lock,
 } from 'lucide-react';
 import { type FileMetadata, fileApi } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
@@ -29,7 +31,8 @@ interface FileListRowProps {
   index: number;
   onOpenFolder: (folder: FileMetadata) => void;
   onDelete: (id: string) => void;
-  onShare: (id: string) => void;
+  onShareUser: (id: string) => void;
+  onSharePublic: (id: string) => void;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onCardClick?: (id: string, e: React.MouseEvent) => void;
@@ -57,7 +60,8 @@ export function FileListRow({
   index,
   onOpenFolder,
   onDelete,
-  onShare,
+  onShareUser,
+  onSharePublic,
   isSelected,
   onToggleSelect,
   onCardClick,
@@ -136,12 +140,22 @@ export function FileListRow({
       </div>
 
       {/* Shared */}
-      <div className="hidden sm:block w-20 shrink-0 text-center">
-        {(file.shareCount ?? 0) > 0 && (
+      <div className="hidden sm:flex w-28 shrink-0 items-center justify-center gap-1">
+        {(file.publicShareCount ?? 0) > 0 && (
           <Badge
             variant="secondary"
-            className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0"
+            className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0 gap-1"
           >
+            <Globe className="h-3 w-3" />
+            Shared
+          </Badge>
+        )}
+        {(file.privateShareCount ?? 0) > 0 && (
+          <Badge
+            variant="secondary"
+            className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0 gap-1"
+          >
+            <Lock className="h-3 w-3" />
             Shared
           </Badge>
         )}
@@ -165,7 +179,7 @@ export function FileListRow({
           className="h-8 w-8 text-muted-foreground hover:text-foreground"
           onClick={(e) => {
             e.stopPropagation();
-            onShare(file.id);
+            onShareUser(file.id);
           }}
           title="Share"
         >
@@ -183,18 +197,24 @@ export function FileListRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            {!file.is_folder && (
-              <>
-                <DropdownMenuItem onClick={handleDownload} className="gap-2">
-                  <Download className="h-4 w-4" />
-                  Download
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
+            <>
+              <DropdownMenuItem onClick={handleDownload} className="gap-2">
+                <Download className="h-4 w-4" />
+                {file.is_folder ? 'Download folder (zip)' : 'Download'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
 
             <DropdownMenuItem
-              onClick={() => onShare(file.id)}
+              onClick={() => onShareUser(file.id)}
+              className="gap-2"
+            >
+              <UserPlus className="h-4 w-4" />
+              Share
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => onSharePublic(file.id)}
               className="gap-2"
             >
               <LinkIcon className="h-4 w-4" />
