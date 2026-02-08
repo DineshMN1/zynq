@@ -63,6 +63,7 @@ import {
   type User,
   type UserStorageInfo,
   type Invitation,
+  type StorageOverview,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -94,6 +95,8 @@ function parseQuotaInput(value: string): number {
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [usersStorage, setUsersStorage] = useState<UserStorageInfo[]>([]);
+  const [storageOverview, setStorageOverview] =
+    useState<StorageOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page] = useState(1);
@@ -257,12 +260,14 @@ export default function UsersPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [usersRes, usersStorageRes] = await Promise.all([
+      const [usersRes, usersStorageRes, overviewRes] = await Promise.all([
         adminApi.listUsers({ page, limit: 50 }),
         storageApi.getAllUsersStorage(),
+        storageApi.getOverview(),
       ]);
       setUsers(usersRes.items);
       setUsersStorage(usersStorageRes);
+      setStorageOverview(overviewRes);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -332,11 +337,44 @@ export default function UsersPage() {
     setSavingQuota(true);
     try {
       const quotaBytes = parseQuotaInput(`${quotaValue} ${quotaUnit}`);
+      const usedBytes = getUserStorageInfo(selectedUser.id)?.usedBytes || 0;
+      const availableBytes = storageOverview?.system.freeBytes;
+
+      if (quotaBytes !== 0 && quotaBytes < usedBytes) {
+        toast({
+          title: 'Quota too low',
+          description: 'Quota cannot be lower than current usage.',
+          variant: 'warning',
+        });
+        setSavingQuota(false);
+        return;
+      }
+
+      if (
+        quotaBytes !== 0 &&
+        availableBytes != null &&
+        quotaBytes > usedBytes + availableBytes
+      ) {
+        const maxAllowed = usedBytes + availableBytes;
+        toast({
+          title: 'Quota exceeds available storage',
+          description: `Max allowed is ${formatBytes(maxAllowed)} based on free space.`,
+          variant: 'warning',
+        });
+        setSavingQuota(false);
+        return;
+      }
+
       await storageApi.updateUserQuota(selectedUser.id, quotaBytes);
       setQuotaDialogOpen(false);
       loadData();
     } catch (error) {
       console.error('Failed to update quota:', error);
+      toast({
+        title: 'Failed to update quota',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setSavingQuota(false);
     }
@@ -713,6 +751,14 @@ export default function UsersPage() {
                     )}
                   </span>
                 </p>
+                {storageOverview && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Available system free:{' '}
+                    <span className="font-medium text-foreground">
+                      {formatBytes(storageOverview.system.freeBytes)}
+                    </span>
+                  </p>
+                )}
               </div>
             )}
             <div className="flex gap-2">
