@@ -6,6 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -21,6 +29,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Upload,
   Search,
@@ -32,7 +48,13 @@ import {
   HardDrive,
   X,
 } from 'lucide-react';
-import { fileApi, type FileMetadata, ApiError } from '@/lib/api';
+import {
+  fileApi,
+  userApi,
+  type FileMetadata,
+  type ShareableUser,
+  ApiError,
+} from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
 import { FileGrid } from '@/features/file/components/file-grid';
@@ -150,6 +172,20 @@ export default function FilesPage() {
     open: boolean;
     file: FileMetadata | null;
   }>({ open: false, file: null });
+  const [shareTypeDialog, setShareTypeDialog] = useState<{
+    open: boolean;
+    file: FileMetadata | null;
+  }>({ open: false, file: null });
+  const [shareUserDialog, setShareUserDialog] = useState<{
+    open: boolean;
+    file: FileMetadata | null;
+  }>({ open: false, file: null });
+  const [shareUsers, setShareUsers] = useState<ShareableUser[]>([]);
+  const [shareUsersLoading, setShareUsersLoading] = useState(false);
+  const [selectedShareUserId, setSelectedShareUserId] = useState('');
+  const [sharePermission, setSharePermission] = useState<'read' | 'write'>(
+    'read',
+  );
 
   // Drag & drop state
   const [isDragActive, setIsDragActive] = useState(false);
@@ -909,6 +945,34 @@ export default function FilesPage() {
     if (file) setShareConfirm({ open: true, file });
   };
 
+  const handleShareType = (fileId: string) => {
+    const file = files.find((f) => f.id === fileId);
+    if (!file) return;
+    setShareTypeDialog({ open: true, file });
+  };
+
+  const handleShareWithUser = async (fileId: string) => {
+    const file = files.find((f) => f.id === fileId);
+    if (!file) return;
+    setShareUserDialog({ open: true, file });
+    setSelectedShareUserId('');
+    setSharePermission('read');
+    try {
+      setShareUsersLoading(true);
+      const users = await userApi.listShareable();
+      setShareUsers(users);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      toast({
+        title: 'Unable to load users',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setShareUsersLoading(false);
+    }
+  };
+
   const confirmShare = async () => {
     const fileId = shareConfirm.file?.id ?? null;
     setShareConfirm({ open: false, file: null });
@@ -934,6 +998,39 @@ export default function FilesPage() {
       toast({
         title: 'Error creating link',
         description: 'Share link could not be created.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const confirmShareWithUser = async () => {
+    const fileId = shareUserDialog.file?.id ?? null;
+    if (!fileId) return;
+    if (!selectedShareUserId) {
+      toast({
+        title: 'Select a user',
+        description: 'Please choose a user to share with.',
+        variant: 'warning',
+      });
+      return;
+    }
+    try {
+      await fileApi.share(fileId, {
+        toUserId: selectedShareUserId,
+        permission: sharePermission,
+      });
+      setShareUserDialog({ open: false, file: null });
+      toast({
+        title: 'Shared',
+        description: 'File shared with selected user.',
+        variant: 'success',
+      });
+      loadFiles();
+    } catch (error) {
+      console.error('Failed to share with user:', error);
+      toast({
+        title: 'Share failed',
+        description: 'Could not share with the selected user.',
         variant: 'destructive',
       });
     }
@@ -1320,7 +1417,8 @@ export default function FilesPage() {
           loading={loading}
           onOpenFolder={handleOpenFolder}
           onDelete={handleDelete}
-          onShare={handlePublicShare}
+          onShareUser={handleShareType}
+          onSharePublic={handlePublicShare}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onCardClick={handleCardClick}
@@ -1328,7 +1426,7 @@ export default function FilesPage() {
 
         {/* Status Bar */}
         {!loading && files.length > 0 && (
-          <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between border-t pt-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-4">
               {files.filter((f) => f.is_folder).length > 0 && (
                 <span className="flex items-center gap-1">
@@ -1473,6 +1571,143 @@ export default function FilesPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Share Type Dialog */}
+        <Dialog
+          open={shareTypeDialog.open}
+          onOpenChange={(open) =>
+            setShareTypeDialog((prev) => ({ ...prev, open }))
+          }
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Share</DialogTitle>
+              <DialogDescription>
+                Choose how you want to share this{' '}
+                {shareTypeDialog.file?.is_folder ? 'folder' : 'file'}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-3">
+              <Button
+                onClick={() => {
+                  const fileId = shareTypeDialog.file?.id;
+                  setShareTypeDialog({ open: false, file: null });
+                  if (fileId) handleShareWithUser(fileId);
+                }}
+              >
+                Share with user
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const fileId = shareTypeDialog.file?.id;
+                  setShareTypeDialog({ open: false, file: null });
+                  if (fileId) handlePublicShare(fileId);
+                }}
+              >
+                Create public link
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={shareUserDialog.open}
+          onOpenChange={(open) =>
+            setShareUserDialog((prev) => ({ ...prev, open }))
+          }
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Share with user</DialogTitle>
+              <DialogDescription>
+                Share this {shareUserDialog.file?.is_folder ? 'folder' : 'file'}{' '}
+                with a team member.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {shareUserDialog.file && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border overflow-hidden">
+                  <div className="shrink-0">
+                    {shareUserDialog.file.is_folder ? (
+                      <Folder className="h-8 w-8 text-amber-500" />
+                    ) : (
+                      <FileIcon className="h-8 w-8 text-blue-500" />
+                    )}
+                  </div>
+                  <div className="min-w-0 overflow-hidden">
+                    <p
+                      className="font-medium text-sm text-foreground truncate"
+                      title={shareUserDialog.file.name}
+                    >
+                      {shareUserDialog.file.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {shareUserDialog.file.is_folder
+                        ? 'Folder'
+                        : formatBytes(Number(shareUserDialog.file.size || 0))}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="share_user">User</Label>
+                <Select
+                  value={selectedShareUserId}
+                  onValueChange={setSelectedShareUserId}
+                >
+                  <SelectTrigger id="share_user">
+                    <SelectValue
+                      placeholder={
+                        shareUsersLoading ? 'Loading...' : 'Select user'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {shareUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="share_permission">Permission</Label>
+                <Select
+                  value={sharePermission}
+                  onValueChange={(v) =>
+                    setSharePermission(v as 'read' | 'write')
+                  }
+                >
+                  <SelectTrigger id="share_permission">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="read">Read</SelectItem>
+                    <SelectItem value="write">Write</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShareUserDialog({ open: false, file: null })}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmShareWithUser}
+                disabled={shareUsersLoading}
+              >
+                Share
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <ToastContainer />

@@ -40,6 +40,13 @@ export interface User {
   token?: string;
 }
 
+export interface ShareableUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'user' | 'admin' | 'owner';
+}
+
 export interface FileMetadata {
   id: string;
   owner_id: string;
@@ -54,6 +61,8 @@ export interface FileMetadata {
   created_at: string;
   updated_at: string;
   shareCount?: number;
+  publicShareCount?: number;
+  privateShareCount?: number;
 }
 
 export interface Share {
@@ -139,6 +148,30 @@ function toNumber(value: unknown, fallback = 0): number {
         ? Number(value)
         : fallback;
   return Number.isFinite(num) ? num : fallback;
+}
+
+function getFileNameFromDisposition(
+  contentDisposition: string | null,
+  fallback = 'download',
+): string {
+  if (!contentDisposition) return fallback;
+  const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encodedMatch?.[1]) {
+    try {
+      return decodeURIComponent(encodedMatch[1]);
+    } catch {
+      return encodedMatch[1];
+    }
+  }
+  const match = contentDisposition.match(/filename="?([^"]+)"?/);
+  if (match?.[1]) {
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+  return fallback;
 }
 
 function getAuthToken(): string | null {
@@ -359,6 +392,30 @@ export const fileApi = {
     fetchApi<{ success: boolean }>(`/files/shares/${shareId}`, {
       method: 'DELETE',
     }),
+
+  downloadShared: async (shareId: string) => {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE_URL}/files/shares/${shareId}/download`,
+      {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+      },
+    );
+
+    if (!response.ok) {
+      throw new ApiError('Download failed', response.status);
+    }
+
+    const blob = await response.blob();
+    const fileName = getFileNameFromDisposition(
+      response.headers.get('Content-Disposition'),
+    );
+
+    return { blob, fileName };
+  },
   bulkDelete: (ids: string[]) =>
     fetchApi<{ deleted: number }>('/files/bulk', {
       method: 'DELETE',
@@ -384,14 +441,9 @@ export const fileApi = {
     }
 
     const blob = await response.blob();
-    const contentDisposition = response.headers.get('Content-Disposition');
-    let fileName = 'download';
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="?([^"]+)"?/);
-      if (match) {
-        fileName = decodeURIComponent(match[1]);
-      }
-    }
+    const fileName = getFileNameFromDisposition(
+      response.headers.get('Content-Disposition'),
+    );
 
     return { blob, fileName };
   },
@@ -467,6 +519,16 @@ export const adminApi = {
     fetchApi<{ success: boolean }>(`/admin/users/${id}`, {
       method: 'DELETE',
     }),
+};
+
+/** Users API: shareable user list (auth required) */
+export const userApi = {
+  listShareable: (query?: string) => {
+    const params = new URLSearchParams();
+    if (query) params.append('q', query);
+    const suffix = params.toString() ? `?${params}` : '';
+    return fetchApi<ShareableUser[]>(`/users/shareable${suffix}`);
+  },
 };
 
 /** Settings API: user preferences */
@@ -566,14 +628,9 @@ export const publicApi = {
     }
 
     const blob = await response.blob();
-    const contentDisposition = response.headers.get('Content-Disposition');
-    let fileName = 'download';
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="?([^"]+)"?/);
-      if (match) {
-        fileName = decodeURIComponent(match[1]);
-      }
-    }
+    const fileName = getFileNameFromDisposition(
+      response.headers.get('Content-Disposition'),
+    );
 
     return { blob, fileName };
   },

@@ -7,18 +7,23 @@ import { Button } from '@/components/ui/button';
 import {
   Share2,
   Loader2,
-  File,
-  Folder,
   Globe,
   Trash2,
   Copy,
   Check,
+  Download,
+  Lock,
 } from 'lucide-react';
 import { fileApi, type Share } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
 import { motion } from 'framer-motion';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
+import {
+  getFileIcon,
+  getIconBgColor,
+  getIconColor,
+} from '@/features/file/utils/file-icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,6 +90,27 @@ export default function SharedPage() {
     }
   };
 
+  const handleDownloadShared = async (shareId: string) => {
+    try {
+      const { blob, fileName } = await fileApi.downloadShared(shareId);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast({
+        title: 'Error downloading',
+        description: 'Unable to download file.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleCopyLink = async (token: string, shareId: string) => {
     const link = `${window.location.origin}/share/${token}`;
     try {
@@ -140,65 +166,88 @@ export default function SharedPage() {
                 <Globe className="h-4 w-4 text-primary" /> Public Links
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {publicShares.map((share, index) => (
-                  <motion.div
-                    key={share.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                  >
-                    <Card className="p-4 hover:border-primary/50 transition-colors">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                          {share.file?.is_folder ? (
-                            <Folder className="h-5 w-5 text-primary" />
-                          ) : (
-                            <File className="h-5 w-5 text-primary" />
-                          )}
+                {publicShares.map((share, index) => {
+                  const fileName = share.file?.name ?? 'File';
+                  const mimeType = share.file?.mime_type ?? '';
+                  const isFolder = !!share.file?.is_folder;
+                  const IconComponent = getFileIcon(
+                    fileName,
+                    mimeType,
+                    isFolder,
+                  );
+                  const iconColor = getIconColor(fileName, mimeType, isFolder);
+                  const iconBgColor = getIconBgColor(
+                    fileName,
+                    mimeType,
+                    isFolder,
+                  );
+                  return (
+                    <motion.div
+                      key={share.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                    >
+                      <Card className="p-4 h-full hover:border-primary/50 transition-colors">
+                        <div className="flex h-full flex-col">
+                          <div className="flex items-start justify-between">
+                            <div
+                              className={`h-12 w-12 rounded-xl flex items-center justify-center ${iconBgColor}`}
+                            >
+                              <IconComponent
+                                className={`h-6 w-6 ${iconColor}`}
+                              />
+                            </div>
+                            <Badge variant="outline" className="gap-1">
+                              <Globe className="h-3 w-3" />
+                              Public
+                            </Badge>
+                          </div>
+                          <div className="mt-3">
+                            <p
+                              className="font-medium truncate"
+                              title={share.file?.name}
+                            >
+                              {share.file?.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {share.file?.is_folder
+                                ? 'Folder'
+                                : formatBytes(Number(share.file?.size || 0))}
+                            </p>
+                          </div>
+                          <div className="mt-auto pt-4 grid grid-cols-2 gap-2">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="w-full bg-primary/10 text-primary hover:bg-primary/20"
+                              onClick={() =>
+                                share.share_token &&
+                                handleCopyLink(share.share_token, share.id)
+                              }
+                            >
+                              {copiedId === share.id ? (
+                                <Check className="h-3 w-3 mr-1" />
+                              ) : (
+                                <Copy className="h-3 w-3 mr-1" />
+                              )}
+                              Copy
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => handleRevokeShare(share.id)}
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Stop Sharing
+                            </Button>
+                          </div>
                         </div>
-                        <Badge variant="outline">Public</Badge>
-                      </div>
-                      <div>
-                        <p
-                          className="font-medium truncate"
-                          title={share.file?.name}
-                        >
-                          {share.file?.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {share.file?.is_folder
-                            ? 'Folder'
-                            : formatBytes(Number(share.file?.size || 0))}
-                        </p>
-                        <div className="flex gap-2 mt-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              share.share_token &&
-                              handleCopyLink(share.share_token, share.id)
-                            }
-                          >
-                            {copiedId === share.id ? (
-                              <Check className="h-3 w-3 mr-1" />
-                            ) : (
-                              <Copy className="h-3 w-3 mr-1" />
-                            )}
-                            Copy
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleRevokeShare(share.id)}
-                          >
-                            <Trash2 className="h-3 w-3 mr-1" />
-                            Stop Sharing
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  </motion.div>
-                ))}
+                      </Card>
+                    </motion.div>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -210,48 +259,83 @@ export default function SharedPage() {
                 <Share2 className="h-4 w-4 text-primary" /> Shared With Me
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {privateShares.map((share, index) => (
-                  <motion.div
-                    key={share.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                  >
-                    <Card className="p-4 hover:border-primary/50 transition-colors">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                          {share.file?.is_folder ? (
-                            <Folder className="h-5 w-5 text-primary" />
-                          ) : (
-                            <File className="h-5 w-5 text-primary" />
-                          )}
+                {privateShares.map((share, index) => {
+                  const fileName = share.file?.name ?? 'File';
+                  const mimeType = share.file?.mime_type ?? '';
+                  const isFolder = !!share.file?.is_folder;
+                  const IconComponent = getFileIcon(
+                    fileName,
+                    mimeType,
+                    isFolder,
+                  );
+                  const iconColor = getIconColor(fileName, mimeType, isFolder);
+                  const iconBgColor = getIconBgColor(
+                    fileName,
+                    mimeType,
+                    isFolder,
+                  );
+                  return (
+                    <motion.div
+                      key={share.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                    >
+                      <Card className="p-4 h-full hover:border-primary/50 transition-colors">
+                        <div className="flex h-full flex-col">
+                          <div className="flex items-start justify-between">
+                            <div
+                              className={`h-12 w-12 rounded-xl flex items-center justify-center ${iconBgColor}`}
+                            >
+                              <IconComponent
+                                className={`h-6 w-6 ${iconColor}`}
+                              />
+                            </div>
+                            <Badge
+                              variant={
+                                share.permission === 'write'
+                                  ? 'default'
+                                  : 'secondary'
+                              }
+                              className="gap-1"
+                            >
+                              <Lock className="h-3 w-3" />
+                              {share.permission}
+                            </Badge>
+                          </div>
+                          <div className="mt-3">
+                            <p
+                              className="font-medium truncate"
+                              title={share.file?.name}
+                            >
+                              {share.file?.name}
+                            </p>
+                            {share.file && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {share.file.is_folder
+                                  ? 'Folder'
+                                  : formatBytes(Number(share.file.size || 0))}
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-auto pt-4">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="w-full bg-primary/10 text-primary hover:bg-primary/20"
+                              onClick={() => handleDownloadShared(share.id)}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              {share.file?.is_folder
+                                ? 'Download folder (zip)'
+                                : 'Download'}
+                            </Button>
+                          </div>
                         </div>
-                        <Badge
-                          variant={
-                            share.permission === 'write'
-                              ? 'default'
-                              : 'secondary'
-                          }
-                        >
-                          {share.permission}
-                        </Badge>
-                      </div>
-                      <p
-                        className="font-medium truncate"
-                        title={share.file?.name}
-                      >
-                        {share.file?.name}
-                      </p>
-                      {share.file && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {share.file.is_folder
-                            ? 'Folder'
-                            : formatBytes(Number(share.file.size || 0))}
-                        </p>
-                      )}
-                    </Card>
-                  </motion.div>
-                ))}
+                      </Card>
+                    </motion.div>
+                  );
+                })}
               </div>
             </section>
           )}

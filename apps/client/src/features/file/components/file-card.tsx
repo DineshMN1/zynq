@@ -12,7 +12,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Download, Trash2, Link as LinkIcon } from 'lucide-react';
+import {
+  MoreVertical,
+  Download,
+  Trash2,
+  Link as LinkIcon,
+  UserPlus,
+  Globe,
+  Lock,
+} from 'lucide-react';
 import { type FileMetadata, fileApi } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
 import {
@@ -28,7 +36,8 @@ interface FileCardProps {
   index: number;
   onOpenFolder: (folder: FileMetadata) => void;
   onDelete: (id: string) => void;
-  onShare: (id: string) => void;
+  onShareUser: (id: string) => void;
+  onSharePublic: (id: string) => void;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onCardClick?: (id: string, e: React.MouseEvent) => void;
@@ -39,7 +48,8 @@ export function FileCard({
   index,
   onOpenFolder,
   onDelete,
-  onShare,
+  onShareUser,
+  onSharePublic,
   isSelected,
   onToggleSelect,
   onCardClick,
@@ -140,18 +150,24 @@ export function FileCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              {!file.is_folder && (
-                <>
-                  <DropdownMenuItem onClick={handleDownload} className="gap-2">
-                    <Download className="h-4 w-4" />
-                    Download
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
+              <>
+                <DropdownMenuItem onClick={handleDownload} className="gap-2">
+                  <Download className="h-4 w-4" />
+                  {file.is_folder ? 'Download folder (zip)' : 'Download'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
 
               <DropdownMenuItem
-                onClick={() => onShare(file.id)}
+                onClick={() => onShareUser(file.id)}
+                className="gap-2"
+              >
+                <UserPlus className="h-4 w-4" />
+                Share
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={() => onSharePublic(file.id)}
                 className="gap-2"
               >
                 <LinkIcon className="h-4 w-4" />
@@ -182,11 +198,21 @@ export function FileCard({
             <p className="text-xs text-muted-foreground">
               {file.is_folder ? 'Folder' : formatBytes(Number(file.size || 0))}
             </p>
-            {(file.shareCount ?? 0) > 0 && (
+            {(file.publicShareCount ?? 0) > 0 && (
               <Badge
                 variant="secondary"
-                className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0"
+                className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0 gap-1"
               >
+                <Globe className="h-3 w-3" />
+                Shared
+              </Badge>
+            )}
+            {(file.privateShareCount ?? 0) > 0 && (
+              <Badge
+                variant="secondary"
+                className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0 gap-1"
+              >
+                <Lock className="h-3 w-3" />
                 Shared
               </Badge>
             )}

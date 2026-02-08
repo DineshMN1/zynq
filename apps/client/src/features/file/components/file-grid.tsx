@@ -21,7 +21,8 @@ interface FileGridProps {
   loading: boolean;
   onOpenFolder: (folder: FileMetadata) => void;
   onDelete: (id: string) => void;
-  onShare: (id: string) => void;
+  onShareUser: (id: string) => void;
+  onSharePublic: (id: string) => void;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onCardClick?: (id: string, e: React.MouseEvent) => void;
@@ -34,7 +35,8 @@ export function FileGrid({
   loading,
   onOpenFolder,
   onDelete,
-  onShare,
+  onShareUser,
+  onSharePublic,
   selectedIds,
   onToggleSelect,
   onCardClick,
@@ -168,7 +170,8 @@ export function FileGrid({
                       index={index}
                       onOpenFolder={onOpenFolder}
                       onDelete={onDelete}
-                      onShare={onShare}
+                      onShareUser={onShareUser}
+                      onSharePublic={onSharePublic}
                       isSelected={selectedIds?.has(file.id)}
                       onToggleSelect={onToggleSelect}
                       onCardClick={onCardClick}
@@ -197,7 +200,8 @@ export function FileGrid({
                       index={folders.length + index}
                       onOpenFolder={onOpenFolder}
                       onDelete={onDelete}
-                      onShare={onShare}
+                      onShareUser={onShareUser}
+                      onSharePublic={onSharePublic}
                       isSelected={selectedIds?.has(file.id)}
                       onToggleSelect={onToggleSelect}
                       onCardClick={onCardClick}
@@ -242,7 +246,8 @@ export function FileGrid({
                     index={index}
                     onOpenFolder={onOpenFolder}
                     onDelete={onDelete}
-                    onShare={onShare}
+                    onShareUser={onShareUser}
+                    onSharePublic={onSharePublic}
                     isSelected={selectedIds?.has(file.id)}
                     onToggleSelect={onToggleSelect}
                     onCardClick={onCardClick}
@@ -256,7 +261,8 @@ export function FileGrid({
                     index={folders.length + index}
                     onOpenFolder={onOpenFolder}
                     onDelete={onDelete}
-                    onShare={onShare}
+                    onShareUser={onShareUser}
+                    onSharePublic={onSharePublic}
                     isSelected={selectedIds?.has(file.id)}
                     onToggleSelect={onToggleSelect}
                     onCardClick={onCardClick}

@@ -55,4 +55,6 @@ export class File extends BaseEntity {
 
   // Computed via loadRelationCountAndMap in queries.
   shareCount?: number;
+  publicShareCount?: number;
+  privateShareCount?: number;
 }

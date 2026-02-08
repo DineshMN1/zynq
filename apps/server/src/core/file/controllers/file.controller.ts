@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  InternalServerErrorException,
   Res,
   UseInterceptors,
   UploadedFile,
@@ -23,6 +24,8 @@ import { User } from '../../user/entities/user.entity';
 import { CreateFileDto } from '../dto/create-file.dto';
 import { BulkDeleteFilesDto } from '../dto/bulk-delete-files.dto';
 import { ShareFileDto } from '../../share/dto/share-file.dto';
+import { File as FileEntity } from '../entities/file.entity';
+import * as archiver from 'archiver';
 
 /**
  * File management endpoints: CRUD, upload, download, share, trash.
@@ -54,7 +57,11 @@ export class FileController {
     );
 
     return {
-      items,
+      items: items.map((file) => ({
+        ...file,
+        publicShareCount: file.publicShareCount ?? 0,
+        privateShareCount: file.privateShareCount ?? 0,
+      })),
       meta: {
         total,
         page: parseInt(page) || 1,
@@ -163,15 +170,73 @@ export class FileController {
     @Res() res: Response,
   ) {
     const file = await this.fileService.findById(id, user.id);
+    if (file.is_folder) {
+      return this.streamFolderZip(res, file, user.id);
+    }
     const data = await this.fileService.downloadFile(id, user.id);
 
     res.set({
       'Content-Type': file.mime_type || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.name)}"`,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.name)}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      'Access-Control-Expose-Headers': 'Content-Disposition',
       'Content-Length': data.length,
     });
 
     res.send(data);
+  }
+
+  @Get('shares/:shareId/download')
+  async downloadSharedFile(
+    @CurrentUser() user: User,
+    @Param('shareId') shareId: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.fileService.downloadSharedFile(shareId, user.id);
+    if (file.is_folder) {
+      return this.streamFolderZip(res, file, file.owner_id);
+    }
+
+    const data = await this.fileService.getDecryptedFileContent(file);
+    res.set({
+      'Content-Type': file.mime_type || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.name)}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      'Access-Control-Expose-Headers': 'Content-Disposition',
+      'Content-Length': data.length,
+    });
+
+    res.send(data);
+  }
+
+  private async streamFolderZip(
+    res: Response,
+    folder: FileEntity,
+    ownerId: string,
+  ) {
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', () => {
+      throw new InternalServerErrorException('Failed to create archive');
+    });
+
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(folder.name)}.zip"; filename*=UTF-8''${encodeURIComponent(folder.name)}.zip`,
+      'Access-Control-Expose-Headers': 'Content-Disposition',
+    });
+
+    archive.pipe(res);
+
+    const entries = await this.fileService.getFolderEntries(
+      ownerId,
+      folder.id,
+      folder.name,
+    );
+
+    for (const entry of entries) {
+      const data = await this.fileService.getDecryptedFileContent(entry.file);
+      archive.append(data, { name: entry.path });
+    }
+
+    await archive.finalize();
   }
 
   @Delete(':id')

@@ -212,6 +212,18 @@ export class FileService {
 
     query
       .loadRelationCountAndMap('file.shareCount', 'file.shares')
+      .loadRelationCountAndMap(
+        'file.publicShareCount',
+        'file.shares',
+        'publicShares',
+        (qb) => qb.andWhere('publicShares.is_public = true'),
+      )
+      .loadRelationCountAndMap(
+        'file.privateShareCount',
+        'file.shares',
+        'privateShares',
+        (qb) => qb.andWhere('privateShares.is_public = false'),
+      )
       .skip((page - 1) * limit)
       .take(limit)
       .orderBy('file.is_folder', 'DESC')
@@ -331,6 +343,10 @@ export class FileService {
   ): Promise<Share & { publicLink?: string | null }> {
     const file = await this.findById(fileId, userId);
 
+    if (shareDto.toUserId && shareDto.toUserId === userId) {
+      throw new BadRequestException('Cannot share with yourself');
+    }
+
     const share = this.sharesRepository.create({
       file_id: file.id,
       grantee_user_id: shareDto.toUserId,
@@ -351,6 +367,61 @@ export class FileService {
         ? `${process.env.FRONTEND_URL || 'http://localhost:3000'}/share/${saved.share_token}`
         : null,
     };
+  }
+
+  async getSharedFile(shareId: string, userId: string): Promise<File> {
+    const share = await this.sharesRepository.findOne({
+      where: { id: shareId, grantee_user_id: userId },
+      relations: ['file', 'file.owner'],
+    });
+
+    if (!share || !share.file) {
+      throw new NotFoundException('Shared file not found');
+    }
+
+    return share.file;
+  }
+
+  async getFolderEntries(
+    ownerId: string,
+    folderId: string,
+    basePath: string,
+  ): Promise<Array<{ file: File; path: string }>> {
+    const children = await this.filesRepository.find({
+      where: {
+        owner_id: ownerId,
+        parent_id: folderId,
+        deleted_at: IsNull(),
+      },
+    });
+
+    const entries: Array<{ file: File; path: string }> = [];
+
+    for (const child of children) {
+      const childPath = `${basePath}/${child.name}`;
+      if (child.is_folder) {
+        entries.push(
+          ...(await this.getFolderEntries(ownerId, child.id, childPath)),
+        );
+      } else {
+        entries.push({ file: child, path: childPath });
+      }
+    }
+
+    return entries;
+  }
+
+  async getDecryptedFileContent(file: File): Promise<Buffer> {
+    if (!file.storage_path || !file.encrypted_dek || !file.encryption_iv) {
+      throw new NotFoundException('File content not found');
+    }
+
+    return this.storageService.downloadFile(
+      file.owner_id,
+      file.id,
+      file.encrypted_dek,
+      file.encryption_iv,
+    );
   }
 
   async getSharedWithMe(userId: string): Promise<Share[]> {
@@ -393,6 +464,11 @@ export class FileService {
       file.encrypted_dek,
       file.encryption_iv,
     );
+  }
+
+  async downloadSharedFile(shareId: string, userId: string): Promise<File> {
+    const file = await this.getSharedFile(shareId, userId);
+    return file;
   }
 
   async getFileByShareToken(token: string): Promise<File | null> {
