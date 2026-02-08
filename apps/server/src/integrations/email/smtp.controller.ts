@@ -56,7 +56,8 @@ export class SmtpController {
     }
 
     const envHost = this.configService.get('SMTP_HOST') || '';
-    const envPort = parseInt(this.configService.get('SMTP_PORT') || '587', 10);
+    const envPort =
+      parseInt(this.configService.get('SMTP_PORT') || '587', 10) || 587;
     const envSecure = this.configService.get('SMTP_SECURE') === 'true';
     const envUser = this.configService.get('SMTP_USER') || '';
     const envPass = this.configService.get('SMTP_PASS') || '';

@@ -45,7 +45,7 @@ export class AuthService {
    */
   async register(registerDto: RegisterDto): Promise<User> {
     const normalizedEmail = registerDto.email.trim().toLowerCase();
-    const existingUser = await this.userService.findByEmail(registerDto.email);
+    const existingUser = await this.userService.findByEmail(normalizedEmail);
     if (existingUser) {
       throw new ConflictException('User already exists');
     }
@@ -55,7 +55,7 @@ export class AuthService {
     if (userCount === 0) {
       return this.userService.create({
         name: registerDto.name,
-        email: registerDto.email,
+        email: normalizedEmail,
         password: registerDto.password,
         role: UserRole.OWNER,
       });
@@ -89,7 +89,7 @@ export class AuthService {
 
     return this.userService.create({
       name: registerDto.name,
-      email: registerDto.email,
+      email: normalizedEmail,
       password: registerDto.password,
       role,
     });

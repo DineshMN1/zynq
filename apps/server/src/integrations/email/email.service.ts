@@ -18,6 +18,26 @@ function normalizeSmtpPassword(value: string): string {
   return value.replace(/\s+/g, '');
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\//g, '&#x2F;');
+}
+
+function sanitizeUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '#';
+    return encodeURI(url.toString());
+  } catch {
+    return '#';
+  }
+}
+
 function buildBaseEmailHtml(params: {
   title: string;
   intro: string;
@@ -27,6 +47,13 @@ function buildBaseEmailHtml(params: {
   extra?: string;
 }): string {
   const { title, intro, buttonLabel, buttonUrl, footerNote, extra } = params;
+  const safeTitle = escapeHtml(title);
+  const safeIntro = escapeHtml(intro);
+  const safeButtonLabel = escapeHtml(buttonLabel);
+  const safeFooter = escapeHtml(footerNote);
+  const safeExtra = extra ? escapeHtml(extra) : '';
+  const safeUrl = sanitizeUrl(buttonUrl);
+  const safeUrlText = escapeHtml(buttonUrl);
   return `
       <!DOCTYPE html>
       <html>
@@ -46,17 +73,17 @@ function buildBaseEmailHtml(params: {
           <div class="container">
             <div class="card">
               <div class="header">
-                <h1 style="margin: 0; font-size: 22px;">${title}</h1>
+                <h1 style="margin: 0; font-size: 22px;">${safeTitle}</h1>
               </div>
               <div class="content">
-                <p>${intro}</p>
+                <p>${safeIntro}</p>
                 <div style="text-align: center; margin: 20px 0;">
-                  <a href="${buttonUrl}" class="button">${buttonLabel}</a>
+                  <a href="${safeUrl}" class="button">${safeButtonLabel}</a>
                 </div>
                 <p class="muted">If the button doesn&apos;t work, copy and paste this link:</p>
-                <div class="link-box">${buttonUrl}</div>
-                ${extra ? `<div style="margin-top: 16px;">${extra}</div>` : ''}
-                <p class="muted" style="margin-top: 20px;">${footerNote}</p>
+                <div class="link-box">${safeUrlText}</div>
+                ${safeExtra ? `<div style="margin-top: 16px;">${safeExtra}</div>` : ''}
+                <p class="muted" style="margin-top: 20px;">${safeFooter}</p>
               </div>
             </div>
             <p class="muted" style="text-align: center; margin-top: 16px;">
@@ -236,8 +263,7 @@ If you did not request a password reset, ignore this email.
       buttonUrl:
         this.configService.get('FRONTEND_URL') || 'http://localhost:3000',
       footerNote: 'If you received this, your SMTP settings are working.',
-      extra:
-        '<p class="muted">You can safely ignore this message after confirming delivery.</p>',
+      extra: 'You can safely ignore this message after confirming delivery.',
     });
 
     const textContent = `

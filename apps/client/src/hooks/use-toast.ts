@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-type ToastVariant = 'default' | 'destructive' | 'success';
+type ToastVariant = 'default' | 'destructive' | 'success' | 'warning';
 
 export interface ToastProps {
   id: string;

@@ -123,6 +123,15 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleSmtpError = (err: unknown, label: string) => {
+    const message =
+      err instanceof ApiError
+        ? err.message || `${label} failed.`
+        : `${label} failed.`;
+    setTestResult({ success: false, message });
+    toast({ title: label, description: message, variant: 'destructive' });
+  };
+
   const handleTestConnection = async () => {
     setTestingConnection(true);
     setTestResult(null);
@@ -133,30 +142,10 @@ export default function NotificationsPage() {
       toast({
         title: result.success ? 'Connection OK' : 'Connection Failed',
         description: result.message,
-        variant: result.success ? undefined : 'destructive',
+        variant: result.success ? 'success' : 'destructive',
       });
     } catch (err) {
-      if (err instanceof ApiError) {
-        setTestResult({
-          success: false,
-          message: err.message || 'Connection test failed.',
-        });
-        toast({
-          title: 'Connection Failed',
-          description: err.message || 'Connection test failed.',
-          variant: 'destructive',
-        });
-      } else {
-        setTestResult({
-          success: false,
-          message: 'Connection test failed.',
-        });
-        toast({
-          title: 'Connection Failed',
-          description: 'Connection test failed.',
-          variant: 'destructive',
-        });
-      }
+      handleSmtpError(err, 'Connection Failed');
     } finally {
       setTestingConnection(false);
     }
@@ -180,30 +169,10 @@ export default function NotificationsPage() {
       toast({
         title: result.success ? 'Email Sent' : 'Email Failed',
         description: result.message,
-        variant: result.success ? undefined : 'destructive',
+        variant: result.success ? 'success' : 'destructive',
       });
     } catch (err) {
-      if (err instanceof ApiError) {
-        setTestResult({
-          success: false,
-          message: err.message || 'Connection test failed.',
-        });
-        toast({
-          title: 'Email Failed',
-          description: err.message || 'Connection test failed.',
-          variant: 'destructive',
-        });
-      } else {
-        setTestResult({
-          success: false,
-          message: 'Connection test failed.',
-        });
-        toast({
-          title: 'Email Failed',
-          description: 'Connection test failed.',
-          variant: 'destructive',
-        });
-      }
+      handleSmtpError(err, 'Email Failed');
     } finally {
       setTestingEmail(false);
     }

@@ -199,10 +199,10 @@ export default function UsersPage() {
         });
       } else {
         toast({
-          title: 'Invite email failed',
+          title: 'Invite created — email delivery failed',
           description:
             invite.email_message || 'Failed to send invitation email.',
-          variant: 'destructive',
+          variant: 'warning',
         });
       }
 

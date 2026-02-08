@@ -74,22 +74,29 @@ export default function RegisterForm() {
   useEffect(() => {
     if (!inviteToken) return;
 
+    let isActive = true;
     const validateInvite = async () => {
       setInviteLoading(true);
       setInviteValidationError('');
       try {
         const result = await inviteApi.validate(inviteToken);
+        if (!isActive) return;
         setFormData((prev) => ({ ...prev, email: result.email }));
       } catch (err) {
+        if (!isActive) return;
         setInviteValidationError(
           getErrorMessage(err, 'Invalid or expired invitation'),
         );
       } finally {
+        if (!isActive) return;
         setInviteLoading(false);
       }
     };
 
     validateInvite();
+    return () => {
+      isActive = false;
+    };
   }, [inviteToken]);
 
   useEffect(() => {
@@ -312,7 +319,11 @@ export default function RegisterForm() {
                 <div
                   className={`flex items-center gap-2 text-xs ${passwordStrength.length ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {passwordStrength.length ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5" />
+                  )}
                   <span>At least 8 characters</span>
                 </div>
               )}
@@ -355,7 +366,11 @@ export default function RegisterForm() {
                 <div
                   className={`flex items-center gap-2 text-xs ${passwordStrength.match ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {passwordStrength.match ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5" />
+                  )}
                   <span>
                     {passwordStrength.match
                       ? 'Passwords match'
