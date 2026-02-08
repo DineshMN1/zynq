@@ -73,6 +73,22 @@ export class InvitationController {
     return this.invitationService.findAll();
   }
 
+  @Get('validate/:token')
+  @HttpCode(HttpStatus.OK)
+  async validate(@Param('token') token: string) {
+    const invitation = await this.invitationService.validateToken(token);
+    if (!invitation) {
+      throw new ForbiddenException('Invalid or expired invitation');
+    }
+
+    return {
+      valid: true,
+      email: invitation.email,
+      role: invitation.role,
+      expires_at: invitation.expires_at,
+    };
+  }
+
   @Post(':id/revoke')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.OWNER)
@@ -90,6 +106,13 @@ export class InvitationController {
     );
     if (!invitation) {
       throw new ForbiddenException('Invalid or expired invitation');
+    }
+    const invitedEmail = invitation.email?.trim().toLowerCase();
+    const providedEmail = acceptDto.email.trim().toLowerCase();
+    if (invitedEmail && invitedEmail !== providedEmail) {
+      throw new ForbiddenException(
+        'Invitation email does not match the registration email',
+      );
     }
 
     const user = await this.userService.create({

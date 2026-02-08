@@ -44,6 +44,7 @@ export class AuthService {
    * @throws ForbiddenException if registration is closed and no valid invite
    */
   async register(registerDto: RegisterDto): Promise<User> {
+    const normalizedEmail = registerDto.email.trim().toLowerCase();
     const existingUser = await this.userService.findByEmail(registerDto.email);
     if (existingUser) {
       throw new ConflictException('User already exists');
@@ -75,6 +76,12 @@ export class AuthService {
       );
       if (!invitation) {
         throw new ForbiddenException('Invalid or expired invitation');
+      }
+      const invitedEmail = invitation.email?.trim().toLowerCase();
+      if (invitedEmail && invitedEmail !== normalizedEmail) {
+        throw new ForbiddenException(
+          'Invitation email does not match the registration email',
+        );
       }
       role = (invitation.role as UserRole) ?? UserRole.USER;
       await this.invitationService.markAsAccepted(invitation.id);

@@ -1,19 +1,25 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Loader2,
   Mail,
@@ -23,38 +29,43 @@ import {
   EyeOff,
   Bell,
   Send,
-} from "lucide-react";
-import { smtpApi, ApiError } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
+} from 'lucide-react';
+import { smtpApi, ApiError } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { toast } from '@/hooks/use-toast';
+import { ToastContainer } from '@/components/toast-container';
 
 export default function NotificationsPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.role === "owner";
+  const isAdmin = user?.role === 'admin' || user?.role === 'owner';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
   } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
+  const [hasSavedPassword, setHasSavedPassword] = useState(false);
 
   const [formData, setFormData] = useState({
-    smtp_host: "",
+    smtp_host: '',
     smtp_port: 587,
     smtp_secure: false,
-    smtp_user: "",
-    smtp_pass: "",
-    smtp_from: "",
+    smtp_user: '',
+    smtp_pass: '',
+    smtp_from: '',
   });
 
   useEffect(() => {
     if (user && !isAdmin) {
-      router.push("/dashboard/settings");
+      router.push('/dashboard/settings');
     } else if (user) {
       loadSettings();
     }
@@ -65,16 +76,17 @@ export default function NotificationsPage() {
       setLoading(true);
       const data = await smtpApi.getSettings();
       setFormData({
-        smtp_host: data.smtp_host || "",
+        smtp_host: data.smtp_host || '',
         smtp_port: data.smtp_port || 587,
         smtp_secure: data.smtp_secure || false,
-        smtp_user: data.smtp_user || "",
-        smtp_pass: data.smtp_pass || "",
-        smtp_from: data.smtp_from || "",
+        smtp_user: data.smtp_user || '',
+        smtp_pass: '',
+        smtp_from: data.smtp_from || '',
       });
+      setHasSavedPassword(!!data.has_password);
     } catch (err) {
-      console.error("Failed to load SMTP settings:", err);
-      setError("Failed to load settings.");
+      console.error('Failed to load SMTP settings:', err);
+      setError('Failed to load settings.');
     } finally {
       setLoading(false);
     }
@@ -82,7 +94,7 @@ export default function NotificationsPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    setError("");
+    setError('');
     setSaved(false);
 
     try {
@@ -94,13 +106,17 @@ export default function NotificationsPage() {
         smtp_pass: formData.smtp_pass || undefined,
         smtp_from: formData.smtp_from,
       });
+      if (formData.smtp_pass) {
+        setHasSavedPassword(true);
+        setFormData((prev) => ({ ...prev, smtp_pass: '' }));
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message || "Failed to save settings.");
+        setError(err.message || 'Failed to save settings.');
       } else {
-        setError("Failed to save settings.");
+        setError('Failed to save settings.');
       }
     } finally {
       setSaving(false);
@@ -108,26 +124,88 @@ export default function NotificationsPage() {
   };
 
   const handleTestConnection = async () => {
-    setTesting(true);
+    setTestingConnection(true);
     setTestResult(null);
 
     try {
       const result = await smtpApi.testConnection();
       setTestResult(result);
+      toast({
+        title: result.success ? 'Connection OK' : 'Connection Failed',
+        description: result.message,
+        variant: result.success ? undefined : 'destructive',
+      });
     } catch (err) {
       if (err instanceof ApiError) {
         setTestResult({
           success: false,
-          message: err.message || "Connection test failed.",
+          message: err.message || 'Connection test failed.',
+        });
+        toast({
+          title: 'Connection Failed',
+          description: err.message || 'Connection test failed.',
+          variant: 'destructive',
         });
       } else {
         setTestResult({
           success: false,
-          message: "Connection test failed.",
+          message: 'Connection test failed.',
+        });
+        toast({
+          title: 'Connection Failed',
+          description: 'Connection test failed.',
+          variant: 'destructive',
         });
       }
     } finally {
-      setTesting(false);
+      setTestingConnection(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    setTestingEmail(true);
+    setTestResult(null);
+
+    try {
+      if (!testEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail.trim())) {
+        setTestResult({
+          success: false,
+          message: 'Please provide a valid test recipient email.',
+        });
+        setTestingEmail(false);
+        return;
+      }
+      const result = await smtpApi.testConnection({ email: testEmail.trim() });
+      setTestResult(result);
+      toast({
+        title: result.success ? 'Email Sent' : 'Email Failed',
+        description: result.message,
+        variant: result.success ? undefined : 'destructive',
+      });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setTestResult({
+          success: false,
+          message: err.message || 'Connection test failed.',
+        });
+        toast({
+          title: 'Email Failed',
+          description: err.message || 'Connection test failed.',
+          variant: 'destructive',
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: 'Connection test failed.',
+        });
+        toast({
+          title: 'Email Failed',
+          description: 'Connection test failed.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -161,13 +239,15 @@ export default function NotificationsPage() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
+      <ToastContainer />
       <div>
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <Bell className="h-8 w-8" />
           Notifications
         </h1>
         <p className="text-muted-foreground mt-1">
-          Configure notification channels for system alerts and user communications
+          Configure notification channels for system alerts and user
+          communications
         </p>
       </div>
 
@@ -193,7 +273,8 @@ export default function NotificationsPage() {
                 SMTP Configuration
               </CardTitle>
               <CardDescription>
-                Configure email notifications for password resets, invitations, and system alerts.
+                Configure email notifications for password resets, invitations,
+                and system alerts.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -226,19 +307,39 @@ export default function NotificationsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Use SSL/TLS (Secure)</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Enable for port 465, disable for port 587 with STARTTLS
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.smtp_secure}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, smtp_secure: checked })
-                  }
-                />
+              <div className="space-y-2">
+                <Label>Connection Type</Label>
+                <Select
+                  value={formData.smtp_secure ? 'ssl' : 'starttls'}
+                  onValueChange={(value) => {
+                    if (value === 'ssl') {
+                      setFormData({
+                        ...formData,
+                        smtp_secure: true,
+                        smtp_port: 465,
+                      });
+                    } else {
+                      setFormData({
+                        ...formData,
+                        smtp_secure: false,
+                        smtp_port: 587,
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-72">
+                    <SelectValue placeholder="Select connection type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ssl">SSL/TLS (Port 465)</SelectItem>
+                    <SelectItem value="starttls">
+                      STARTTLS (Port 587)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Choose SSL/TLS for port 465 or STARTTLS for port 587.
+                </p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -258,7 +359,7 @@ export default function NotificationsPage() {
                   <div className="relative">
                     <Input
                       id="smtp_pass"
-                      type={showPassword ? "text" : "password"}
+                      type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       value={formData.smtp_pass}
                       onChange={(e) =>
@@ -278,6 +379,11 @@ export default function NotificationsPage() {
                       )}
                     </button>
                   </div>
+                  {hasSavedPassword && !formData.smtp_pass && (
+                    <p className="text-xs text-muted-foreground">
+                      Password is saved.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -285,15 +391,15 @@ export default function NotificationsPage() {
                 <Label htmlFor="smtp_from">From Address</Label>
                 <Input
                   id="smtp_from"
-                  placeholder='ZynqCloud <no-reply@yourdomain.com>'
+                  placeholder="ZynqCloud <no-reply@yourdomain.com>"
                   value={formData.smtp_from}
                   onChange={(e) =>
                     setFormData({ ...formData, smtp_from: e.target.value })
                   }
                 />
                 <p className="text-xs text-muted-foreground">
-                  The sender address that appears in emails (e.g., &quot;ZynqCloud
-                  &lt;no-reply@example.com&gt;&quot;)
+                  The sender address that appears in emails (e.g.,
+                  &quot;ZynqCloud &lt;no-reply@example.com&gt;&quot;)
                 </p>
               </div>
             </CardContent>
@@ -303,25 +409,49 @@ export default function NotificationsPage() {
             <CardHeader>
               <CardTitle>Test Connection</CardTitle>
               <CardDescription>
-                Verify that your SMTP settings are correct by testing the connection
+                Verify your SMTP settings by sending a test email
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button
-                variant="outline"
-                onClick={handleTestConnection}
-                disabled={testing || !formData.smtp_host}
-              >
-                {testing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Test SMTP Connection
-              </Button>
+              <div className="space-y-2">
+                <Label htmlFor="smtp_test_email">Test Recipient Email</Label>
+                <Input
+                  id="smtp_test_email"
+                  type="email"
+                  placeholder="receiver@example.com"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  onClick={handleSendTestEmail}
+                  disabled={testingEmail || !formData.smtp_host}
+                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  {testingEmail && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Send Test Email
+                </Button>
+                <Button
+                  onClick={handleTestConnection}
+                  disabled={testingConnection || !formData.smtp_host}
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  {testingConnection && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Check Connection
+                </Button>
+              </div>
 
               {testResult && (
                 <div
                   className={`flex items-center gap-2 p-3 rounded-lg ${
                     testResult.success
-                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                      : "bg-destructive/10 text-destructive"
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                      : 'bg-destructive/10 text-destructive'
                   }`}
                 >
                   {testResult.success ? (

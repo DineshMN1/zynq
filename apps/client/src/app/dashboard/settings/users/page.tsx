@@ -65,6 +65,8 @@ import {
   type Invitation,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast';
+import { ToastContainer } from '@/components/toast-container';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -188,6 +190,23 @@ export default function UsersPage() {
           window.prompt('Copy invite link', link);
         }
       }
+
+      if (invite.email_sent) {
+        toast({
+          title: 'Invite email sent',
+          description: invite.email_message || 'Invitation email delivered.',
+          variant: 'success',
+        });
+      } else {
+        toast({
+          title: 'Invite email failed',
+          description:
+            invite.email_message || 'Failed to send invitation email.',
+          variant: 'destructive',
+        });
+      }
+
+      setInviteDialogOpen(false);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to create invite.';
@@ -357,6 +376,7 @@ export default function UsersPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6 min-h-screen">
+      <ToastContainer />
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div>

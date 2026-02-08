@@ -407,12 +407,22 @@ export const fileApi = {
 /** Invitation API: create, list, revoke (admin), accept (public) */
 export const inviteApi = {
   create: (data: { email: string; role: string }) =>
-    fetchApi<Invitation & { link: string }>('/invites', {
+    fetchApi<
+      Invitation & { link: string; email_sent: boolean; email_message?: string }
+    >('/invites', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   list: () => fetchApi<Invitation[]>('/invites'),
+
+  validate: (token: string) =>
+    fetchApi<{
+      valid: boolean;
+      email: string;
+      role: string;
+      expires_at: string;
+    }>(`/invites/validate/${encodeURIComponent(token)}`),
 
   revoke: (id: string) =>
     fetchApi<{ success: boolean }>(`/invites/${id}/revoke`, {
@@ -496,9 +506,10 @@ export const smtpApi = {
       body: JSON.stringify(data),
     }),
 
-  testConnection: () =>
+  testConnection: (data?: { email?: string }) =>
     fetchApi<{ success: boolean; message: string }>('/settings/smtp/test', {
       method: 'POST',
+      body: JSON.stringify(data || {}),
     }),
 };
 

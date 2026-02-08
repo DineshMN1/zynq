@@ -12,6 +12,62 @@ interface SmtpConfig {
   from: string;
 }
 
+function normalizeSmtpPassword(value: string): string {
+  if (!value) return value;
+  // Some providers show app passwords with spaces for readability.
+  return value.replace(/\s+/g, '');
+}
+
+function buildBaseEmailHtml(params: {
+  title: string;
+  intro: string;
+  buttonLabel: string;
+  buttonUrl: string;
+  footerNote: string;
+  extra?: string;
+}): string {
+  const { title, intro, buttonLabel, buttonUrl, footerNote, extra } = params;
+  return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #111827; background: #f3f4f6; }
+            .container { max-width: 600px; margin: 0 auto; padding: 24px; }
+            .card { background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; }
+            .header { background: #111827; color: #ffffff; padding: 24px; text-align: center; }
+            .content { padding: 24px; }
+            .button { display: inline-block; background: #2563eb; color: #ffffff !important; padding: 12px 22px; text-decoration: none; border-radius: 8px; font-weight: 600; }
+            .muted { color: #6b7280; font-size: 13px; }
+            .link-box { background: #f9fafb; padding: 12px; border-radius: 8px; word-break: break-all; font-size: 12px; border: 1px solid #e5e7eb; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="card">
+              <div class="header">
+                <h1 style="margin: 0; font-size: 22px;">${title}</h1>
+              </div>
+              <div class="content">
+                <p>${intro}</p>
+                <div style="text-align: center; margin: 20px 0;">
+                  <a href="${buttonUrl}" class="button">${buttonLabel}</a>
+                </div>
+                <p class="muted">If the button doesn&apos;t work, copy and paste this link:</p>
+                <div class="link-box">${buttonUrl}</div>
+                ${extra ? `<div style="margin-top: 16px;">${extra}</div>` : ''}
+                <p class="muted" style="margin-top: 20px;">${footerNote}</p>
+              </div>
+            </div>
+            <p class="muted" style="text-align: center; margin-top: 16px;">
+              &copy; ${new Date().getFullYear()} zynqCloud
+            </p>
+          </div>
+        </body>
+      </html>
+    `;
+}
+
 /**
  * Handles SMTP email sending for invitations and password resets.
  * Supports DB-first config with env var fallback. Caches transporter.
@@ -37,7 +93,9 @@ export class EmailService {
         secure:
           (await this.settingService.getGlobalSetting('smtp_secure')) || false,
         user: (await this.settingService.getGlobalSetting('smtp_user')) || '',
-        pass: (await this.settingService.getGlobalSetting('smtp_pass')) || '',
+        pass: normalizeSmtpPassword(
+          (await this.settingService.getGlobalSetting('smtp_pass')) || '',
+        ),
         from: (await this.settingService.getGlobalSetting('smtp_from')) || '',
       };
     }
@@ -48,7 +106,7 @@ export class EmailService {
       port: parseInt(this.configService.get('SMTP_PORT') || '587', 10),
       secure: this.configService.get('SMTP_SECURE') === 'true',
       user: this.configService.get('SMTP_USER') || '',
-      pass: this.configService.get('SMTP_PASS') || '',
+      pass: normalizeSmtpPassword(this.configService.get('SMTP_PASS') || ''),
       from:
         this.configService.get('SMTP_FROM') || 'zynqCloud <no-reply@localhost>',
     };
@@ -98,44 +156,13 @@ export class EmailService {
     const config = await this.getSmtpConfig();
     const transporter = await this.getTransporter();
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
-            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; background: #7c3aed; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>You're invited to zynqCloud</h1>
-            </div>
-            <div class="content">
-              <p>Hi,</p>
-              <p><strong>${inviterName}</strong> invited you to join zynqCloud for secure, self-hosted file management.</p>
-              <p>Click the button below to register (valid until ${expiresAt.toLocaleDateString()}):</p>
-              <div style="text-align: center;">
-                <a href="${inviteLink}" class="button">Accept Invitation</a>
-              </div>
-              <p>Or copy this link:</p>
-              <p style="background: #e5e7eb; padding: 10px; border-radius: 4px; word-break: break-all; font-size: 12px;">
-                ${inviteLink}
-              </p>
-              <p>If you did not request this invite, you can safely ignore this email.</p>
-            </div>
-            <div class="footer">
-              <p>&copy; ${new Date().getFullYear()} zynqCloud. Self-hosted file management platform.</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
+    const htmlContent = buildBaseEmailHtml({
+      title: "You're invited to zynqCloud",
+      intro: `<strong>${inviterName}</strong> invited you to join their workspace.`,
+      buttonLabel: 'Accept Invitation',
+      buttonUrl: inviteLink,
+      footerNote: `This invitation expires on ${expiresAt.toLocaleDateString()}. If you did not request this invite, you can ignore this email.`,
+    });
 
     const textContent = `
 Hi,
@@ -167,44 +194,14 @@ If you did not request this invite, ignore this email.
     const config = await this.getSmtpConfig();
     const transporter = await this.getTransporter();
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
-            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; background: #7c3aed; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>Password Reset</h1>
-            </div>
-            <div class="content">
-              <p>Hi ${userName},</p>
-              <p>We received a request to reset your password. Click the button below to set a new password:</p>
-              <div style="text-align: center;">
-                <a href="${resetLink}" class="button">Reset Password</a>
-              </div>
-              <p>Or copy this link:</p>
-              <p style="background: #e5e7eb; padding: 10px; border-radius: 4px; word-break: break-all; font-size: 12px;">
-                ${resetLink}
-              </p>
-              <p>This link expires in 1 hour.</p>
-              <p>If you did not request a password reset, you can safely ignore this email.</p>
-            </div>
-            <div class="footer">
-              <p>&copy; ${new Date().getFullYear()} zynqCloud. Self-hosted file management platform.</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
+    const htmlContent = buildBaseEmailHtml({
+      title: 'Password Reset',
+      intro: `Hi ${userName}, we received a request to reset your password.`,
+      buttonLabel: 'Reset Password',
+      buttonUrl: resetLink,
+      footerNote:
+        'This link expires in 1 hour. If you did not request a password reset, you can ignore this email.',
+    });
 
     const textContent = `
 Hi ${userName},
@@ -222,6 +219,39 @@ If you did not request a password reset, ignore this email.
       from: config.from,
       to: email,
       subject: 'Reset your zynqCloud password',
+      text: textContent,
+      html: htmlContent,
+    });
+  }
+
+  /** Sends a basic SMTP test email to a receiver address. */
+  async sendTestEmail(receiver: string): Promise<void> {
+    const config = await this.getSmtpConfig();
+    const transporter = await this.getTransporter();
+
+    const htmlContent = buildBaseEmailHtml({
+      title: 'SMTP Test Email',
+      intro: 'This is a test email to confirm your SMTP configuration.',
+      buttonLabel: 'Open zynqCloud',
+      buttonUrl:
+        this.configService.get('FRONTEND_URL') || 'http://localhost:3000',
+      footerNote: 'If you received this, your SMTP settings are working.',
+      extra:
+        '<p class="muted">You can safely ignore this message after confirming delivery.</p>',
+    });
+
+    const textContent = `
+SMTP Test Email
+
+This is a test email to confirm your SMTP configuration.
+
+If you received this, your SMTP settings are working.
+    `;
+
+    await transporter.sendMail({
+      from: config.from,
+      to: receiver,
+      subject: 'SMTP test email from zynqCloud',
       text: textContent,
       html: htmlContent,
     });
