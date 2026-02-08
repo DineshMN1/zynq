@@ -338,8 +338,7 @@ export default function UsersPage() {
     try {
       const quotaBytes = parseQuotaInput(`${quotaValue} ${quotaUnit}`);
       const usedBytes = getUserStorageInfo(selectedUser.id)?.usedBytes || 0;
-      const availableBytes = storageOverview?.system.freeBytes ?? 0;
-      const maxAllowed = usedBytes + availableBytes;
+      const availableBytes = storageOverview?.system.freeBytes;
 
       if (quotaBytes !== 0 && quotaBytes < usedBytes) {
         toast({
@@ -351,7 +350,12 @@ export default function UsersPage() {
         return;
       }
 
-      if (quotaBytes !== 0 && quotaBytes > maxAllowed) {
+      if (
+        quotaBytes !== 0 &&
+        availableBytes != null &&
+        quotaBytes > usedBytes + availableBytes
+      ) {
+        const maxAllowed = usedBytes + availableBytes;
         toast({
           title: 'Quota exceeds available storage',
           description: `Max allowed is ${formatBytes(maxAllowed)} based on free space.`,

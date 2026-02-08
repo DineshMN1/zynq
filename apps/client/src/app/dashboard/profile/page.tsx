@@ -311,11 +311,9 @@ export default function ProfilePage() {
               }`}
             />
             <p className="text-xs text-muted-foreground">
-              {storageOverview
-                ? `${usagePercentage}% of system storage is used by you.`
-                : isUnlimited
-                  ? 'You have unlimited storage.'
-                  : `${usagePercentage}% of your storage is used.`}
+              {isUnlimited
+                ? 'You have unlimited storage.'
+                : `${usagePercentage}% of your storage is used.`}
             </p>
             {storageOverview &&
               (user.role === 'admin' || user.role === 'owner') && (

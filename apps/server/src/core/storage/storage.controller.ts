@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Controller,
   Get,
+  NotFoundException,
   Patch,
   Param,
   Body,
@@ -97,7 +98,7 @@ export class StorageController {
   async getUserStorage(@Param('userId') userId: string) {
     const user = await this.userService.findById(userId);
     if (!user) {
-      return { error: 'User not found' };
+      throw new NotFoundException('User not found');
     }
     const systemStats = await this.storageService.getStorageStats();
     const totalBytes = systemStats.totalBytes;
@@ -134,11 +135,8 @@ export class StorageController {
     @Param('userId') userId: string,
     @Body('storage_quota') storageQuota: number,
   ) {
-    if (
-      storageQuota == null ||
-      Number.isNaN(storageQuota) ||
-      storageQuota < 0
-    ) {
+    const parsedQuota = Number(storageQuota);
+    if (!Number.isFinite(parsedQuota) || parsedQuota < 0) {
       throw new BadRequestException(
         'Storage quota must be a non-negative number',
       );
@@ -146,21 +144,21 @@ export class StorageController {
 
     const user = await this.userService.findById(userId);
     if (!user) {
-      throw new BadRequestException('User not found');
+      throw new NotFoundException('User not found');
     }
 
     const usedBytes = Number(user.storage_used ?? 0);
     const systemStats = await this.storageService.getStorageStats();
 
-    if (storageQuota !== 0) {
-      if (storageQuota < usedBytes) {
+    if (parsedQuota !== 0) {
+      if (parsedQuota < usedBytes) {
         throw new BadRequestException(
           'Storage quota cannot be lower than current usage',
         );
       }
 
       const maxAllowed = usedBytes + systemStats.freeBytes;
-      if (storageQuota > maxAllowed) {
+      if (parsedQuota > maxAllowed) {
         throw new BadRequestException(
           'Storage quota exceeds available system free space',
         );
@@ -169,7 +167,7 @@ export class StorageController {
 
     const updatedUser = await this.userService.updateStorageLimit(
       userId,
-      storageQuota,
+      parsedQuota,
     );
 
     return {
