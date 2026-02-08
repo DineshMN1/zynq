@@ -2,21 +2,25 @@
 
 # zynqCloud
 
-**Self-hosted file storage. Your files, your server, your control.**
+**An open-source & self‑hostable file cloud for teams and individuals.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
-[![NestJS](https://img.shields.io/badge/NestJS-10-E0234E?logo=nestjs)](https://nestjs.com/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://typescriptlang.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://docker.com/)
+Self‑hosted file storage with roles, invites, sharing, and quotas — your files, your server, your control.
 
-[![GitHub stars](https://img.shields.io/github/stars/DineshMN1/zynq?style=social)](https://github.com/DineshMN1/zynq/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/DineshMN1/zynq?style=social)](https://github.com/DineshMN1/zynq/network/members)
-[![GitHub contributors](https://img.shields.io/github/contributors/DineshMN1/zynq)](https://github.com/DineshMN1/zynq/graphs/contributors)
-
-[Quick Start](#quick-start) • [Features](#features) • [Documentation](#documentation) • [Contributing](#contributing)
+[Quick Start](#quick-start) • [About](#about) • [Features](#features) • [Installation](#installation) • [Support](#support) • [Contributing](#contributing)
 
 </div>
+
+---
+
+## About
+
+zynqCloud helps you run a private file cloud on your own infrastructure. You get a clean UI, strong access control, and familiar workflows without vendor lock‑in.
+
+- Manage users, roles, and storage quotas
+- Share files privately or publicly
+- Keep ownership of your data and configuration
+
+If you stop using zynqCloud, your files and database remain fully on your servers.
 
 ---
 
@@ -28,135 +32,70 @@ cd zynq
 docker compose up -d --build
 ```
 
-Open **http://localhost:3000** → Create your admin account → Done!
+Open `http://localhost:3000` → Create your admin account → Done.
 
 ---
 
 ## Features
 
-| Feature             | Description                           |
-| ------------------- | ------------------------------------- |
-| **File Management** | Upload, download, organize in folders |
-| **Sharing**         | Share with users or public links      |
-| **Roles**           | Owner, Admin, User permissions        |
-| **Invites**         | Invite-only registration              |
-| **Trash**           | Soft delete with restore              |
-| **Deduplication**   | SHA-256 hash prevents duplicates      |
-| **Storage Quotas**  | Per-user storage limits               |
-| **SMTP**            | Email for invites & password reset    |
-| **Themes**          | Dark / Light mode                     |
+- Upload, download, and organize files
+- Private and public sharing links
+- Invite-only registration
+- Roles: Owner, Admin, User
+- Per‑user storage quotas
+- Trash with restore
+- SMTP for invites and password reset
+- Light/Dark themes
 
 ---
 
-## Tech Stack
+## Installation
 
-| Layer        | Technologies                                  |
-| ------------ | --------------------------------------------- |
-| **Frontend** | Next.js 15, React 19, Tailwind CSS, shadcn/ui |
-| **Backend**  | NestJS 10, TypeORM, PostgreSQL                |
-| **Storage**  | Local filesystem (encrypted)                  |
-| **Auth**     | JWT + HttpOnly Cookies                        |
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                       zynqCloud                         │
-├─────────────────────────────────────────────────────────┤
-│  ┌─────────────┐              ┌─────────────┐          │
-│  │   Next.js   │   REST API   │   NestJS    │          │
-│  │   :3000     │◄────────────►│   :4000     │          │
-│  └─────────────┘              └──────┬──────┘          │
-│                                      │                  │
-│                    ┌─────────────────┼─────────────┐   │
-│                    ▼                 ▼             ▼   │
-│              ┌──────────┐     ┌──────────┐   ┌──────┐ │
-│              │ Postgres │     │  Files   │   │ SMTP │ │
-│              │  :5432   │     │ (Local)  │   │      │ │
-│              └──────────┘     └──────────┘   └──────┘ │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## Services
-
-| Service | URL                          | Credentials        |
-| ------- | ---------------------------- | ------------------ |
-| App     | http://localhost:3000        | First user = Owner |
-| API     | http://localhost:4000/api/v1 | —                  |
-
----
-
-## Commands
+**Docker (recommended)**
 
 ```bash
-# Production
-docker compose up -d --build  # Start (build & run)
-docker compose down           # Stop
-docker compose logs -f        # Logs
-docker compose down -v        # Reset (deletes data)
+docker compose up -d --build
+```
 
-# Development (hot reload, no rebuild needed)
-pnpm docker:dev               # Start dev environment
-pnpm docker:down              # Stop all containers
+**Development**
+
+```bash
+pnpm install
+pnpm turbo run dev
 ```
 
 ---
 
 ## Configuration
 
-Copy `apps/server/.env.example` and configure:
+Copy `apps/server/.env.example` to `apps/server/.env` and configure:
 
 | Variable     | Description             |
 | ------------ | ----------------------- |
 | `JWT_SECRET` | Auth secret (32+ chars) |
 | `DATABASE_*` | PostgreSQL connection   |
-| `S3_*`       | Storage (S3/MinIO)      |
 | `SMTP_*`     | Email settings          |
-
-See [docs/INSTALLATION.md](docs/INSTALLATION.md) for full setup guide.
 
 ---
 
-## Documentation
+## Support
 
-- [Installation Guide](docs/INSTALLATION.md)
-- [Contributing](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
-- [Security Policy](SECURITY.md)
+If you need help, open an issue or start a discussion in the repository.
 
 ---
 
 ## Contributing
 
-We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
-
-```bash
-# Local development (without Docker)
-pnpm install
-pnpm turbo run dev                    # Start all with hot reload
-
-# Quality checks
-pnpm turbo run lint                   # Lint all packages
-pnpm turbo run test                   # Test all packages
-pnpm turbo run build                  # Build all packages
-```
+Contributions are welcome. Please read `CONTRIBUTING.md` and keep changes focused.
 
 ---
 
 ## License
 
-[MIT](LICENSE) © zynqCloud
-
----
+MIT © zynqCloud
 
 <div align="center">
 
 **Your files. Your cloud. Your control.**
-
-⭐ Star us on GitHub if you find this useful!
 
 </div>
