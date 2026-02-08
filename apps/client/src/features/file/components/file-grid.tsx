@@ -1,13 +1,20 @@
-"use client";
+'use client';
 
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { File as FileIcon, Folder, Upload, Loader2, LayoutGrid, List } from "lucide-react";
-import { type FileMetadata } from "@/lib/api";
-import { FileCard } from "./file-card";
-import { FileListRow } from "./file-list-row";
-import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  File as FileIcon,
+  Folder,
+  Upload,
+  Loader2,
+  LayoutGrid,
+  List,
+} from 'lucide-react';
+import { type FileMetadata } from '@/lib/api';
+import { FileCard } from './file-card';
+import { FileListRow } from './file-list-row';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
 
 interface FileGridProps {
   files: FileMetadata[];
@@ -20,7 +27,7 @@ interface FileGridProps {
   onCardClick?: (id: string, e: React.MouseEvent) => void;
 }
 
-type ViewMode = "grid" | "list";
+type ViewMode = 'grid' | 'list';
 
 export function FileGrid({
   files,
@@ -32,19 +39,19 @@ export function FileGrid({
   onToggleSelect,
   onCardClick,
 }: FileGridProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   // Load view preference from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem("zynq-view-mode") as ViewMode;
-    if (saved === "grid" || saved === "list") {
+    const saved = localStorage.getItem('zynq-view-mode') as ViewMode;
+    if (saved === 'grid' || saved === 'list') {
       setViewMode(saved);
     }
   }, []);
 
   const handleViewChange = (mode: ViewMode) => {
     setViewMode(mode);
-    localStorage.setItem("zynq-view-mode", mode);
+    localStorage.setItem('zynq-view-mode', mode);
   };
 
   if (loading) {
@@ -56,7 +63,9 @@ export function FileGrid({
           </div>
           <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-ping" />
         </div>
-        <p className="text-sm text-muted-foreground font-medium">Loading your files...</p>
+        <p className="text-sm text-muted-foreground font-medium">
+          Loading your files...
+        </p>
       </div>
     );
   }
@@ -79,15 +88,24 @@ export function FileGrid({
               </div>
             </div>
             <div className="space-y-2">
-              <h3 className="font-semibold text-lg text-foreground">No files here yet</h3>
+              <h3 className="font-semibold text-lg text-foreground">
+                No files here yet
+              </h3>
               <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                Start by uploading files or creating a new folder. You can also drag and drop files here.
+                Start by uploading files or creating a new folder. You can also
+                drag and drop files here.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 justify-center text-xs text-muted-foreground">
-              <span className="px-3 py-1.5 rounded-full bg-muted">Drag & drop files</span>
-              <span className="px-3 py-1.5 rounded-full bg-muted">Upload button above</span>
-              <span className="px-3 py-1.5 rounded-full bg-muted">Ctrl+V to paste</span>
+              <span className="px-3 py-1.5 rounded-full bg-muted">
+                Drag & drop files
+              </span>
+              <span className="px-3 py-1.5 rounded-full bg-muted">
+                Upload button above
+              </span>
+              <span className="px-3 py-1.5 rounded-full bg-muted">
+                Ctrl+V to paste
+              </span>
             </div>
           </div>
         </Card>
@@ -104,19 +122,19 @@ export function FileGrid({
       {/* View Toggle - Nextcloud style */}
       <div className="flex items-center justify-end gap-1">
         <Button
-          variant={viewMode === "grid" ? "secondary" : "ghost"}
+          variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => handleViewChange("grid")}
+          onClick={() => handleViewChange('grid')}
           title="Grid view"
         >
           <LayoutGrid className="h-4 w-4" />
         </Button>
         <Button
-          variant={viewMode === "list" ? "secondary" : "ghost"}
+          variant={viewMode === 'list' ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => handleViewChange("list")}
+          onClick={() => handleViewChange('list')}
           title="List view"
         >
           <List className="h-4 w-4" />
@@ -124,7 +142,7 @@ export function FileGrid({
       </div>
 
       <AnimatePresence mode="wait">
-        {viewMode === "grid" ? (
+        {viewMode === 'grid' ? (
           <motion.div
             key="grid"
             initial={{ opacity: 0 }}
@@ -200,12 +218,18 @@ export function FileGrid({
             {/* List View - Nextcloud style */}
             <Card className="overflow-hidden">
               {/* Table Header */}
-              <div className="flex items-center gap-4 px-4 py-3 border-b bg-muted/30 text-sm font-medium text-muted-foreground">
-                <div className="w-8" /> {/* Checkbox space */}
+              <div className="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2.5 border-b bg-muted/30 text-sm font-medium text-muted-foreground">
+                <div className="w-8 shrink-0" /> {/* Checkbox column */}
                 <div className="flex-1 min-w-0">Name</div>
-                <div className="hidden sm:block w-24 text-right">Size</div>
-                <div className="hidden md:block w-32 text-right">Modified</div>
-                <div className="w-10" /> {/* Actions */}
+                <div className="hidden sm:block w-20 shrink-0" />{' '}
+                {/* Shared column */}
+                <div className="hidden sm:block w-24 shrink-0 text-right">
+                  Size
+                </div>
+                <div className="hidden md:block w-32 shrink-0 text-right">
+                  Modified
+                </div>
+                <div className="w-16 shrink-0" /> {/* Actions column */}
               </div>
 
               {/* Table Body */}

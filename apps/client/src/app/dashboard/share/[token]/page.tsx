@@ -69,7 +69,9 @@ export default function PublicSharePage() {
 
         <div className="flex flex-col items-center space-y-2">
           <File className="h-10 w-10 text-muted-foreground" />
-          <p className="text-lg font-medium">{file?.name}</p>
+          <p className="text-lg font-medium break-all max-w-full">
+            {file?.name}
+          </p>
           <p className="text-sm text-muted-foreground">
             {formatBytes(file?.size || 0)}
           </p>

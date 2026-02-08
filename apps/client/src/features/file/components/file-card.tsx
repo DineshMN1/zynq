@@ -1,28 +1,27 @@
-"use client";
+'use client';
 
-import { motion } from "framer-motion";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { motion } from 'framer-motion';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
+import { MoreVertical, Download, Trash2, Link as LinkIcon } from 'lucide-react';
+import { type FileMetadata, fileApi } from '@/lib/api';
+import { formatBytes } from '@/lib/auth';
 import {
-  MoreVertical,
-  Download,
-  Trash2,
-  Link as LinkIcon,
-} from "lucide-react";
-import { type FileMetadata, fileApi } from "@/lib/api";
-import { formatBytes } from "@/lib/auth";
-import { getFileIcon, getIconColor, getIconBgColor } from "@/features/file/utils/file-icons";
-import { toast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+  getFileIcon,
+  getIconColor,
+  getIconBgColor,
+} from '@/features/file/utils/file-icons';
+import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface FileCardProps {
   file: FileMetadata;
@@ -49,19 +48,19 @@ export function FileCard({
     try {
       const { blob, fileName } = await fileApi.download(file.id);
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = blobUrl;
-      a.download = fileName || file.name || "download";
+      a.download = fileName || file.name || 'download';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      console.error("Download failed:", err);
+      console.error('Download failed:', err);
       toast({
-        title: "Error downloading",
-        description: "Unable to download file.",
-        variant: "destructive",
+        title: 'Error downloading',
+        description: 'Unable to download file.',
+        variant: 'destructive',
       });
     }
   };
@@ -89,43 +88,44 @@ export function FileCard({
     >
       <Card
         className={cn(
-          "group relative p-4 transition-all duration-200 cursor-pointer",
-          "hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5",
-          "active:translate-y-0 active:shadow-sm",
-          isSelected && "border-primary bg-primary/5 shadow-md ring-1 ring-primary/20"
+          'group relative p-4 transition-all duration-200 cursor-pointer',
+          'hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5',
+          'active:translate-y-0 active:shadow-sm',
+          isSelected &&
+            'border-primary bg-primary/5 shadow-md ring-1 ring-primary/20',
         )}
         onClick={handleCardClick}
       >
-        {/* Selection checkbox overlay */}
-        {hasSelect && (
-          <div
-            className={cn(
-              "absolute top-3 left-3 z-10 transition-opacity duration-200",
-              isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSelect(file.id);
-            }}
-          >
-            <div className="bg-background/80 backdrop-blur-sm rounded-md p-0.5">
-              <Checkbox
-                checked={isSelected}
-                className="h-5 w-5 border-2"
-                tabIndex={-1}
-              />
-            </div>
-          </div>
-        )}
-
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className={cn(
-              "h-12 w-12 rounded-xl flex items-center justify-center transition-transform duration-200",
-              "group-hover:scale-105",
-              iconBgColor
-            )}>
-              <IconComponent className={cn("h-6 w-6", iconColor)} />
+            {hasSelect && (
+              <div
+                className={cn(
+                  'shrink-0 transition-opacity duration-200',
+                  isSelected
+                    ? 'opacity-100'
+                    : 'opacity-0 group-hover:opacity-100',
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect(file.id);
+                }}
+              >
+                <Checkbox
+                  checked={isSelected}
+                  className="h-5 w-5 border-2 border-muted-foreground/50 data-[state=checked]:border-primary"
+                  tabIndex={-1}
+                />
+              </div>
+            )}
+            <div
+              className={cn(
+                'h-12 w-12 rounded-xl flex items-center justify-center transition-transform duration-200',
+                'group-hover:scale-105',
+                iconBgColor,
+              )}
+            >
+              <IconComponent className={cn('h-6 w-6', iconColor)} />
             </div>
           </div>
           <DropdownMenu>
@@ -133,10 +133,7 @@ export function FileCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className={cn(
-                  "h-8 w-8 transition-opacity duration-200",
-                  "opacity-0 group-hover:opacity-100 focus:opacity-100"
-                )}
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />
@@ -153,7 +150,10 @@ export function FileCard({
                 </>
               )}
 
-              <DropdownMenuItem onClick={() => onShare(file.id)} className="gap-2">
+              <DropdownMenuItem
+                onClick={() => onShare(file.id)}
+                className="gap-2"
+              >
                 <LinkIcon className="h-4 w-4" />
                 Get Public Link
               </DropdownMenuItem>
@@ -178,16 +178,16 @@ export function FileCard({
           >
             {file.name}
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="text-xs text-muted-foreground">
-              {formatBytes(Number(file.size || 0))}
+              {file.is_folder ? 'Folder' : formatBytes(Number(file.size || 0))}
             </p>
-            {file.is_folder && (
+            {(file.shareCount ?? 0) > 0 && (
               <Badge
                 variant="secondary"
-                className="text-[10px] px-1.5 py-0 h-5 font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-0"
+                className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0"
               >
-                Folder
+                Shared
               </Badge>
             )}
           </div>

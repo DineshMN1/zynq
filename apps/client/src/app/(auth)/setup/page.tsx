@@ -1,15 +1,43 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { authApi } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
-import { toast } from "@/hooks/use-toast";
-import { ToastContainer } from "@/components/toast-container";
-import { Loader2, CheckCircle2, Eye, EyeOff, HardDrive, Shield } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { authApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { toast } from '@/hooks/use-toast';
+import { ToastContainer } from '@/components/toast-container';
+import {
+  Loader2,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  HardDrive,
+  Shield,
+} from 'lucide-react';
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) {
+    const errorText = err.message;
+    const jsonMatch = errorText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const errorData = JSON.parse(jsonMatch[0]) as { message?: string };
+        if (typeof errorData.message === 'string') {
+          return errorData.message;
+        }
+      } catch {
+        return errorText || fallback;
+      }
+    }
+    return errorText || fallback;
+  }
+
+  if (typeof err === 'string') return err;
+  return fallback;
+}
 
 export default function SetupPage() {
   const router = useRouter();
@@ -18,10 +46,10 @@ export default function SetupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
   });
 
   const [passwordStrength, setPasswordStrength] = useState({
@@ -32,9 +60,18 @@ export default function SetupPage() {
   useEffect(() => {
     setPasswordStrength({
       length: formData.password.length >= 8,
-      match: formData.password.length > 0 && formData.password === formData.confirmPassword,
+      match:
+        formData.password.length > 0 &&
+        formData.password === formData.confirmPassword,
     });
   }, [formData.password, formData.confirmPassword]);
+
+  // If setup is not needed, redirect to login
+  useEffect(() => {
+    if (needsSetup === false) {
+      router.replace('/login');
+    }
+  }, [needsSetup, router]);
 
   // If auth is still loading, show spinner
   if (authLoading) {
@@ -45,9 +82,7 @@ export default function SetupPage() {
     );
   }
 
-  // If setup is not needed, redirect to login
   if (needsSetup === false) {
-    router.replace('/login');
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -60,9 +95,9 @@ export default function SetupPage() {
 
     if (formData.name.length < 2) {
       toast({
-        title: "Name too short",
-        description: "Please enter your full name (at least 2 characters).",
-        variant: "destructive",
+        title: 'Name too short',
+        description: 'Please enter your full name (at least 2 characters).',
+        variant: 'destructive',
       });
       return;
     }
@@ -70,17 +105,17 @@ export default function SetupPage() {
     if (formData.password !== formData.confirmPassword) {
       toast({
         title: "Passwords don't match",
-        description: "Please ensure both passwords are the same.",
-        variant: "destructive",
+        description: 'Please ensure both passwords are the same.',
+        variant: 'destructive',
       });
       return;
     }
 
     if (formData.password.length < 8) {
       toast({
-        title: "Password too short",
-        description: "Password must be at least 8 characters long.",
-        variant: "destructive",
+        title: 'Password too short',
+        description: 'Password must be at least 8 characters long.',
+        variant: 'destructive',
       });
       return;
     }
@@ -97,34 +132,22 @@ export default function SetupPage() {
       login(user);
 
       toast({
-        title: "Welcome to ZynqCloud!",
-        description: "Your administrator account has been created.",
+        title: 'Welcome to ZynqCloud!',
+        description: 'Your administrator account has been created.',
       });
 
-      setTimeout(() => {
-        router.push("/dashboard/files");
-      }, 500);
-    } catch (err: any) {
-      console.error("Registration failed:", err);
-
-      let errorMessage = "Failed to create admin account.";
-      if (err?.message) {
-        try {
-          const errorText = err.message;
-          const jsonMatch = errorText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const errorData = JSON.parse(jsonMatch[0]);
-            errorMessage = errorData.message || errorMessage;
-          }
-        } catch {
-          errorMessage = err.message;
-        }
-      }
+      await router.push('/dashboard/files');
+    } catch (err: unknown) {
+      console.error('Registration failed:', err);
+      const errorMessage = getErrorMessage(
+        err,
+        'Failed to create admin account.',
+      );
 
       toast({
-        title: "Setup failed",
+        title: 'Setup failed',
         description: errorMessage,
-        variant: "destructive",
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -145,12 +168,13 @@ export default function SetupPage() {
 
           <div className="space-y-6">
             <h1 className="text-4xl font-bold leading-tight">
-              Welcome to your<br />
+              Welcome to your
+              <br />
               self-hosted cloud
             </h1>
             <p className="text-lg text-muted-foreground max-w-md">
-              Set up your administrator account to get started.
-              You&apos;ll have full control over users, storage, and security.
+              Set up your administrator account to get started. You&apos;ll have
+              full control over users, storage, and security.
             </p>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Shield className="h-4 w-4" />
@@ -175,7 +199,9 @@ export default function SetupPage() {
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-2xl font-semibold tracking-tight">Initial Setup</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                Initial Setup
+              </h2>
               <p className="text-muted-foreground">
                 Create your administrator account
               </p>
@@ -189,7 +215,9 @@ export default function SetupPage() {
                   type="text"
                   placeholder="John Doe"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   required
                   disabled={loading}
                   minLength={2}
@@ -204,7 +232,9 @@ export default function SetupPage() {
                   type="email"
                   placeholder="admin@example.com"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
                   required
                   disabled={loading}
                   className="h-10"
@@ -216,10 +246,12 @@ export default function SetupPage() {
                 <div className="relative">
                   <Input
                     id="password"
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
                     required
                     disabled={loading}
                     minLength={8}
@@ -231,11 +263,17 @@ export default function SetupPage() {
                     className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
                     disabled={loading}
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
                 {formData.password.length > 0 && (
-                  <div className={`flex items-center gap-2 text-xs ${passwordStrength.length ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                  <div
+                    className={`flex items-center gap-2 text-xs ${passwordStrength.length ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
+                  >
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     <span>At least 8 characters</span>
                   </div>
@@ -247,10 +285,15 @@ export default function SetupPage() {
                 <div className="relative">
                   <Input
                     id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
+                    type={showConfirmPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        confirmPassword: e.target.value,
+                      })
+                    }
                     required
                     disabled={loading}
                     minLength={8}
@@ -262,28 +305,43 @@ export default function SetupPage() {
                     className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
                     disabled={loading}
                   >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
                 {formData.confirmPassword.length > 0 && (
-                  <div className={`flex items-center gap-2 text-xs ${passwordStrength.match ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                  <div
+                    className={`flex items-center gap-2 text-xs ${passwordStrength.match ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}
+                  >
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>{passwordStrength.match ? 'Passwords match' : 'Passwords do not match'}</span>
+                    <span>
+                      {passwordStrength.match
+                        ? 'Passwords match'
+                        : 'Passwords do not match'}
+                    </span>
                   </div>
                 )}
               </div>
 
               <div className="p-3 rounded-md bg-muted/50 border border-border">
                 <p className="text-xs text-muted-foreground">
-                  <strong className="text-foreground">Administrator Account:</strong> This account will have full access to all
-                  features including user management and system configuration.
+                  <strong className="text-foreground">
+                    Administrator Account:
+                  </strong>{' '}
+                  This account will have full access to all features including
+                  user management and system configuration.
                 </p>
               </div>
 
               <Button
                 type="submit"
                 className="w-full h-10"
-                disabled={loading || !passwordStrength.length || !passwordStrength.match}
+                disabled={
+                  loading || !passwordStrength.length || !passwordStrength.match
+                }
               >
                 {loading ? (
                   <>
@@ -291,7 +349,7 @@ export default function SetupPage() {
                     Creating Account...
                   </>
                 ) : (
-                  "Create Administrator Account"
+                  'Create Administrator Account'
                 )}
               </Button>
             </form>

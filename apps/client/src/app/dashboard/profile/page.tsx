@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -9,7 +15,17 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, User, Mail, Shield, Calendar, Eye, EyeOff, CheckCircle2, HardDrive } from 'lucide-react';
+import {
+  Loader2,
+  User,
+  Mail,
+  Shield,
+  Calendar,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  HardDrive,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { authApi } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
@@ -31,6 +47,14 @@ function formatDate(dateString: string): string {
     month: 'long',
     day: 'numeric',
   });
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) {
+    return err.message || fallback;
+  }
+  if (typeof err === 'string') return err;
+  return fallback;
 }
 
 export default function ProfilePage() {
@@ -66,7 +90,9 @@ export default function ProfilePage() {
   useEffect(() => {
     setPasswordStrength({
       length: passwordForm.newPassword.length >= 8,
-      match: passwordForm.newPassword.length > 0 && passwordForm.newPassword === passwordForm.confirmPassword,
+      match:
+        passwordForm.newPassword.length > 0 &&
+        passwordForm.newPassword === passwordForm.confirmPassword,
     });
   }, [passwordForm.newPassword, passwordForm.confirmPassword]);
 
@@ -148,11 +174,14 @@ export default function ProfilePage() {
         title: 'Password changed',
         description: 'Your password has been updated successfully.',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to change password:', error);
       toast({
         title: 'Password change failed',
-        description: error?.message || 'Unable to change password. Please check your current password.',
+        description: getErrorMessage(
+          error,
+          'Unable to change password. Please check your current password.',
+        ),
         variant: 'destructive',
       });
     } finally {
@@ -171,14 +200,18 @@ export default function ProfilePage() {
   const storageUsed = user.storage_used || 0;
   const storageLimit = user.storage_limit || 0;
   const isUnlimited = storageLimit === 0;
-  const usagePercentage = isUnlimited ? 0 : Math.min(Math.round((storageUsed / storageLimit) * 100), 100);
+  const usagePercentage = isUnlimited
+    ? 0
+    : Math.min(Math.round((storageUsed / storageLimit) * 100), 100);
 
   return (
     <>
       <div className="p-6 max-w-3xl mx-auto space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Profile</h1>
-          <p className="text-muted-foreground mt-1">Manage your account settings</p>
+          <p className="text-muted-foreground mt-1">
+            Manage your account settings
+          </p>
         </div>
 
         {/* Profile Overview Card */}
@@ -193,7 +226,15 @@ export default function ProfilePage() {
               <div className="space-y-1">
                 <h2 className="text-xl font-semibold">{user.name}</h2>
                 <div className="flex items-center gap-2">
-                  <Badge variant={user.role === 'owner' ? 'default' : user.role === 'admin' ? 'secondary' : 'outline'}>
+                  <Badge
+                    variant={
+                      user.role === 'owner'
+                        ? 'default'
+                        : user.role === 'admin'
+                          ? 'secondary'
+                          : 'outline'
+                    }
+                  >
                     {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                   </Badge>
                 </div>
@@ -235,15 +276,19 @@ export default function ProfilePage() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between text-sm">
               <span>{formatBytes(storageUsed)} used</span>
-              <span>{isUnlimited ? 'Unlimited' : formatBytes(storageLimit)}</span>
+              <span>
+                {isUnlimited ? 'Unlimited' : formatBytes(storageLimit)}
+              </span>
             </div>
             {!isUnlimited && (
               <Progress
                 value={usagePercentage}
                 className={`h-2 ${
-                  usagePercentage >= 90 ? '[&>div]:bg-red-500' :
-                  usagePercentage >= 75 ? '[&>div]:bg-amber-500' :
-                  '[&>div]:bg-primary'
+                  usagePercentage >= 90
+                    ? '[&>div]:bg-red-500'
+                    : usagePercentage >= 75
+                      ? '[&>div]:bg-amber-500'
+                      : '[&>div]:bg-primary'
                 }`}
               />
             )}
@@ -304,7 +349,9 @@ export default function ProfilePage() {
               <Shield className="h-5 w-5" />
               Change Password
             </CardTitle>
-            <CardDescription>Update your password to keep your account secure</CardDescription>
+            <CardDescription>
+              Update your password to keep your account secure
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleChangePassword} className="space-y-4">
@@ -315,7 +362,12 @@ export default function ProfilePage() {
                     id="currentPassword"
                     type={showCurrentPassword ? 'text' : 'password'}
                     value={passwordForm.currentPassword}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                    onChange={(e) =>
+                      setPasswordForm({
+                        ...passwordForm,
+                        currentPassword: e.target.value,
+                      })
+                    }
                     placeholder="Enter current password"
                     disabled={passwordLoading}
                     className="pr-10"
@@ -326,7 +378,11 @@ export default function ProfilePage() {
                     className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
                     disabled={passwordLoading}
                   >
-                    {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showCurrentPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -340,7 +396,12 @@ export default function ProfilePage() {
                     id="newPassword"
                     type={showNewPassword ? 'text' : 'password'}
                     value={passwordForm.newPassword}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                    onChange={(e) =>
+                      setPasswordForm({
+                        ...passwordForm,
+                        newPassword: e.target.value,
+                      })
+                    }
                     placeholder="Enter new password"
                     disabled={passwordLoading}
                     className="pr-10"
@@ -351,11 +412,17 @@ export default function ProfilePage() {
                     className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
                     disabled={passwordLoading}
                   >
-                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
                 {passwordForm.newPassword.length > 0 && (
-                  <div className={`flex items-center gap-2 text-xs ${passwordStrength.length ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                  <div
+                    className={`flex items-center gap-2 text-xs ${passwordStrength.length ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
+                  >
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     <span>At least 8 characters</span>
                   </div>
@@ -369,7 +436,12 @@ export default function ProfilePage() {
                     id="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={passwordForm.confirmPassword}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                    onChange={(e) =>
+                      setPasswordForm({
+                        ...passwordForm,
+                        confirmPassword: e.target.value,
+                      })
+                    }
                     placeholder="Confirm new password"
                     disabled={passwordLoading}
                     className="pr-10"
@@ -380,22 +452,38 @@ export default function ProfilePage() {
                     className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
                     disabled={passwordLoading}
                   >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
                 {passwordForm.confirmPassword.length > 0 && (
-                  <div className={`flex items-center gap-2 text-xs ${passwordStrength.match ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                  <div
+                    className={`flex items-center gap-2 text-xs ${passwordStrength.match ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}
+                  >
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>{passwordStrength.match ? 'Passwords match' : 'Passwords do not match'}</span>
+                    <span>
+                      {passwordStrength.match
+                        ? 'Passwords match'
+                        : 'Passwords do not match'}
+                    </span>
                   </div>
                 )}
               </div>
 
               <Button
                 type="submit"
-                disabled={passwordLoading || !passwordStrength.length || !passwordStrength.match}
+                disabled={
+                  passwordLoading ||
+                  !passwordStrength.length ||
+                  !passwordStrength.match
+                }
               >
-                {passwordLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {passwordLoading && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 Change Password
               </Button>
             </form>

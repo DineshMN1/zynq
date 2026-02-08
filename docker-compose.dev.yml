@@ -1,11 +1,12 @@
+# DO NOT USE THESE DEFAULT SECRETS IN PRODUCTION — override via .env file or environment variables
 services:
   postgres:
     image: postgres:16-alpine
     container_name: zynqcloud-postgres-dev
     environment:
-      POSTGRES_USER: zynqcloud
-      POSTGRES_PASSWORD: supersecret_db_pass
-      POSTGRES_DB: zynqcloud
+      POSTGRES_USER: ${POSTGRES_USER:-zynqcloud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supersecret_db_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-zynqcloud}
     ports:
       - '5432:5432'
     volumes:
@@ -23,20 +24,20 @@ services:
   backend:
     image: node:20-alpine
     container_name: zynqcloud-backend-dev
-    working_dir: /app
-    command: sh -c "corepack enable && pnpm install && pnpm run start:dev"
+    working_dir: /workspace/apps/server
+    command: sh -c "corepack enable && pnpm config set store-dir /workspace/.pnpm-store && pnpm install --filter @zynqcloud/server... && pnpm run start:dev"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       NODE_ENV: development
       PORT: 4000
-      DATABASE_URL: postgresql://zynqcloud:supersecret_db_pass@postgres:5432/zynqcloud
+      DATABASE_URL: postgresql://${POSTGRES_USER:-zynqcloud}:${POSTGRES_PASSWORD:-supersecret_db_pass}@postgres:5432/${POSTGRES_DB:-zynqcloud}
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
-      DATABASE_USER: zynqcloud
-      DATABASE_PASSWORD: supersecret_db_pass
-      DATABASE_NAME: zynqcloud
+      DATABASE_USER: ${POSTGRES_USER:-zynqcloud}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-supersecret_db_pass}
+      DATABASE_NAME: ${POSTGRES_DB:-zynqcloud}
       JWT_SECRET: ${JWT_SECRET:-zynqcloud_dev_secret_change_in_production_32chars}
       FILE_STORAGE_PATH: /data/files
       FILE_ENCRYPTION_MASTER_KEY: ${FILE_ENCRYPTION_MASTER_KEY:-YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=}
@@ -46,8 +47,9 @@ services:
     ports:
       - '4000:4000'
     volumes:
-      - ./apps/server:/app
-      - backend_node_modules:/app/node_modules
+      - .:/workspace
+      - backend_node_modules:/workspace/apps/server/node_modules
+      - pnpm_store:/workspace/.pnpm-store
       - zynq_dev_files:/data/files
     networks:
       - zynqcloud-dev
@@ -55,8 +57,8 @@ services:
   frontend:
     image: node:20-alpine
     container_name: zynqcloud-frontend-dev
-    working_dir: /app
-    command: sh -c "corepack enable && pnpm install && pnpm run dev"
+    working_dir: /workspace/apps/client
+    command: sh -c "corepack enable && pnpm config set store-dir /workspace/.pnpm-store && pnpm install --filter @zynqcloud/client... && pnpm run dev"
     depends_on:
       - backend
     environment:
@@ -64,8 +66,9 @@ services:
     ports:
       - '3000:3000'
     volumes:
-      - ./apps/client:/app
-      - frontend_node_modules:/app/node_modules
+      - .:/workspace
+      - frontend_node_modules:/workspace/apps/client/node_modules
+      - pnpm_store:/workspace/.pnpm-store
     networks:
       - zynqcloud-dev
 
@@ -75,6 +78,8 @@ volumes:
   backend_node_modules:
     driver: local
   frontend_node_modules:
+    driver: local
+  pnpm_store:
     driver: local
   zynq_dev_files:
     driver: local
