@@ -13,13 +13,13 @@ const API_BASE_URL =
 export class ApiError extends Error {
   statusCode: number;
   errorCode?: string;
-  details?: any;
+  details?: unknown;
 
   constructor(
     message: string,
     statusCode: number,
     errorCode?: string,
-    details?: any,
+    details?: unknown,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -116,6 +116,31 @@ export interface UserStorageInfo {
   isUnlimited: boolean;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getStringField(value: unknown, key: string): string | undefined {
+  if (isRecord(value) && typeof value[key] === 'string') {
+    return value[key] as string;
+  }
+  return undefined;
+}
+
+function getErrorMessage(value: unknown, fallback: string): string {
+  return getStringField(value, 'message') ?? fallback;
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  const num =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value)
+        : fallback;
+  return Number.isFinite(num) ? num : fallback;
+}
+
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('token');
@@ -139,18 +164,18 @@ async function fetchApi<T>(
 
   if (!response.ok) {
     const text = await response.text();
-    let errorData: any = {};
+    let errorData: unknown = {};
 
     try {
-      errorData = JSON.parse(text);
+      errorData = JSON.parse(text) as unknown;
     } catch {
       errorData = { message: text };
     }
 
     throw new ApiError(
-      errorData.message || 'An error occurred',
+      getErrorMessage(errorData, 'An error occurred'),
       response.status,
-      errorData.errorCode,
+      getStringField(errorData, 'errorCode'),
       errorData,
     );
   }
@@ -274,16 +299,16 @@ export const fileApi = {
 
     if (!response.ok) {
       const text = await response.text();
-      let errorData: any = {};
+      let errorData: unknown = {};
       try {
-        errorData = JSON.parse(text);
+        errorData = JSON.parse(text) as unknown;
       } catch {
         errorData = { message: text };
       }
       throw new ApiError(
-        errorData.message || 'Upload failed',
+        getErrorMessage(errorData, 'Upload failed'),
         response.status,
-        errorData.errorCode,
+        getStringField(errorData, 'errorCode'),
         errorData,
       );
     }
@@ -505,8 +530,8 @@ export const storageApi = {
 
 /** Public API: anonymous access to shared files */
 export const publicApi = {
-  getShare: (token: string) =>
-    fetchApi<{
+  getShare: async (token: string) => {
+    const data = await fetchApi<{
       id: string;
       name: string;
       size: number;
@@ -516,7 +541,12 @@ export const publicApi = {
       createdAt: string;
       isFolder: boolean;
       hasContent: boolean;
-    }>(`/public/share/${token}`),
+    }>(`/public/share/${token}`);
+    return {
+      ...data,
+      size: toNumber(data.size, 0),
+    };
+  },
 
   downloadShare: async (token: string) => {
     const response = await fetch(

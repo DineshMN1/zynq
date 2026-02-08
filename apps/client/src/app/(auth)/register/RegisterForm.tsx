@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Card,
   CardContent,
@@ -13,28 +13,49 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Cloud, Loader2, CheckCircle2 } from "lucide-react";
-import { Eye, EyeOff } from "lucide-react";
-import { authApi } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
-import { motion } from "framer-motion";
+} from '@/components/ui/card';
+import { Cloud, Loader2, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
+import { authApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { motion } from 'framer-motion';
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) {
+    const errorText = err.message;
+    const jsonMatch = errorText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const errorData = JSON.parse(jsonMatch[0]) as { message?: string };
+        if (typeof errorData.message === 'string') {
+          return errorData.message;
+        }
+      } catch {
+        return errorText || fallback;
+      }
+    }
+    return errorText || fallback;
+  }
+
+  if (typeof err === 'string') return err;
+  return fallback;
+}
 
 export default function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
   });
 
   // Password strength indicator
@@ -44,7 +65,7 @@ export default function RegisterForm() {
   });
 
   useEffect(() => {
-    const token = searchParams.get("invite") || searchParams.get("inviteToken");
+    const token = searchParams.get('invite') || searchParams.get('inviteToken');
     if (token) {
       setInviteToken(token);
     }
@@ -54,24 +75,26 @@ export default function RegisterForm() {
     // Update password strength
     setPasswordStrength({
       length: formData.password.length >= 8,
-      match: formData.password.length > 0 && formData.password === formData.confirmPassword,
+      match:
+        formData.password.length > 0 &&
+        formData.password === formData.confirmPassword,
     });
   }, [formData.password, formData.confirmPassword]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
+    setError('');
 
     // Validation
     if (formData.password.length < 8) {
-      setError("Password must be at least 8 characters long");
+      setError('Password must be at least 8 characters long');
       setLoading(false);
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
+      setError('Passwords do not match');
       setLoading(false);
       return;
     }
@@ -84,23 +107,9 @@ export default function RegisterForm() {
         inviteToken: inviteToken || undefined,
       });
       login(user);
-      router.push("/dashboard");
-    } catch (err: any) {
-      // Parse error message
-      let errorMessage = "Registration failed";
-      if (err?.message) {
-        try {
-          const errorText = err.message;
-          const jsonMatch = errorText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const errorData = JSON.parse(jsonMatch[0]);
-            errorMessage = errorData.message || errorMessage;
-          }
-        } catch {
-          errorMessage = err.message;
-        }
-      }
-      setError(errorMessage);
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }
@@ -126,8 +135,8 @@ export default function RegisterForm() {
             <CardTitle className="text-2xl">Create your account</CardTitle>
             <CardDescription>
               {inviteToken
-                ? "Complete your registration with the invite"
-                : "Get started with zynqCloud"}
+                ? 'Complete your registration with the invite'
+                : 'Get started with zynqCloud'}
             </CardDescription>
           </CardHeader>
 
@@ -175,7 +184,7 @@ export default function RegisterForm() {
                 <div className="relative">
                   <Input
                     id="password"
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={(e) =>
                       setFormData({ ...formData, password: e.target.value })
@@ -202,8 +211,12 @@ export default function RegisterForm() {
                 {/* Password strength indicator */}
                 {formData.password.length > 0 && (
                   <div className="space-y-1 mt-2">
-                    <div className={`flex items-center gap-2 text-xs ${passwordStrength.length ? 'text-green-600' : 'text-gray-500'}`}>
-                      <CheckCircle2 className={`h-3 w-3 ${passwordStrength.length ? 'text-green-600' : 'text-gray-400'}`} />
+                    <div
+                      className={`flex items-center gap-2 text-xs ${passwordStrength.length ? 'text-green-600' : 'text-gray-500'}`}
+                    >
+                      <CheckCircle2
+                        className={`h-3 w-3 ${passwordStrength.length ? 'text-green-600' : 'text-gray-400'}`}
+                      />
                       <span>At least 8 characters</span>
                     </div>
                   </div>
@@ -215,7 +228,7 @@ export default function RegisterForm() {
                 <div className="relative">
                   <Input
                     id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
+                    type={showConfirmPassword ? 'text' : 'password'}
                     value={formData.confirmPassword}
                     onChange={(e) =>
                       setFormData({
@@ -244,9 +257,17 @@ export default function RegisterForm() {
 
                 {/* Password match indicator */}
                 {formData.confirmPassword.length > 0 && (
-                  <div className={`flex items-center gap-2 text-xs mt-2 ${passwordStrength.match ? 'text-green-600' : 'text-red-600'}`}>
-                    <CheckCircle2 className={`h-3 w-3 ${passwordStrength.match ? 'text-green-600' : 'text-red-400'}`} />
-                    <span>{passwordStrength.match ? 'Passwords match' : 'Passwords do not match'}</span>
+                  <div
+                    className={`flex items-center gap-2 text-xs mt-2 ${passwordStrength.match ? 'text-green-600' : 'text-red-600'}`}
+                  >
+                    <CheckCircle2
+                      className={`h-3 w-3 ${passwordStrength.match ? 'text-green-600' : 'text-red-400'}`}
+                    />
+                    <span>
+                      {passwordStrength.match
+                        ? 'Passwords match'
+                        : 'Passwords do not match'}
+                    </span>
                   </div>
                 )}
               </div>
@@ -256,13 +277,15 @@ export default function RegisterForm() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={loading || !passwordStrength.length || !passwordStrength.match}
+                disabled={
+                  loading || !passwordStrength.length || !passwordStrength.match
+                }
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create Account
               </Button>
               <p className="text-sm text-center text-muted-foreground">
-                Already have an account?{" "}
+                Already have an account?{' '}
                 <Link href="/login" className="text-primary hover:underline">
                   Sign in
                 </Link>

@@ -18,6 +18,27 @@ import {
   Shield,
 } from 'lucide-react';
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) {
+    const errorText = err.message;
+    const jsonMatch = errorText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const errorData = JSON.parse(jsonMatch[0]) as { message?: string };
+        if (typeof errorData.message === 'string') {
+          return errorData.message;
+        }
+      } catch {
+        return errorText || fallback;
+      }
+    }
+    return errorText || fallback;
+  }
+
+  if (typeof err === 'string') return err;
+  return fallback;
+}
+
 export default function SetupPage() {
   const router = useRouter();
   const { login, loading: authLoading, needsSetup } = useAuth();
@@ -45,6 +66,13 @@ export default function SetupPage() {
     });
   }, [formData.password, formData.confirmPassword]);
 
+  // If setup is not needed, redirect to login
+  useEffect(() => {
+    if (needsSetup === false) {
+      router.replace('/login');
+    }
+  }, [needsSetup, router]);
+
   // If auth is still loading, show spinner
   if (authLoading) {
     return (
@@ -53,13 +81,6 @@ export default function SetupPage() {
       </div>
     );
   }
-
-  // If setup is not needed, redirect to login
-  useEffect(() => {
-    if (needsSetup === false) {
-      router.replace('/login');
-    }
-  }, [needsSetup, router]);
 
   if (needsSetup === false) {
     return (
@@ -118,22 +139,12 @@ export default function SetupPage() {
       setTimeout(() => {
         router.push('/dashboard/files');
       }, 500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Registration failed:', err);
-
-      let errorMessage = 'Failed to create admin account.';
-      if (err?.message) {
-        try {
-          const errorText = err.message;
-          const jsonMatch = errorText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const errorData = JSON.parse(jsonMatch[0]);
-            errorMessage = errorData.message || errorMessage;
-          }
-        } catch {
-          errorMessage = err.message;
-        }
-      }
+      const errorMessage = getErrorMessage(
+        err,
+        'Failed to create admin account.',
+      );
 
       toast({
         title: 'Setup failed',
