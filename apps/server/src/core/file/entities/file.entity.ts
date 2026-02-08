@@ -52,4 +52,7 @@ export class File extends BaseEntity {
 
   @OneToMany(() => Share, (share) => share.file)
   shares: Share[];
+
+  // Computed via loadRelationCountAndMap in queries.
+  shareCount?: number;
 }

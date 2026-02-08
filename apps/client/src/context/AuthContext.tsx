@@ -1,6 +1,13 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { authApi, type User } from '@/lib/api';
 
@@ -57,7 +64,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const initializeAuth = async () => {
       try {
-        const setupResponse = await authApi.checkSetupStatus();
+        const setupResponse = await authApi.getSetupStatus();
         if (canceled) return;
         setNeedsSetup(setupResponse.needsSetup);
 
@@ -114,7 +121,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, needsSetup, login, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, token, loading, needsSetup, login, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

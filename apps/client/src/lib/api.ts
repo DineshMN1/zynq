@@ -219,9 +219,6 @@ export const authApi = {
 
   me: () => fetchApi<User>('/auth/me'),
 
-  checkSetupStatus: () =>
-    fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
-
   forgotPassword: (data: { email: string }) =>
     fetchApi<{ message: string }>('/auth/forgot-password', {
       method: 'POST',

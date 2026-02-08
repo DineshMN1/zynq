@@ -145,7 +145,10 @@ export default function UsersPage() {
       return `${window.location.origin}/register?inviteToken=${invite.token}`;
     if (invite.id)
       return `${window.location.origin}/register?inviteId=${invite.id}`;
-    return window.location.origin;
+    const identifier = invite.email || invite.id || invite.token || 'unknown';
+    throw new Error(
+      `Invite link unavailable: invite id/token/link required (invite: ${identifier}).`,
+    );
   };
 
   const handleCreateInvite = async () => {
@@ -181,7 +184,6 @@ export default function UsersPage() {
         setInviteSuccess('Invite created.');
       }
       setInviteForm({ email: '', role: 'user' });
-      setInviteDialogOpen(false);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to create invite.';
@@ -192,8 +194,8 @@ export default function UsersPage() {
   };
 
   const handleCopyInviteLink = async (invite: Invitation) => {
-    const link = buildInviteLink(invite);
     try {
+      const link = buildInviteLink(invite);
       if (
         navigator.clipboard &&
         typeof navigator.clipboard.writeText === 'function'
@@ -248,7 +250,10 @@ export default function UsersPage() {
   useEffect(() => {
     loadData();
     loadInvites();
-    const interval = setInterval(loadData, 30000);
+    const interval = setInterval(() => {
+      loadData();
+      loadInvites();
+    }, 30000);
     return () => clearInterval(interval);
   }, [loadData, loadInvites]);
 
@@ -553,7 +558,7 @@ export default function UsersPage() {
         <CardHeader className="border-b border-border">
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
-            Pending Invites
+            Invitations
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">

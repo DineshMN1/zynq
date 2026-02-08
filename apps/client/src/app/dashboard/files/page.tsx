@@ -921,6 +921,7 @@ export default function FilesPage() {
       });
       if (res.publicLink) {
         setPublicLink(res.publicLink);
+        loadFiles();
       } else {
         toast({
           title: 'Share failed',

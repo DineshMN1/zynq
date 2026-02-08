@@ -136,9 +136,7 @@ export default function SetupPage() {
         description: 'Your administrator account has been created.',
       });
 
-      setTimeout(() => {
-        router.push('/dashboard/files');
-      }, 500);
+      await router.push('/dashboard/files');
     } catch (err: unknown) {
       console.error('Registration failed:', err);
       const errorMessage = getErrorMessage(
