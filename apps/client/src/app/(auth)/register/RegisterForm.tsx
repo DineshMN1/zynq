@@ -88,8 +88,9 @@ export default function RegisterForm() {
           getErrorMessage(err, 'Invalid or expired invitation'),
         );
       } finally {
-        if (!isActive) return;
-        setInviteLoading(false);
+        if (isActive) {
+          setInviteLoading(false);
+        }
       }
     };
 

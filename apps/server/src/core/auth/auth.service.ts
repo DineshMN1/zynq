@@ -70,8 +70,12 @@ export class AuthService {
 
     let role: UserRole = UserRole.USER;
 
+    let invitation: Awaited<
+      ReturnType<InvitationService['validateToken']>
+    > | null = null;
+
     if (registerDto.inviteToken) {
-      const invitation = await this.invitationService.validateToken(
+      invitation = await this.invitationService.validateToken(
         registerDto.inviteToken,
       );
       if (!invitation) {
@@ -84,15 +88,20 @@ export class AuthService {
         );
       }
       role = (invitation.role as UserRole) ?? UserRole.USER;
-      await this.invitationService.markAsAccepted(invitation.id);
     }
 
-    return this.userService.create({
+    const createdUser = await this.userService.create({
       name: registerDto.name,
       email: normalizedEmail,
       password: registerDto.password,
       role,
     });
+
+    if (invitation) {
+      await this.invitationService.markAsAccepted(invitation.id);
+    }
+
+    return createdUser;
   }
 
   /**

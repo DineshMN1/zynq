@@ -185,7 +185,7 @@ export class EmailService {
 
     const htmlContent = buildBaseEmailHtml({
       title: "You're invited to zynqCloud",
-      intro: `<strong>${inviterName}</strong> invited you to join their workspace.`,
+      intro: `${inviterName} invited you to join their workspace.`,
       buttonLabel: 'Accept Invitation',
       buttonUrl: inviteLink,
       footerNote: `This invitation expires on ${expiresAt.toLocaleDateString()}. If you did not request this invite, you can ignore this email.`,

@@ -395,7 +395,9 @@ export default function NotificationsPage() {
               <div className="flex flex-wrap gap-3">
                 <Button
                   onClick={handleSendTestEmail}
-                  disabled={testingEmail || !formData.smtp_host}
+                  disabled={
+                    testingEmail || testingConnection || !formData.smtp_host
+                  }
                   className="bg-emerald-600 text-white hover:bg-emerald-700"
                 >
                   {testingEmail && (
@@ -405,7 +407,9 @@ export default function NotificationsPage() {
                 </Button>
                 <Button
                   onClick={handleTestConnection}
-                  disabled={testingConnection || !formData.smtp_host}
+                  disabled={
+                    testingEmail || testingConnection || !formData.smtp_host
+                  }
                   className="bg-blue-600 text-white hover:bg-blue-700"
                 >
                   {testingConnection && (
