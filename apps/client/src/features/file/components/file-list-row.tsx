@@ -1,26 +1,28 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   MoreVertical,
   Download,
   Trash2,
   Link as LinkIcon,
-} from "lucide-react";
-import { type FileMetadata, fileApi } from "@/lib/api";
-import { formatBytes } from "@/lib/auth";
-import { getFileIcon, getIconColor } from "@/features/file/utils/file-icons";
-import { toast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
+  UserPlus,
+} from 'lucide-react';
+import { type FileMetadata, fileApi } from '@/lib/api';
+import { formatBytes } from '@/lib/auth';
+import { getFileIcon, getIconColor } from '@/features/file/utils/file-icons';
+import { toast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
 interface FileListRowProps {
   file: FileMetadata;
@@ -64,19 +66,19 @@ export function FileListRow({
     try {
       const { blob, fileName } = await fileApi.download(file.id);
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = blobUrl;
-      a.download = fileName || file.name || "download";
+      a.download = fileName || file.name || 'download';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      console.error("Download failed:", err);
+      console.error('Download failed:', err);
       toast({
-        title: "Error downloading",
-        description: "Unable to download file.",
-        variant: "destructive",
+        title: 'Error downloading',
+        description: 'Unable to download file.',
+        variant: 'destructive',
       });
     }
   };
@@ -101,16 +103,16 @@ export function FileListRow({
       animate={{ opacity: 1 }}
       transition={{ duration: 0.15, delay: index * 0.02 }}
       className={cn(
-        "group flex items-center gap-4 px-4 py-3 cursor-pointer transition-colors",
-        "hover:bg-muted/50",
-        isSelected && "bg-primary/5"
+        'group flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2.5 cursor-pointer transition-colors',
+        'hover:bg-muted/50',
+        isSelected && 'bg-primary/5 hover:bg-primary/10',
       )}
       onClick={handleRowClick}
     >
-      {/* Checkbox */}
+      {/* Checkbox — always visible in list view */}
       {hasSelect && (
         <div
-          className="w-8 flex items-center justify-center"
+          className="w-8 shrink-0 flex items-center justify-center"
           onClick={(e) => {
             e.stopPropagation();
             onToggleSelect(file.id);
@@ -118,39 +120,63 @@ export function FileListRow({
         >
           <Checkbox
             checked={isSelected}
-            className="h-4 w-4"
+            className="h-4.5 w-4.5 border-muted-foreground/50 data-[state=checked]:border-primary"
             tabIndex={-1}
           />
         </div>
       )}
-      {!hasSelect && <div className="w-8" />}
+      {!hasSelect && <div className="w-8 shrink-0" />}
 
       {/* Name with icon */}
       <div className="flex-1 min-w-0 flex items-center gap-3">
-        <IconComponent className={cn("h-5 w-5 shrink-0", iconColor)} />
+        <IconComponent className={cn('h-5 w-5 shrink-0', iconColor)} />
         <span className="truncate text-sm font-medium" title={file.name}>
           {file.name}
         </span>
       </div>
 
+      {/* Shared */}
+      <div className="hidden sm:block w-20 shrink-0 text-center">
+        {(file.shareCount ?? 0) > 0 && (
+          <Badge
+            variant="secondary"
+            className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0"
+          >
+            Shared
+          </Badge>
+        )}
+      </div>
+
       {/* Size */}
-      <div className="hidden sm:block w-24 text-right text-sm text-muted-foreground">
-        {file.is_folder ? "—" : formatBytes(Number(file.size || 0))}
+      <div className="hidden sm:block w-24 shrink-0 text-right text-sm text-muted-foreground">
+        {file.is_folder ? '—' : formatBytes(Number(file.size || 0))}
       </div>
 
       {/* Modified */}
-      <div className="hidden md:block w-32 text-right text-sm text-muted-foreground">
-        {file.updated_at ? formatDate(file.updated_at) : "—"}
+      <div className="hidden md:block w-32 shrink-0 text-right text-sm text-muted-foreground">
+        {file.updated_at ? formatDate(file.updated_at) : '—'}
       </div>
 
-      {/* Actions */}
-      <div className="w-10">
+      {/* Actions — always visible like Nextcloud */}
+      <div className="w-16 shrink-0 flex items-center justify-end gap-0.5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          onClick={(e) => {
+            e.stopPropagation();
+            onShare(file.id);
+          }}
+          title="Share"
+        >
+          <UserPlus className="h-4 w-4" />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 opacity-0 group-hover:opacity-100 hover:opacity-100 focus:opacity-100"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
               onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="h-4 w-4" />
@@ -167,7 +193,10 @@ export function FileListRow({
               </>
             )}
 
-            <DropdownMenuItem onClick={() => onShare(file.id)} className="gap-2">
+            <DropdownMenuItem
+              onClick={() => onShare(file.id)}
+              className="gap-2"
+            >
               <LinkIcon className="h-4 w-4" />
               Get Public Link
             </DropdownMenuItem>

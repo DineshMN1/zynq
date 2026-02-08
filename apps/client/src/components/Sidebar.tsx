@@ -17,7 +17,6 @@ import {
   PanelLeft,
   HardDrive,
   Activity,
-  UserPlus,
 } from 'lucide-react';
 import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -82,7 +81,7 @@ export function Sidebar({ user }: SidebarProps) {
   // Home section links
   const homeLinks = [
     { href: '/dashboard/files', label: 'All Files', icon: Files },
-    { href: '/dashboard/shared', label: 'Shared with me', icon: Share2 },
+    { href: '/dashboard/shared', label: 'Shared', icon: Share2 },
     { href: '/dashboard/trash', label: 'Trash', icon: Trash2 },
   ];
 
@@ -95,18 +94,34 @@ export function Sidebar({ user }: SidebarProps) {
   const adminLinks = isAdmin
     ? [
         { href: '/dashboard/settings/users', label: 'Users', icon: Users },
-        { href: '/dashboard/settings/invites', label: 'Invitations', icon: UserPlus },
-        { href: '/dashboard/settings/notifications', label: 'Notifications', icon: Bell },
-        { href: '/dashboard/settings/monitoring', label: 'Monitoring', icon: Activity },
+        {
+          href: '/dashboard/settings/notifications',
+          label: 'Notifications',
+          icon: Bell,
+        },
+        {
+          href: '/dashboard/settings/monitoring',
+          label: 'Monitoring',
+          icon: Activity,
+        },
       ]
     : [];
 
   const usedPercentage = storageInfo?.user.usedPercentage || 0;
   const isUnlimited = storageInfo?.user.isUnlimited;
 
-  const isActiveLink = (href: string) => pathname === href || pathname.startsWith(href + '/');
+  const isActiveLink = (href: string) =>
+    pathname === href || pathname.startsWith(href + '/');
 
-  const NavLink = ({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) => {
+  const NavLink = ({
+    href,
+    label,
+    icon: Icon,
+  }: {
+    href: string;
+    label: string;
+    icon: React.ElementType;
+  }) => {
     const isActive = isActiveLink(href);
     const link = (
       <Link
@@ -116,7 +131,7 @@ export function Sidebar({ user }: SidebarProps) {
           isActive
             ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
             : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50',
-          collapsed && 'justify-center px-2'
+          collapsed && 'justify-center px-2',
         )}
       >
         <Icon className="h-4 w-4 shrink-0" />
@@ -129,7 +144,9 @@ export function Sidebar({ user }: SidebarProps) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+        <TooltipContent side="right" sideOffset={8}>
+          {label}
+        </TooltipContent>
       </Tooltip>
     );
   };
@@ -150,17 +167,24 @@ export function Sidebar({ user }: SidebarProps) {
     <aside
       className={cn(
         'flex flex-col h-full bg-sidebar border-r border-sidebar-border transition-all duration-200',
-        collapsed ? 'w-[60px]' : 'w-[240px]'
+        collapsed ? 'w-[60px]' : 'w-[240px]',
       )}
     >
       {/* Logo Header */}
-      <div className={cn('h-14 flex items-center border-b border-sidebar-border px-3', collapsed && 'justify-center')}>
+      <div
+        className={cn(
+          'h-14 flex items-center border-b border-sidebar-border px-3',
+          collapsed && 'justify-center',
+        )}
+      >
         {!collapsed ? (
           <Link href="/dashboard/files" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
               <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
             </div>
-            <span className="font-semibold text-sidebar-foreground">ZynqCloud</span>
+            <span className="font-semibold text-sidebar-foreground">
+              ZynqCloud
+            </span>
           </Link>
         ) : (
           <Link href="/dashboard/files">
@@ -201,14 +225,21 @@ export function Sidebar({ user }: SidebarProps) {
       </nav>
 
       {/* Storage Indicator */}
-      <div className={cn('px-3 py-3 border-t border-sidebar-border', collapsed && 'px-2')}>
+      <div
+        className={cn(
+          'px-3 py-3 border-t border-sidebar-border',
+          collapsed && 'px-2',
+        )}
+      >
         {!collapsed ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="text-sidebar-foreground/60">Storage</span>
               {!loadingStorage && storageInfo && (
                 <span className="text-sidebar-foreground/80">
-                  {isUnlimited ? 'Unlimited' : `${formatBytes(storageInfo.user.usedBytes)} / ${formatBytes(storageInfo.user.quotaBytes)}`}
+                  {isUnlimited
+                    ? 'Unlimited'
+                    : `${formatBytes(storageInfo.user.usedBytes)} / ${formatBytes(storageInfo.user.quotaBytes)}`}
                 </span>
               )}
             </div>
@@ -220,8 +251,10 @@ export function Sidebar({ user }: SidebarProps) {
                 className={cn(
                   'h-1.5 bg-sidebar-accent',
                   usedPercentage >= 90 && '[&>div]:bg-red-500',
-                  usedPercentage >= 75 && usedPercentage < 90 && '[&>div]:bg-amber-500',
-                  usedPercentage < 75 && '[&>div]:bg-sidebar-primary'
+                  usedPercentage >= 75 &&
+                    usedPercentage < 90 &&
+                    '[&>div]:bg-amber-500',
+                  usedPercentage < 75 && '[&>div]:bg-sidebar-primary',
                 )}
               />
             ) : (
@@ -229,7 +262,8 @@ export function Sidebar({ user }: SidebarProps) {
             )}
             {!loadingStorage && storageInfo && isUnlimited && (
               <p className="text-[10px] text-sidebar-foreground/40">
-                {formatBytes(storageInfo.system.freeBytes)} free of {formatBytes(storageInfo.system.totalBytes)}
+                {formatBytes(storageInfo.system.freeBytes)} free of{' '}
+                {formatBytes(storageInfo.system.totalBytes)}
               </p>
             )}
           </div>
@@ -241,8 +275,10 @@ export function Sidebar({ user }: SidebarProps) {
                   className={cn(
                     'h-2 w-2 rounded-full',
                     usedPercentage >= 90 && 'bg-red-500',
-                    usedPercentage >= 75 && usedPercentage < 90 && 'bg-amber-500',
-                    usedPercentage < 75 && 'bg-sidebar-primary'
+                    usedPercentage >= 75 &&
+                      usedPercentage < 90 &&
+                      'bg-amber-500',
+                    usedPercentage < 75 && 'bg-sidebar-primary',
                   )}
                 />
               </div>
@@ -259,15 +295,22 @@ export function Sidebar({ user }: SidebarProps) {
       </div>
 
       {/* User Profile & Controls */}
-      <div className={cn('px-2 py-2 border-t border-sidebar-border', collapsed && 'px-1')}>
+      <div
+        className={cn(
+          'px-2 py-2 border-t border-sidebar-border',
+          collapsed && 'px-1',
+        )}
+      >
         {user ? (
-          <div className={cn('flex items-center gap-2', collapsed && 'flex-col')}>
+          <div
+            className={cn('flex items-center gap-2', collapsed && 'flex-col')}
+          >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   className={cn(
                     'flex items-center gap-2 p-2 rounded-md hover:bg-sidebar-accent transition-colors text-left flex-1 min-w-0',
-                    collapsed && 'justify-center w-full'
+                    collapsed && 'justify-center w-full',
                   )}
                 >
                   <Avatar className="h-8 w-8 shrink-0">
@@ -277,8 +320,12 @@ export function Sidebar({ user }: SidebarProps) {
                   </Avatar>
                   {!collapsed && (
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
-                      <p className="text-xs text-sidebar-foreground/60 truncate">{user.email}</p>
+                      <p className="text-sm font-medium text-sidebar-foreground truncate">
+                        {user.name}
+                      </p>
+                      <p className="text-xs text-sidebar-foreground/60 truncate">
+                        {user.email}
+                      </p>
                     </div>
                   )}
                 </button>
@@ -306,7 +353,10 @@ export function Sidebar({ user }: SidebarProps) {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={toggleTheme} className="cursor-pointer">
+                <DropdownMenuItem
+                  onClick={toggleTheme}
+                  className="cursor-pointer"
+                >
                   {theme === 'dark' ? (
                     <>
                       <Sun className="mr-2 h-4 w-4" />
@@ -337,7 +387,7 @@ export function Sidebar({ user }: SidebarProps) {
               onClick={() => setCollapsed(!collapsed)}
               className={cn(
                 'h-8 w-8 shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent',
-                collapsed && 'mt-1'
+                collapsed && 'mt-1',
               )}
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >

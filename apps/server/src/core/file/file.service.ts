@@ -210,12 +210,14 @@ export class FileService {
       query.andWhere('file.parent_id IS NULL');
     }
 
-    const [items, total] = await query
+    query
+      .loadRelationCountAndMap('file.shareCount', 'file.shares')
       .skip((page - 1) * limit)
       .take(limit)
       .orderBy('file.is_folder', 'DESC')
-      .addOrderBy('file.created_at', 'DESC')
-      .getManyAndCount();
+      .addOrderBy('file.created_at', 'DESC');
+
+    const [items, total] = await query.getManyAndCount();
 
     return { items, total };
   }

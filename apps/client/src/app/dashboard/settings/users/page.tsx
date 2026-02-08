@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import Link from 'next/link';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -27,6 +27,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -50,8 +51,19 @@ import {
   Loader2,
   UserPlus,
   RefreshCw,
+  Mail,
+  Copy,
+  Check,
+  XCircle,
 } from 'lucide-react';
-import { adminApi, storageApi, type User, type UserStorageInfo } from '@/lib/api';
+import {
+  adminApi,
+  storageApi,
+  inviteApi,
+  type User,
+  type UserStorageInfo,
+  type Invitation,
+} from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 function formatBytes(bytes: number): string {
@@ -96,6 +108,127 @@ export default function UsersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
+  // Invite state
+  const [invites, setInvites] = useState<Invitation[]>([]);
+  const [loadingInvites, setLoadingInvites] = useState(true);
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'user' });
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [revokeInviteDialogOpen, setRevokeInviteDialogOpen] = useState(false);
+  const [selectedInviteId, setSelectedInviteId] = useState<string | null>(null);
+
+  const isValidEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const formatDate = (iso?: string) =>
+    iso ? new Date(iso).toLocaleDateString() : '-';
+
+  const loadInvites = useCallback(async () => {
+    try {
+      setLoadingInvites(true);
+      const data = await inviteApi.list();
+      setInvites(data);
+    } catch (error) {
+      console.error('Failed to load invites:', error);
+    } finally {
+      setLoadingInvites(false);
+    }
+  }, []);
+
+  const buildInviteLink = (invite: Invitation & { link?: string }) => {
+    if (invite.link) return invite.link;
+    if (invite.token)
+      return `${window.location.origin}/register?inviteToken=${invite.token}`;
+    if (invite.id)
+      return `${window.location.origin}/register?inviteId=${invite.id}`;
+    return window.location.origin;
+  };
+
+  const handleCreateInvite = async () => {
+    setInviteError(null);
+    setInviteSuccess(null);
+    if (!inviteForm.email || !isValidEmail(inviteForm.email)) {
+      setInviteError('Please enter a valid email address.');
+      return;
+    }
+    setCreatingInvite(true);
+    try {
+      const invite = await inviteApi.create({
+        email: inviteForm.email,
+        role: inviteForm.role,
+      });
+      await loadInvites();
+      const link = buildInviteLink(invite);
+      try {
+        if (
+          navigator.clipboard &&
+          typeof navigator.clipboard.writeText === 'function'
+        ) {
+          await navigator.clipboard.writeText(link);
+          setCopiedInviteId(invite.id);
+          setTimeout(() => setCopiedInviteId(null), 3000);
+          setInviteSuccess('Invite created and link copied to clipboard.');
+        } else {
+          window.prompt('Copy invite link', link);
+          setInviteSuccess('Invite created.');
+        }
+      } catch {
+        window.prompt('Copy invite link', link);
+        setInviteSuccess('Invite created.');
+      }
+      setInviteForm({ email: '', role: 'user' });
+      setInviteDialogOpen(false);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to create invite.';
+      setInviteError(message);
+    } finally {
+      setCreatingInvite(false);
+    }
+  };
+
+  const handleCopyInviteLink = async (invite: Invitation) => {
+    const link = buildInviteLink(invite);
+    try {
+      if (
+        navigator.clipboard &&
+        typeof navigator.clipboard.writeText === 'function'
+      ) {
+        await navigator.clipboard.writeText(link);
+        setCopiedInviteId(invite.id);
+        setTimeout(() => setCopiedInviteId(null), 3000);
+      } else {
+        window.prompt('Copy invite link', link);
+      }
+    } catch {
+      window.prompt('Copy invite link', link);
+    }
+  };
+
+  const handleRevokeInvite = (id: string) => {
+    setSelectedInviteId(id);
+    setRevokeInviteDialogOpen(true);
+  };
+
+  const confirmRevokeInvite = async () => {
+    if (!selectedInviteId) return;
+    try {
+      setRevokingInviteId(selectedInviteId);
+      await inviteApi.revoke(selectedInviteId);
+      await loadInvites();
+    } catch (err) {
+      console.error('Failed to revoke invite:', err);
+    } finally {
+      setRevokingInviteId(null);
+      setRevokeInviteDialogOpen(false);
+      setSelectedInviteId(null);
+    }
+  };
+
   const loadData = useCallback(async () => {
     try {
       const [usersRes, usersStorageRes] = await Promise.all([
@@ -114,9 +247,10 @@ export default function UsersPage() {
 
   useEffect(() => {
     loadData();
+    loadInvites();
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
-  }, [loadData]);
+  }, [loadData, loadInvites]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -146,7 +280,7 @@ export default function UsersPage() {
     setSelectedUser(user);
     const storageInfo = usersStorage.find((s) => s.userId === user.id);
     if (storageInfo) {
-      const quotaGB = storageInfo.quotaBytes / (1024 ** 3);
+      const quotaGB = storageInfo.quotaBytes / 1024 ** 3;
       if (quotaGB >= 1024) {
         setQuotaValue((quotaGB / 1024).toFixed(2));
         setQuotaUnit('TB');
@@ -154,7 +288,7 @@ export default function UsersPage() {
         setQuotaValue(quotaGB.toFixed(2));
         setQuotaUnit('GB');
       } else {
-        setQuotaValue((storageInfo.quotaBytes / (1024 ** 2)).toFixed(2));
+        setQuotaValue((storageInfo.quotaBytes / 1024 ** 2).toFixed(2));
         setQuotaUnit('MB');
       }
     } else {
@@ -216,7 +350,9 @@ export default function UsersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Users</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Users
+          </h1>
           <p className="text-muted-foreground mt-1">
             Manage users and permissions
           </p>
@@ -228,14 +364,87 @@ export default function UsersPage() {
             onClick={handleRefresh}
             disabled={refreshing}
           >
-            <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+            <RefreshCw
+              className={cn('h-4 w-4', refreshing && 'animate-spin')}
+            />
           </Button>
-          <Button asChild>
-            <Link href="/dashboard/settings/invites">
-              <UserPlus className="mr-2 h-4 w-4" />
-              Invite User
-            </Link>
-          </Button>
+          <Dialog
+            open={inviteDialogOpen}
+            onOpenChange={(open) => {
+              setInviteDialogOpen(open);
+              if (!open) {
+                setInviteError(null);
+                setInviteSuccess(null);
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Invite User
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Invitation</DialogTitle>
+                <DialogDescription>
+                  Send an invitation link to a new user
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                {inviteError && (
+                  <div className="p-2 rounded bg-destructive/10 text-destructive text-sm">
+                    {inviteError}
+                  </div>
+                )}
+                {inviteSuccess && (
+                  <div className="p-2 rounded bg-primary/10 text-primary text-sm">
+                    {inviteSuccess}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="invite-email">Email</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    placeholder="user@example.com"
+                    value={inviteForm.email}
+                    onChange={(e) =>
+                      setInviteForm({ ...inviteForm, email: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="invite-role">Role</Label>
+                  <Select
+                    value={inviteForm.role}
+                    onValueChange={(value) =>
+                      setInviteForm({ ...inviteForm, role: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={handleCreateInvite}
+                  disabled={creatingInvite || !isValidEmail(inviteForm.email)}
+                >
+                  {creatingInvite && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Create & Copy Link
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -249,10 +458,18 @@ export default function UsersPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-muted-foreground font-medium">Name</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Email</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Role</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Joined</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">
+                    Name
+                  </TableHead>
+                  <TableHead className="text-muted-foreground font-medium">
+                    Email
+                  </TableHead>
+                  <TableHead className="text-muted-foreground font-medium">
+                    Role
+                  </TableHead>
+                  <TableHead className="text-muted-foreground font-medium">
+                    Joined
+                  </TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -264,14 +481,20 @@ export default function UsersPage() {
                       className="border-border hover:bg-secondary/50 transition-colors"
                     >
                       <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {user.email}
+                      </TableCell>
                       <TableCell>
                         <Badge
-                          variant={user.role === 'owner' ? 'default' : 'secondary'}
+                          variant={
+                            user.role === 'owner' ? 'default' : 'secondary'
+                          }
                           className={cn(
                             'capitalize',
-                            user.role === 'owner' && 'bg-primary/20 text-primary border-0',
-                            user.role === 'admin' && 'bg-amber-500/20 text-amber-500 border-0'
+                            user.role === 'owner' &&
+                              'bg-primary/20 text-primary border-0',
+                            user.role === 'admin' &&
+                              'bg-amber-500/20 text-amber-500 border-0',
                           )}
                         >
                           {user.role}
@@ -285,7 +508,11 @@ export default function UsersPage() {
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                            >
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -321,6 +548,121 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
+      {/* Pending Invites Section */}
+      <Card className="bg-card/50 border-border shadow-lg overflow-hidden">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-4 w-4" />
+            Pending Invites
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loadingInvites ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : invites.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              No pending invites. Click &quot;Invite User&quot; to send one.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="text-muted-foreground font-medium">
+                      Email
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-medium">
+                      Role
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-medium">
+                      Status
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-medium">
+                      Created
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-medium">
+                      Expires
+                    </TableHead>
+                    <TableHead className="w-[100px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invites.map((invite) => (
+                    <TableRow
+                      key={invite.id}
+                      className="border-border hover:bg-secondary/50 transition-colors"
+                    >
+                      <TableCell className="font-medium">
+                        {invite.email}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="capitalize">
+                          {invite.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            invite.status === 'pending'
+                              ? 'default'
+                              : invite.status === 'accepted'
+                                ? 'secondary'
+                                : 'destructive'
+                          }
+                          className="capitalize"
+                        >
+                          {invite.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(invite.created_at)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(invite.expires_at)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleCopyInviteLink(invite)}
+                            disabled={invite.status !== 'pending'}
+                          >
+                            {copiedInviteId === invite.id ? (
+                              <Check className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                          {invite.status === 'pending' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => handleRevokeInvite(invite.id)}
+                              disabled={revokingInviteId === invite.id}
+                            >
+                              {revokingInviteId === invite.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <XCircle className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Quota Editor Dialog */}
       <Dialog open={quotaDialogOpen} onOpenChange={setQuotaDialogOpen}>
         <DialogContent>
@@ -336,7 +678,9 @@ export default function UsersPage() {
                 <p className="text-sm text-muted-foreground">
                   Current usage:{' '}
                   <span className="font-medium text-foreground">
-                    {formatBytes(getUserStorageInfo(selectedUser.id)?.usedBytes || 0)}
+                    {formatBytes(
+                      getUserStorageInfo(selectedUser.id)?.usedBytes || 0,
+                    )}
                   </span>
                 </p>
               </div>
@@ -351,7 +695,10 @@ export default function UsersPage() {
                 min="0"
                 step="0.01"
               />
-              <Select value={quotaUnit} onValueChange={(v) => setQuotaUnit(v as typeof quotaUnit)}>
+              <Select
+                value={quotaUnit}
+                onValueChange={(v) => setQuotaUnit(v as typeof quotaUnit)}
+              >
                 <SelectTrigger className="w-24">
                   <SelectValue />
                 </SelectTrigger>
@@ -451,7 +798,8 @@ export default function UsersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete User?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the user account and all associated data. This action cannot be undone.
+              This will permanently delete the user account and all associated
+              data. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -463,6 +811,31 @@ export default function UsersPage() {
               onClick={confirmDeleteUser}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Revoke Invite Confirmation */}
+      <AlertDialog
+        open={revokeInviteDialogOpen}
+        onOpenChange={setRevokeInviteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke invite?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to revoke this invite? The invitation link
+              will no longer work.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRevokeInvite}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Revoke
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

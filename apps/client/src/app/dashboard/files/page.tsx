@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Card } from "@/components/ui/card";
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Card } from '@/components/ui/card';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,13 +15,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   Upload,
   Search,
@@ -30,84 +30,101 @@ import {
   Trash2,
   File as FileIcon,
   Folder,
-  Link as LinkIcon,
   HardDrive,
-} from "lucide-react";
-import { fileApi, type FileMetadata, ApiError } from "@/lib/api";
-import { toast } from "@/hooks/use-toast";
-import { ToastContainer } from "@/components/toast-container";
-import { FileGrid } from "@/features/file/components/file-grid";
-import { FileBreadcrumb } from "@/features/file/components/file-breadcrumb";
-import { CreateFolderDialog } from "@/features/file/components/create-folder-dialog";
-import { PublicLinkDialog } from "@/features/share/components/public-link-dialog";
-import { DuplicateWarningDialog, type DuplicateItem } from "@/features/file/components/duplicate-warning-dialog";
-import { FolderUploadDialog } from "@/features/file/components/folder-upload-dialog";
-import { DropZoneOverlay } from "@/features/file/components/drop-zone-overlay";
-import { uploadManager } from "@/lib/upload-manager";
-import { formatBytes } from "@/lib/auth";
-import { motion, AnimatePresence } from "framer-motion";
+  X,
+} from 'lucide-react';
+import { fileApi, type FileMetadata, ApiError } from '@/lib/api';
+import { toast } from '@/hooks/use-toast';
+import { ToastContainer } from '@/components/toast-container';
+import { FileGrid } from '@/features/file/components/file-grid';
+import { FileBreadcrumb } from '@/features/file/components/file-breadcrumb';
+import { CreateFolderDialog } from '@/features/file/components/create-folder-dialog';
+import { PublicLinkDialog } from '@/features/share/components/public-link-dialog';
+import {
+  DuplicateWarningDialog,
+  type DuplicateItem,
+} from '@/features/file/components/duplicate-warning-dialog';
+import { FolderUploadDialog } from '@/features/file/components/folder-upload-dialog';
+import { DropZoneOverlay } from '@/features/file/components/drop-zone-overlay';
+import { uploadManager } from '@/lib/upload-manager';
+import { formatBytes } from '@/lib/auth';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface UploadProgress {
   id: string;
   fileName: string;
   progress: number;
-  status: "queued" | "uploading" | "completed" | "error" | "checking" | "duplicate";
+  status:
+    | 'queued'
+    | 'uploading'
+    | 'completed'
+    | 'error'
+    | 'checking'
+    | 'duplicate';
 }
 
 let uploadIdCounter = 0;
 
 const KNOWN_MIME_PREFIXES = [
-  "image/",
-  "video/",
-  "audio/",
-  "text/",
-  "application/",
-  "font/",
-  "model/",
-  "chemical/",
-  "x-conference/",
-  "message/",
-  "multipart/",
-  "inode/",
+  'image/',
+  'video/',
+  'audio/',
+  'text/',
+  'application/',
+  'font/',
+  'model/',
+  'chemical/',
+  'x-conference/',
+  'message/',
+  'multipart/',
+  'inode/',
 ];
 
 function getSafeMimeType(file: File): string {
   const type = file.type;
-  if (!type) return "application/octet-stream";
-  if (KNOWN_MIME_PREFIXES.some((prefix) => type.startsWith(prefix))) return type;
-  return "application/octet-stream";
+  if (!type) return 'application/octet-stream';
+  if (KNOWN_MIME_PREFIXES.some((prefix) => type.startsWith(prefix)))
+    return type;
+  return 'application/octet-stream';
 }
 
 export default function FilesPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [total, setTotal] = useState(0);
   const [pathStack, setPathStack] = useState<
     { id: string | null; name: string }[]
-    >([{ id: null, name: "Home" }]);
+  >([{ id: null, name: 'Home' }]);
 
-    // Restore path from history state or URL on client mount
-    useEffect(() => {
+  // Restore path from history state or URL on client mount
+  useEffect(() => {
     if (window.history.state?.pathStack) {
       setPathStack(window.history.state.pathStack);
     } else {
-      const folderParam = new URLSearchParams(window.location.search).get("folder");
+      const folderParam = new URLSearchParams(window.location.search).get(
+        'folder',
+      );
       if (folderParam) {
-        setPathStack([{ id: null, name: "Home" }, { id: folderParam, name: "..." }]);
+        setPathStack([
+          { id: null, name: 'Home' },
+          { id: folderParam, name: '...' },
+        ]);
       }
     }
-    }, []);
+  }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
-  const [folderName, setFolderName] = useState("");
+  const [folderName, setFolderName] = useState('');
   const [publicLink, setPublicLink] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<UploadProgress[]>([]);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
-  const [pendingDuplicates, setPendingDuplicates] = useState<DuplicateItem[]>([]);
+  const [pendingDuplicates, setPendingDuplicates] = useState<DuplicateItem[]>(
+    [],
+  );
 
   // Folder upload confirmation state
   const [showFolderUploadDialog, setShowFolderUploadDialog] = useState(false);
@@ -125,9 +142,15 @@ export default function FilesPage() {
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<{
     open: boolean;
-    type: "single" | "bulk";
+    type: 'single' | 'bulk';
     id?: string;
-  }>({ open: false, type: "single" });
+  }>({ open: false, type: 'single' });
+
+  // Share confirmation state
+  const [shareConfirm, setShareConfirm] = useState<{
+    open: boolean;
+    file: FileMetadata | null;
+  }>({ open: false, file: null });
 
   // Drag & drop state
   const [isDragActive, setIsDragActive] = useState(false);
@@ -144,10 +167,10 @@ export default function FilesPage() {
     }
     const url = currentFolderId
       ? `/dashboard/files?folder=${currentFolderId}`
-      : "/dashboard/files";
+      : '/dashboard/files';
     // Only push if URL actually changed
     if (window.location.pathname + window.location.search !== url) {
-      window.history.pushState({ pathStack }, "", url);
+      window.history.pushState({ pathStack }, '', url);
     }
   }, [currentFolderId, pathStack]);
 
@@ -155,8 +178,8 @@ export default function FilesPage() {
   useEffect(() => {
     const url = currentFolderId
       ? `/dashboard/files?folder=${currentFolderId}`
-      : "/dashboard/files";
-    window.history.replaceState({ pathStack }, "", url);
+      : '/dashboard/files';
+    window.history.replaceState({ pathStack }, '', url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -168,11 +191,11 @@ export default function FilesPage() {
         setPathStack(e.state.pathStack);
       } else {
         skipHistoryPush.current = true;
-        setPathStack([{ id: null, name: "Home" }]);
+        setPathStack([{ id: null, name: 'Home' }]);
       }
     };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   // Upload queue helpers
@@ -180,17 +203,17 @@ export default function FilesPage() {
     const id = `upload-${++uploadIdCounter}`;
     setUploadQueue((prev) => [
       ...prev,
-      { id, fileName, progress: 0, status: "queued" },
+      { id, fileName, progress: 0, status: 'queued' },
     ]);
     return id;
   };
 
   const updateUploadProgress = (
     progressId: string,
-    updates: Partial<Omit<UploadProgress, "id">>
+    updates: Partial<Omit<UploadProgress, 'id'>>,
   ) => {
     setUploadQueue((prev) =>
-      prev.map((p) => (p.id === progressId ? { ...p, ...updates } : p))
+      prev.map((p) => (p.id === progressId ? { ...p, ...updates } : p)),
     );
   };
 
@@ -210,11 +233,11 @@ export default function FilesPage() {
       setFiles(response.items);
       setTotal(response.meta.total);
     } catch (error) {
-      console.error("Failed to load files:", error);
+      console.error('Failed to load files:', error);
       toast({
-        title: "Error loading files",
-        description: "Something went wrong fetching your files.",
-        variant: "destructive",
+        title: 'Error loading files',
+        description: 'Something went wrong fetching your files.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -229,17 +252,22 @@ export default function FilesPage() {
   const resolvedRef = useRef(false);
   useEffect(() => {
     if (resolvedRef.current) return;
-    const placeholder = pathStack.find((p) => p.name === "..." && p.id);
+    const placeholder = pathStack.find((p) => p.name === '...' && p.id);
     if (!placeholder?.id) return;
     resolvedRef.current = true;
     const folderId = placeholder.id;
-    fileApi.get(folderId).then((folder) => {
-      setPathStack((prev) =>
-        prev.map((p) => (p.id === folderId ? { ...p, name: folder.name } : p))
-      );
-    }).catch(() => {
-      setPathStack([{ id: null, name: "Home" }]);
-    });
+    fileApi
+      .get(folderId)
+      .then((folder) => {
+        setPathStack((prev) =>
+          prev.map((p) =>
+            p.id === folderId ? { ...p, name: folder.name } : p,
+          ),
+        );
+      })
+      .catch(() => {
+        setPathStack([{ id: null, name: 'Home' }]);
+      });
   }, [pathStack]);
 
   // Clear selection on folder navigation or search change
@@ -251,15 +279,15 @@ export default function FilesPage() {
   // Ctrl+A keyboard shortcut
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
         const tag = (e.target as HTMLElement).tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         e.preventDefault();
         setSelectedIds(new Set(files.map((f) => f.id)));
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [files]);
 
   // Multi-select functions
@@ -318,79 +346,39 @@ export default function FilesPage() {
 
   const handleBulkDelete = () => {
     if (selectedIds.size === 0) return;
-    setDeleteConfirm({ open: true, type: "bulk" });
+    setDeleteConfirm({ open: true, type: 'bulk' });
   };
 
   const confirmBulkDelete = async () => {
     const ids = Array.from(selectedIds);
     const count = ids.length;
-    setDeleteConfirm({ open: false, type: "bulk" });
+    setDeleteConfirm({ open: false, type: 'bulk' });
 
     try {
       await fileApi.bulkDelete(ids);
       setFiles((prev) => prev.filter((f) => !selectedIds.has(f.id)));
       setSelectedIds(new Set());
       toast({
-        title: "Items deleted",
-        description: `${count} ${count === 1 ? "item" : "items"} moved to trash.`,
+        title: 'Items deleted',
+        description: `${count} ${count === 1 ? 'item' : 'items'} moved to trash.`,
       });
     } catch (error) {
-      console.error("Bulk delete failed:", error);
+      console.error('Bulk delete failed:', error);
       toast({
-        title: "Error deleting files",
-        description: "Unable to move files to trash.",
-        variant: "destructive",
+        title: 'Error deleting files',
+        description: 'Unable to move files to trash.',
+        variant: 'destructive',
       });
     }
-  };
-
-  const handleBulkShare = async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-
-    let successCount = 0;
-    let lastLink: string | null = null;
-
-    for (const id of ids) {
-      try {
-        const res = await fileApi.share(id, {
-          permission: "read",
-          isPublic: true,
-        });
-        if (res.publicLink) {
-          successCount++;
-          lastLink = res.publicLink;
-        }
-      } catch (err) {
-        console.error(`Failed to share ${id}:`, err);
-      }
-    }
-
-    if (successCount === 1 && lastLink) {
-      setPublicLink(lastLink);
-    } else if (successCount > 0) {
-      toast({
-        title: "Links created",
-        description: `Public links generated for ${successCount} ${successCount === 1 ? "item" : "items"}.`,
-      });
-    } else {
-      toast({
-        title: "Share failed",
-        description: "Could not generate public links.",
-        variant: "destructive",
-      });
-    }
-
-    setSelectedIds(new Set());
   };
 
   const handleDelete = (id: string) => {
-    setDeleteConfirm({ open: true, type: "single", id });
+    setDeleteConfirm({ open: true, type: 'single', id });
   };
 
   const confirmSingleDelete = async () => {
     const id = deleteConfirm.id;
-    setDeleteConfirm({ open: false, type: "single" });
+    setDeleteConfirm({ open: false, type: 'single' });
     if (!id) return;
 
     try {
@@ -402,15 +390,15 @@ export default function FilesPage() {
         return next;
       });
       toast({
-        title: "Item deleted",
-        description: "Moved to trash successfully.",
+        title: 'Item deleted',
+        description: 'Moved to trash successfully.',
       });
     } catch (error) {
-      console.error("Failed to move item to trash:", error);
+      console.error('Failed to move item to trash:', error);
       toast({
-        title: "Error deleting item",
-        description: "Unable to move item to trash.",
-        variant: "destructive",
+        title: 'Error deleting item',
+        description: 'Unable to move item to trash.',
+        variant: 'destructive',
       });
     }
   };
@@ -422,44 +410,46 @@ export default function FilesPage() {
     url: string,
     file: File,
     _contentType: string,
-    progressId: string
+    progressId: string,
   ): Promise<void> => {
     const apiBase =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
-    const fullUrl = url.startsWith("http") ? url : `${apiBase}${url.replace(/^\/api\/v1/, "")}`;
-    const token = localStorage.getItem("token");
+      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+    const fullUrl = url.startsWith('http')
+      ? url
+      : `${apiBase}${url.replace(/^\/api\/v1/, '')}`;
+    const token = localStorage.getItem('token');
 
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
-      xhr.upload.addEventListener("progress", (event) => {
+      xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable) {
           const percent = Math.round((event.loaded / event.total) * 100);
           updateUploadProgress(progressId, { progress: percent });
         }
       });
 
-      xhr.addEventListener("readystatechange", () => {
+      xhr.addEventListener('readystatechange', () => {
         if (xhr.readyState === 4) {
           if (xhr.status >= 200 && xhr.status < 300) {
             updateUploadProgress(progressId, {
               progress: 100,
-              status: "completed",
+              status: 'completed',
             });
             resolve();
           } else {
-            updateUploadProgress(progressId, { status: "error" });
+            updateUploadProgress(progressId, { status: 'error' });
             reject(new Error(`Upload failed with status ${xhr.status}`));
           }
         }
       });
 
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append('file', file);
 
-      xhr.open("PUT", fullUrl);
+      xhr.open('PUT', fullUrl);
       if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       }
       xhr.send(formData);
     });
@@ -470,9 +460,9 @@ export default function FilesPage() {
     fileHash: string,
     skipDuplicateCheck: boolean,
     progressId: string,
-    targetParentId?: string
+    targetParentId?: string,
   ) => {
-    updateUploadProgress(progressId, { status: "uploading", progress: 0 });
+    updateUploadProgress(progressId, { status: 'uploading', progress: 0 });
 
     const parentId = targetParentId ?? currentFolderId ?? undefined;
 
@@ -493,15 +483,15 @@ export default function FilesPage() {
         created.uploadUrl,
         file,
         safeMime,
-        progressId
+        progressId,
       );
     } else {
-      updateUploadProgress(progressId, { progress: 100, status: "completed" });
+      updateUploadProgress(progressId, { progress: 100, status: 'completed' });
     }
   };
 
   const uploadMultipleFiles = async (
-    fileEntries: { file: File; parentId?: string }[]
+    fileEntries: { file: File; parentId?: string }[],
   ) => {
     if (fileEntries.length === 0) return;
 
@@ -514,24 +504,40 @@ export default function FilesPage() {
       async (entry) => {
         const fileHash = await uploadManager.calculateHash(entry.file);
         try {
-          const { isDuplicate, existingFile } = await fileApi.checkDuplicate(fileHash, entry.file.name);
+          const { isDuplicate, existingFile } = await fileApi.checkDuplicate(
+            fileHash,
+            entry.file.name,
+          );
           if (isDuplicate && existingFile) {
-            duplicates.push({ file: entry.file, hash: fileHash, existingFile, parentId: entry.parentId });
+            duplicates.push({
+              file: entry.file,
+              hash: fileHash,
+              existingFile,
+              parentId: entry.parentId,
+            });
           } else {
-            readyToUpload.push({ file: entry.file, hash: fileHash, parentId: entry.parentId });
+            readyToUpload.push({
+              file: entry.file,
+              hash: fileHash,
+              parentId: entry.parentId,
+            });
           }
         } catch {
           // checkDuplicate failed — treat as non-duplicate
-          readyToUpload.push({ file: entry.file, hash: fileHash, parentId: entry.parentId });
+          readyToUpload.push({
+            file: entry.file,
+            hash: fileHash,
+            parentId: entry.parentId,
+          });
         }
       },
-      3
+      3,
     );
 
     // Phase 2: Upload non-duplicate files immediately
     if (readyToUpload.length > 0) {
       const progressIds = readyToUpload.map((entry) =>
-        addUploadProgress(entry.file.name)
+        addUploadProgress(entry.file.name),
       );
       let uploaded = 0;
       let errors = 0;
@@ -545,14 +551,20 @@ export default function FilesPage() {
         uploadTasks,
         async ({ file, hash, parentId, progressId }) => {
           try {
-            await proceedWithUploadForId(file, hash, true, progressId, parentId);
+            await proceedWithUploadForId(
+              file,
+              hash,
+              true,
+              progressId,
+              parentId,
+            );
             uploaded++;
           } catch {
             errors++;
-            updateUploadProgress(progressId, { status: "error" });
+            updateUploadProgress(progressId, { status: 'error' });
           }
         },
-        3
+        3,
       );
 
       await loadFiles();
@@ -562,9 +574,9 @@ export default function FilesPage() {
         if (uploaded > 0) parts.push(`${uploaded} uploaded`);
         if (errors > 0) parts.push(`${errors} failed`);
         toast({
-          title: "Upload complete",
-          description: parts.join(", ") + ".",
-          variant: errors > 0 && uploaded === 0 ? "destructive" : undefined,
+          title: 'Upload complete',
+          description: parts.join(', ') + '.',
+          variant: errors > 0 && uploaded === 0 ? 'destructive' : undefined,
         });
       }
 
@@ -573,8 +585,8 @@ export default function FilesPage() {
           prev.filter(
             (p) =>
               !progressIds.includes(p.id) ||
-              (p.status !== "completed" && p.status !== "error")
-          )
+              (p.status !== 'completed' && p.status !== 'error'),
+          ),
         );
       }, 3000);
     }
@@ -596,7 +608,7 @@ export default function FilesPage() {
         parentId: currentFolderId || undefined,
       }));
       await uploadMultipleFiles(entries);
-      e.target.value = "";
+      e.target.value = '';
       return;
     }
 
@@ -604,18 +616,21 @@ export default function FilesPage() {
     const progressId = addUploadProgress(file.name);
 
     try {
-      updateUploadProgress(progressId, { status: "checking" });
+      updateUploadProgress(progressId, { status: 'checking' });
       // Use web worker for hash calculation (non-blocking)
       const fileHash = await uploadManager.calculateHash(file);
 
       // Check for duplicates before uploading (only for documents and images)
-      const { isDuplicate, existingFile } = await fileApi.checkDuplicate(fileHash, file.name);
+      const { isDuplicate, existingFile } = await fileApi.checkDuplicate(
+        fileHash,
+        file.name,
+      );
 
       if (isDuplicate && existingFile) {
         setPendingDuplicates([{ file, hash: fileHash, existingFile }]);
         setShowDuplicateDialog(true);
         removeUploadProgress(progressId);
-        e.target.value = "";
+        e.target.value = '';
         return;
       }
 
@@ -623,24 +638,24 @@ export default function FilesPage() {
       await proceedWithUploadForId(file, fileHash, false, progressId);
       await loadFiles();
       toast({
-        title: "Upload successful",
+        title: 'Upload successful',
         description: `${file.name} uploaded.`,
       });
 
       setTimeout(() => removeUploadProgress(progressId), 2000);
     } catch (err) {
-      console.error("File upload error:", err);
+      console.error('File upload error:', err);
       const errorMessage =
-        err instanceof ApiError ? err.message : "Unable to upload this file.";
+        err instanceof ApiError ? err.message : 'Unable to upload this file.';
       toast({
-        title: "Upload failed",
+        title: 'Upload failed',
         description: errorMessage,
-        variant: "destructive",
+        variant: 'destructive',
       });
-      updateUploadProgress(progressId, { status: "error" });
+      updateUploadProgress(progressId, { status: 'error' });
       setTimeout(() => removeUploadProgress(progressId), 3000);
     } finally {
-      e.target.value = "";
+      e.target.value = '';
     }
   };
 
@@ -655,7 +670,10 @@ export default function FilesPage() {
     let uploaded = 0;
     let errors = 0;
 
-    const tasks = items.map((item, i) => ({ ...item, progressId: progressIds[i] }));
+    const tasks = items.map((item, i) => ({
+      ...item,
+      progressId: progressIds[i],
+    }));
 
     await uploadManager.processFilesParallel(
       tasks,
@@ -666,24 +684,26 @@ export default function FilesPage() {
         } catch (err) {
           errors++;
           const errorMessage =
-            err instanceof ApiError ? err.message : "Unable to upload this file.";
+            err instanceof ApiError
+              ? err.message
+              : 'Unable to upload this file.';
           console.error(`Failed to upload ${file.name}:`, errorMessage);
-          updateUploadProgress(progressId, { status: "error" });
+          updateUploadProgress(progressId, { status: 'error' });
         }
       },
-      3
+      3,
     );
 
     await loadFiles();
 
     const count = items.length;
     toast({
-      title: uploaded === count ? "Upload successful" : "Upload complete",
+      title: uploaded === count ? 'Upload successful' : 'Upload complete',
       description:
         uploaded === count
-          ? `${uploaded} file${uploaded > 1 ? "s" : ""} uploaded.`
+          ? `${uploaded} file${uploaded > 1 ? 's' : ''} uploaded.`
           : `${uploaded} uploaded, ${errors} failed.`,
-      variant: errors > 0 && uploaded === 0 ? "destructive" : undefined,
+      variant: errors > 0 && uploaded === 0 ? 'destructive' : undefined,
     });
 
     setTimeout(() => {
@@ -691,8 +711,8 @@ export default function FilesPage() {
         prev.filter(
           (p) =>
             !progressIds.includes(p.id) ||
-            (p.status !== "completed" && p.status !== "error")
-        )
+            (p.status !== 'completed' && p.status !== 'error'),
+        ),
       );
     }, 3000);
   };
@@ -701,14 +721,14 @@ export default function FilesPage() {
     setShowDuplicateDialog(false);
     setPendingDuplicates([]);
     toast({
-      title: "Upload cancelled",
-      description: "Duplicate files were skipped.",
+      title: 'Upload cancelled',
+      description: 'Duplicate files were skipped.',
     });
   };
 
   const findExistingFolderId = async (
     name: string,
-    parentId?: string
+    parentId?: string,
   ): Promise<string | undefined> => {
     try {
       const res = await fileApi.list({
@@ -717,26 +737,22 @@ export default function FilesPage() {
         search: name,
         parentId,
       });
-      const match = res.items.find(
-        (f) => f.is_folder && f.name === name
-      );
+      const match = res.items.find((f) => f.is_folder && f.name === name);
       return match?.id;
     } catch {
       return undefined;
     }
   };
 
-  const handleFolderChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
     const allFiles = Array.from(fileList);
 
     // Extract folder name from the first file's relative path
-    const firstPath = allFiles[0]?.webkitRelativePath || "";
-    const rootFolderName = firstPath.split("/")[0] || "Unknown Folder";
+    const firstPath = allFiles[0]?.webkitRelativePath || '';
+    const rootFolderName = firstPath.split('/')[0] || 'Unknown Folder';
 
     const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
 
@@ -747,7 +763,7 @@ export default function FilesPage() {
       fileCount: allFiles.length,
     });
     setShowFolderUploadDialog(true);
-    e.target.value = "";
+    e.target.value = '';
   };
 
   const handleFolderUploadProceed = async () => {
@@ -760,15 +776,15 @@ export default function FilesPage() {
     for (const file of allFiles) {
       const relPath = file.webkitRelativePath;
       if (!relPath) continue;
-      const parts = relPath.split("/");
+      const parts = relPath.split('/');
       for (let i = 1; i < parts.length; i++) {
-        folderPaths.add(parts.slice(0, i).join("/"));
+        folderPaths.add(parts.slice(0, i).join('/'));
       }
     }
 
     const sortedFolders = Array.from(folderPaths).sort((a, b) => {
-      const depthA = a.split("/").length;
-      const depthB = b.split("/").length;
+      const depthA = a.split('/').length;
+      const depthB = b.split('/').length;
       return depthA - depthB;
     });
 
@@ -776,13 +792,10 @@ export default function FilesPage() {
     const baseParentId = currentFolderId || undefined;
 
     for (const folderPath of sortedFolders) {
-      const parts = folderPath.split("/");
+      const parts = folderPath.split('/');
       const name = parts[parts.length - 1];
-      const parentPath =
-        parts.length > 1 ? parts.slice(0, -1).join("/") : null;
-      const parentId = parentPath
-        ? folderIdMap.get(parentPath)
-        : baseParentId;
+      const parentPath = parts.length > 1 ? parts.slice(0, -1).join('/') : null;
+      const parentId = parentPath ? folderIdMap.get(parentPath) : baseParentId;
 
       const existingId = await findExistingFolderId(name, parentId);
       if (existingId) {
@@ -794,7 +807,7 @@ export default function FilesPage() {
         const created = await fileApi.create({
           name,
           size: 0,
-          mimeType: "inode/directory",
+          mimeType: 'inode/directory',
           parentId,
           isFolder: true,
         });
@@ -802,9 +815,9 @@ export default function FilesPage() {
       } catch (err) {
         console.error(`Failed to create folder ${folderPath}:`, err);
         toast({
-          title: "Folder creation failed",
+          title: 'Folder creation failed',
           description: `Could not create folder "${name}".`,
-          variant: "destructive",
+          variant: 'destructive',
         });
       }
     }
@@ -812,14 +825,14 @@ export default function FilesPage() {
     const fileEntries: { file: File; parentId?: string }[] = allFiles.map(
       (file) => {
         const relPath = file.webkitRelativePath;
-        const parts = relPath.split("/");
+        const parts = relPath.split('/');
         const parentPath =
-          parts.length > 1 ? parts.slice(0, -1).join("/") : null;
+          parts.length > 1 ? parts.slice(0, -1).join('/') : null;
         const parentId = parentPath
           ? folderIdMap.get(parentPath)
           : baseParentId;
         return { file, parentId };
-      }
+      },
     );
 
     await uploadMultipleFiles(fileEntries);
@@ -831,8 +844,8 @@ export default function FilesPage() {
     setShowFolderUploadDialog(false);
     setPendingFolderUpload(null);
     toast({
-      title: "Folder upload cancelled",
-      description: "Folder upload was cancelled.",
+      title: 'Folder upload cancelled',
+      description: 'Folder upload was cancelled.',
     });
   };
 
@@ -841,13 +854,13 @@ export default function FilesPage() {
 
     const existingId = await findExistingFolderId(
       folderName.trim(),
-      currentFolderId || undefined
+      currentFolderId || undefined,
     );
     if (existingId) {
       toast({
-        title: "Folder already exists",
+        title: 'Folder already exists',
         description: `A folder named "${folderName.trim()}" already exists here.`,
-        variant: "destructive",
+        variant: 'destructive',
       });
       return;
     }
@@ -857,23 +870,23 @@ export default function FilesPage() {
       await fileApi.create({
         name: folderName.trim(),
         size: 0,
-        mimeType: "inode/directory",
+        mimeType: 'inode/directory',
         parentId: currentFolderId || undefined,
         isFolder: true,
       });
-      setFolderName("");
+      setFolderName('');
       setShowNewFolderDialog(false);
       await loadFiles();
       toast({
-        title: "Folder created",
-        description: "New folder added successfully.",
+        title: 'Folder created',
+        description: 'New folder added successfully.',
       });
     } catch (err) {
-      console.error("Failed to create folder:", err);
+      console.error('Failed to create folder:', err);
       toast({
-        title: "Error creating folder",
-        description: "Unable to create a new folder.",
-        variant: "destructive",
+        title: 'Error creating folder',
+        description: 'Unable to create a new folder.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -892,27 +905,36 @@ export default function FilesPage() {
     setPathStack(pathStack.slice(0, index + 1));
   };
 
-  const handlePublicShare = async (fileId: string) => {
+  const handlePublicShare = (fileId: string) => {
+    const file = files.find((f) => f.id === fileId);
+    if (file) setShareConfirm({ open: true, file });
+  };
+
+  const confirmShare = async () => {
+    const fileId = shareConfirm.file?.id ?? null;
+    setShareConfirm({ open: false, file: null });
+    if (!fileId) return;
+
     try {
       const res = await fileApi.share(fileId, {
-        permission: "read",
+        permission: 'read',
         isPublic: true,
       });
       if (res.publicLink) {
         setPublicLink(res.publicLink);
       } else {
         toast({
-          title: "Share failed",
-          description: "Public link could not be generated.",
-          variant: "destructive",
+          title: 'Share failed',
+          description: 'Public link could not be generated.',
+          variant: 'destructive',
         });
       }
     } catch (err) {
-      console.error("Share failed:", err);
+      console.error('Share failed:', err);
       toast({
-        title: "Error creating link",
-        description: "Share link could not be created.",
-        variant: "destructive",
+        title: 'Error creating link',
+        description: 'Share link could not be created.',
+        variant: 'destructive',
       });
     }
   };
@@ -922,7 +944,7 @@ export default function FilesPage() {
     e.preventDefault();
     e.stopPropagation();
     dragCounter.current++;
-    if (e.dataTransfer.types.includes("Files")) {
+    if (e.dataTransfer.types.includes('Files')) {
       setIsDragActive(true);
     }
   };
@@ -943,7 +965,7 @@ export default function FilesPage() {
 
   // Helper to read all entries from a directory
   const readDirectoryEntries = (
-    dirReader: FileSystemDirectoryReader
+    dirReader: FileSystemDirectoryReader,
   ): Promise<FileSystemEntry[]> => {
     return new Promise((resolve, reject) => {
       const entries: FileSystemEntry[] = [];
@@ -957,7 +979,7 @@ export default function FilesPage() {
               readBatch();
             }
           },
-          (err) => reject(err)
+          (err) => reject(err),
         );
       };
       readBatch();
@@ -967,14 +989,14 @@ export default function FilesPage() {
   // Recursively traverse a FileSystemEntry and collect files with paths
   const traverseEntry = async (
     entry: FileSystemEntry,
-    path: string = ""
+    path: string = '',
   ): Promise<{ file: File; relativePath: string }[]> => {
     if (entry.isFile) {
       const fileEntry = entry as FileSystemFileEntry;
       return new Promise((resolve, reject) => {
         fileEntry.file(
           (file) => resolve([{ file, relativePath: path + file.name }]),
-          (err) => reject(err)
+          (err) => reject(err),
         );
       });
     } else if (entry.isDirectory) {
@@ -985,7 +1007,7 @@ export default function FilesPage() {
       for (const childEntry of entries) {
         const childResults = await traverseEntry(
           childEntry,
-          path + entry.name + "/"
+          path + entry.name + '/',
         );
         results.push(...childResults);
       }
@@ -1018,7 +1040,7 @@ export default function FilesPage() {
     const entries: FileSystemEntry[] = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (item.kind === "file") {
+      if (item.kind === 'file') {
         const entry = item.webkitGetAsEntry?.();
         if (entry) {
           entries.push(entry);
@@ -1067,23 +1089,27 @@ export default function FilesPage() {
 
     if (allFilesWithPaths.length === 0) {
       toast({
-        title: "Empty folder",
-        description: "The dropped folder contains no files.",
-        variant: "destructive",
+        title: 'Empty folder',
+        description: 'The dropped folder contains no files.',
+        variant: 'destructive',
       });
       return;
     }
 
     // Get root folder name from first entry
-    const rootFolderName = entries.find((e) => e.isDirectory)?.name || "Dropped Folder";
-    const totalSize = allFilesWithPaths.reduce((sum, f) => sum + f.file.size, 0);
+    const rootFolderName =
+      entries.find((e) => e.isDirectory)?.name || 'Dropped Folder';
+    const totalSize = allFilesWithPaths.reduce(
+      (sum, f) => sum + f.file.size,
+      0,
+    );
 
     // Show folder upload confirmation dialog
     setPendingFolderUpload({
       files: allFilesWithPaths.map((f) => {
         // Create a new File with webkitRelativePath-like path
         const newFile = new File([f.file], f.file.name, { type: f.file.type });
-        Object.defineProperty(newFile, "webkitRelativePath", {
+        Object.defineProperty(newFile, 'webkitRelativePath', {
           value: f.relativePath,
           writable: false,
         });
@@ -1102,13 +1128,17 @@ export default function FilesPage() {
 
   // Aggregate upload progress for the inline indicator
   const activeUploads = uploadQueue.filter(
-    (u) => u.status === "uploading" || u.status === "checking" || u.status === "queued"
+    (u) =>
+      u.status === 'uploading' ||
+      u.status === 'checking' ||
+      u.status === 'queued',
   );
   const isUploading = activeUploads.length > 0;
   const aggregateProgress =
     activeUploads.length > 0
       ? Math.round(
-          activeUploads.reduce((sum, u) => sum + u.progress, 0) / activeUploads.length
+          activeUploads.reduce((sum, u) => sum + u.progress, 0) /
+            activeUploads.length,
         )
       : 100;
 
@@ -1127,11 +1157,13 @@ export default function FilesPage() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
             <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">My Files</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                My Files
+              </h1>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <HardDrive className="h-4 w-4" />
-                  {total} {total === 1 ? "item" : "items"}
+                  {total} {total === 1 ? 'item' : 'items'}
                 </span>
               </div>
             </div>
@@ -1156,11 +1188,17 @@ export default function FilesPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={handleUploadFileClick} className="gap-2">
+                  <DropdownMenuItem
+                    onClick={handleUploadFileClick}
+                    className="gap-2"
+                  >
                     <FileIcon className="h-4 w-4" />
                     Upload Files
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleUploadFolderClick} className="gap-2">
+                  <DropdownMenuItem
+                    onClick={handleUploadFolderClick}
+                    className="gap-2"
+                  >
                     <Folder className="h-4 w-4" />
                     Upload Folder
                   </DropdownMenuItem>
@@ -1179,7 +1217,10 @@ export default function FilesPage() {
                 ref={folderInputRef}
                 onChange={handleFolderChange}
                 className="hidden"
-                {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
+                {...({
+                  webkitdirectory: '',
+                  directory: '',
+                } as React.InputHTMLAttributes<HTMLInputElement>)}
               />
             </div>
           </div>
@@ -1202,7 +1243,11 @@ export default function FilesPage() {
               >
                 <Upload className="h-3 w-3 text-muted-foreground animate-pulse" />
                 <span className="text-xs text-muted-foreground">
-                  Uploading{activeUploads.length > 1 ? ` ${activeUploads.length} files` : ""}…
+                  Uploading
+                  {activeUploads.length > 1
+                    ? ` ${activeUploads.length} files`
+                    : ''}
+                  …
                 </span>
                 <Progress
                   value={aggregateProgress}
@@ -1232,46 +1277,39 @@ export default function FilesPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <Card className="flex flex-wrap items-center gap-3 sm:gap-4 p-3 sm:px-4 sm:py-3 bg-primary/5 border-primary/20">
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        selectAll();
-                      } else {
-                        clearSelection();
-                      }
-                    }}
-                  />
-                  <span className="text-sm font-medium">
-                    {selectedIds.size} {selectedIds.size === 1 ? "item" : "items"} selected
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 ml-auto">
-                  <Button variant="ghost" size="sm" onClick={clearSelection}>
-                    Clear
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleBulkShare}
-                    className="gap-2"
-                  >
-                    <LinkIcon className="h-4 w-4" />
-                    <span className="hidden sm:inline">Share</span>
-                  </Button>
+              <div className="flex items-center h-10 px-3 rounded-lg bg-primary/5 border border-primary/20">
+                <Checkbox
+                  checked={allSelected}
+                  className="h-4 w-4 border-muted-foreground/50 data-[state=checked]:border-primary"
+                  onCheckedChange={(checked) => {
+                    if (checked) selectAll();
+                    else clearSelection();
+                  }}
+                />
+                <span className="text-sm font-medium ml-3 whitespace-nowrap">
+                  {selectedIds.size} selected
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={clearSelection}
+                  className="h-8 w-8 ml-1"
+                  title="Clear selection"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <div className="ml-auto">
                   <Button
                     variant="destructive"
                     size="sm"
                     onClick={handleBulkDelete}
-                    className="gap-2"
+                    className="h-8 gap-1.5 px-2.5"
                   >
                     <Trash2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Delete</span>
+                    <span className="text-xs">Delete</span>
                   </Button>
                 </div>
-              </Card>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -1295,18 +1333,24 @@ export default function FilesPage() {
               {files.filter((f) => f.is_folder).length > 0 && (
                 <span className="flex items-center gap-1">
                   <Folder className="h-3 w-3" />
-                  {files.filter((f) => f.is_folder).length} folder{files.filter((f) => f.is_folder).length !== 1 ? "s" : ""}
+                  {files.filter((f) => f.is_folder).length} folder
+                  {files.filter((f) => f.is_folder).length !== 1 ? 's' : ''}
                 </span>
               )}
               {files.filter((f) => !f.is_folder).length > 0 && (
                 <span className="flex items-center gap-1">
                   <FileIcon className="h-3 w-3" />
-                  {files.filter((f) => !f.is_folder).length} file{files.filter((f) => !f.is_folder).length !== 1 ? "s" : ""}
+                  {files.filter((f) => !f.is_folder).length} file
+                  {files.filter((f) => !f.is_folder).length !== 1 ? 's' : ''}
                 </span>
               )}
             </div>
             <span>
-              {formatBytes(files.filter((f) => !f.is_folder).reduce((sum, f) => sum + Number(f.size || 0), 0))}
+              {formatBytes(
+                files
+                  .filter((f) => !f.is_folder)
+                  .reduce((sum, f) => sum + Number(f.size || 0), 0),
+              )}
             </span>
           </div>
         )}
@@ -1336,10 +1380,10 @@ export default function FilesPage() {
         <FolderUploadDialog
           open={showFolderUploadDialog}
           onOpenChange={setShowFolderUploadDialog}
-          folderName={pendingFolderUpload?.folderName || ""}
+          folderName={pendingFolderUpload?.folderName || ''}
           fileCount={pendingFolderUpload?.fileCount || 0}
           totalSize={formatBytes(pendingFolderUpload?.totalSize || 0)}
-          destination={pathStack[pathStack.length - 1]?.name || "Home"}
+          destination={pathStack[pathStack.length - 1]?.name || 'Home'}
           onUpload={handleFolderUploadProceed}
           onCancel={handleFolderUploadCancel}
         />
@@ -1354,9 +1398,9 @@ export default function FilesPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Move to Trash?</AlertDialogTitle>
               <AlertDialogDescription>
-                {deleteConfirm.type === "bulk"
-                  ? `${selectedIds.size} ${selectedIds.size === 1 ? "item" : "items"} will be moved to Trash. You can restore them later.`
-                  : "This item will be moved to Trash. You can restore it later."}
+                {deleteConfirm.type === 'bulk'
+                  ? `${selectedIds.size} ${selectedIds.size === 1 ? 'item' : 'items'} will be moved to Trash. You can restore them later.`
+                  : 'This item will be moved to Trash. You can restore it later.'}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1364,12 +1408,64 @@ export default function FilesPage() {
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={
-                  deleteConfirm.type === "bulk"
+                  deleteConfirm.type === 'bulk'
                     ? confirmBulkDelete
                     : confirmSingleDelete
                 }
               >
                 Move to Trash
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Share Confirmation Dialog */}
+        <AlertDialog
+          open={shareConfirm.open}
+          onOpenChange={(open) =>
+            setShareConfirm((prev) => ({ ...prev, open }))
+          }
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Create Public Link?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <p>Anyone with the link will be able to view this file:</p>
+                  {shareConfirm.file && (
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border overflow-hidden">
+                      <div className="shrink-0">
+                        {shareConfirm.file.is_folder ? (
+                          <Folder className="h-8 w-8 text-amber-500" />
+                        ) : (
+                          <FileIcon className="h-8 w-8 text-blue-500" />
+                        )}
+                      </div>
+                      <div className="min-w-0 overflow-hidden">
+                        <p
+                          className="font-medium text-sm text-foreground truncate"
+                          title={shareConfirm.file.name}
+                        >
+                          {shareConfirm.file.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {shareConfirm.file.is_folder
+                            ? 'Folder'
+                            : formatBytes(Number(shareConfirm.file.size || 0))}
+                          {shareConfirm.file.mime_type &&
+                            !shareConfirm.file.is_folder &&
+                            ` · ${shareConfirm.file.mime_type}`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmShare}>
+                Generate Link
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

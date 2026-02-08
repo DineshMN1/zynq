@@ -22,7 +22,22 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     labels: ['dependencies']
-    # Group non-security updates to reduce PR noise
+    # Block incompatible major bumps
+    ignore:
+      # NestJS 11 — stay on 10.x until intentional migration
+      - dependency-name: '@nestjs/*'
+        update-types: ['version-update:semver-major']
+      # Node/Docker — stay on Node 20
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
+      # uuid — stay on 9.x (13.x has breaking API)
+      - dependency-name: 'uuid'
+        update-types: ['version-update:semver-major']
+      # vitest — stay on 2.x (4.x needs config changes)
+      - dependency-name: 'vitest'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@vitest/*'
+        update-types: ['version-update:semver-major']
     groups:
       # Minor + patch version bumps → single PR
       minor-and-patch:
@@ -33,15 +48,21 @@ updates:
         applies-to: security-updates
         patterns: ['*']
 
-  # ── Docker base images ──
+  # ── Docker base images (pin to Node 20) ──
   - package-ecosystem: 'docker'
     directory: '/apps/server'
     schedule:
       interval: monthly
     labels: ['dependencies', 'docker']
+    ignore:
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: 'docker'
     directory: '/apps/client'
     schedule:
       interval: monthly
     labels: ['dependencies', 'docker']
+    ignore:
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']

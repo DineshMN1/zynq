@@ -4,7 +4,8 @@
  * @module api
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 /**
  * Custom error class for API errors with status code and details.
@@ -14,7 +15,12 @@ export class ApiError extends Error {
   errorCode?: string;
   details?: any;
 
-  constructor(message: string, statusCode: number, errorCode?: string, details?: any) {
+  constructor(
+    message: string,
+    statusCode: number,
+    errorCode?: string,
+    details?: any,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.statusCode = statusCode;
@@ -47,6 +53,7 @@ export interface FileMetadata {
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
+  shareCount?: number;
 }
 
 export interface Share {
@@ -114,7 +121,10 @@ function getAuthToken(): string | null {
   return localStorage.getItem('token');
 }
 
-async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function fetchApi<T>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<T> {
   const token = getAuthToken();
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -141,11 +151,14 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
       errorData.message || 'An error occurred',
       response.status,
       errorData.errorCode,
-      errorData
+      errorData,
     );
   }
 
-  if (response.status === 204 || response.headers.get('Content-Length') === '0') {
+  if (
+    response.status === 204 ||
+    response.headers.get('Content-Length') === '0'
+  ) {
     return {} as T;
   }
 
@@ -157,7 +170,12 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 export const authApi = {
   getSetupStatus: () => fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
 
-  register: (data: { name: string; email: string; password: string; inviteToken?: string }) =>
+  register: (data: {
+    name: string;
+    email: string;
+    password: string;
+    inviteToken?: string;
+  }) =>
     fetchApi<User>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -176,7 +194,8 @@ export const authApi = {
 
   me: () => fetchApi<User>('/auth/me'),
 
-  checkSetupStatus: () => fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
+  checkSetupStatus: () =>
+    fetchApi<{ needsSetup: boolean }>('/auth/setup-status'),
 
   forgotPassword: (data: { email: string }) =>
     fetchApi<{ message: string }>('/auth/forgot-password', {
@@ -205,7 +224,12 @@ export const authApi = {
 
 /** File API: CRUD, upload, download, share, trash operations */
 export const fileApi = {
-  list: (params: { page?: number; limit?: number; search?: string; parentId?: string }) => {
+  list: (params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    parentId?: string;
+  }) => {
     const query = new URLSearchParams();
     if (params.page) query.append('page', params.page.toString());
     if (params.limit) query.append('limit', params.limit.toString());
@@ -223,17 +247,16 @@ export const fileApi = {
     fileHash?: string;
     skipDuplicateCheck?: boolean;
   }) =>
-    fetchApi<FileMetadata & {
-      uploadUrl?: string;
-      presignedFields?: Record<string, string>;
-      duplicateFiles?: FileMetadata[];
-    }>(
-      '/files',
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
+    fetchApi<
+      FileMetadata & {
+        uploadUrl?: string;
+        presignedFields?: Record<string, string>;
+        duplicateFiles?: FileMetadata[];
       }
-    ),
+    >('/files', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   upload: async (fileId: string, file: File): Promise<FileMetadata> => {
     const token = getAuthToken();
@@ -261,7 +284,7 @@ export const fileApi = {
         errorData.message || 'Upload failed',
         response.status,
         errorData.errorCode,
-        errorData
+        errorData,
       );
     }
 
@@ -274,7 +297,7 @@ export const fileApi = {
       {
         method: 'POST',
         body: JSON.stringify({ fileHash, fileName }),
-      }
+      },
     ),
 
   get: (id: string) => fetchApi<FileMetadata>(`/files/${id}`),
@@ -294,12 +317,15 @@ export const fileApi = {
       method: 'DELETE',
     }),
 
-  share: (id: string, data: {
-    toUserId?: string;
-    email?: string;
-    permission: 'read' | 'write';
-    isPublic?: boolean;
-  }) =>
+  share: (
+    id: string,
+    data: {
+      toUserId?: string;
+      email?: string;
+      permission: 'read' | 'write';
+      isPublic?: boolean;
+    },
+  ) =>
     fetchApi<Share>(`/files/${id}/share`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -350,8 +376,8 @@ export const fileApi = {
 
   trash: (params: { page?: number; limit?: number }) => {
     const query = new URLSearchParams();
-    if (params.page) query.append("page", params.page.toString());
-    if (params.limit) query.append("limit", params.limit.toString());
+    if (params.page) query.append('page', params.page.toString());
+    if (params.limit) query.append('limit', params.limit.toString());
     return fetchApi<PaginatedResponse<FileMetadata>>(`/files/trash?${query}`);
   },
 };
@@ -371,7 +397,12 @@ export const inviteApi = {
       method: 'POST',
     }),
 
-  accept: (data: { token: string; name: string; email: string; password: string }) =>
+  accept: (data: {
+    token: string;
+    name: string;
+    email: string;
+    password: string;
+  }) =>
     fetchApi<User>('/invites/accept', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -455,19 +486,21 @@ export const storageApi = {
 
   getUserStorage: (userId: string) =>
     fetchApi<UserStorageInfo & { actualUsedBytes: number; freeBytes: number }>(
-      `/storage/users/${userId}`
+      `/storage/users/${userId}`,
     ),
 
   getAllUsersStorage: () => fetchApi<UserStorageInfo[]>('/storage/users'),
 
   updateUserQuota: (userId: string, quotaBytes: number) =>
-    fetchApi<{ userId: string; name: string; quotaBytes: number; usedBytes: number }>(
-      `/storage/users/${userId}/quota`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ storage_quota: quotaBytes }),
-      }
-    ),
+    fetchApi<{
+      userId: string;
+      name: string;
+      quotaBytes: number;
+      usedBytes: number;
+    }>(`/storage/users/${userId}/quota`, {
+      method: 'PATCH',
+      body: JSON.stringify({ storage_quota: quotaBytes }),
+    }),
 };
 
 /** Public API: anonymous access to shared files */
@@ -486,7 +519,9 @@ export const publicApi = {
     }>(`/public/share/${token}`),
 
   downloadShare: async (token: string) => {
-    const response = await fetch(`${API_BASE_URL}/public/share/${token}/download`);
+    const response = await fetch(
+      `${API_BASE_URL}/public/share/${token}/download`,
+    );
 
     if (!response.ok) {
       throw new ApiError('Download failed', response.status);

@@ -4,7 +4,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Share2, Loader2, File, Folder, Globe, Trash2, Copy, Check } from 'lucide-react';
+import {
+  Share2,
+  Loader2,
+  File,
+  Folder,
+  Globe,
+  Trash2,
+  Copy,
+  Check,
+} from 'lucide-react';
 import { fileApi, type Share } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
 import { motion } from 'framer-motion';
@@ -150,17 +159,25 @@ export default function SharedPage() {
                         <Badge variant="outline">Public</Badge>
                       </div>
                       <div>
-                        <p className="font-medium truncate" title={share.file?.name}>
+                        <p
+                          className="font-medium truncate"
+                          title={share.file?.name}
+                        >
                           {share.file?.name}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {formatBytes(share.file?.size ?? 0)}
+                          {share.file?.is_folder
+                            ? 'Folder'
+                            : formatBytes(Number(share.file?.size || 0))}
                         </p>
                         <div className="flex gap-2 mt-3">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => share.share_token && handleCopyLink(share.share_token, share.id)}
+                            onClick={() =>
+                              share.share_token &&
+                              handleCopyLink(share.share_token, share.id)
+                            }
                           >
                             {copiedId === share.id ? (
                               <Check className="h-3 w-3 mr-1" />
@@ -209,16 +226,27 @@ export default function SharedPage() {
                             <File className="h-5 w-5 text-primary" />
                           )}
                         </div>
-                        <Badge variant={share.permission === 'write' ? 'default' : 'secondary'}>
+                        <Badge
+                          variant={
+                            share.permission === 'write'
+                              ? 'default'
+                              : 'secondary'
+                          }
+                        >
                           {share.permission}
                         </Badge>
                       </div>
-                      <p className="font-medium truncate" title={share.file?.name}>
+                      <p
+                        className="font-medium truncate"
+                        title={share.file?.name}
+                      >
                         {share.file?.name}
                       </p>
                       {share.file && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          {formatBytes(share.file.size)}
+                          {share.file.is_folder
+                            ? 'Folder'
+                            : formatBytes(Number(share.file.size || 0))}
                         </p>
                       )}
                     </Card>
@@ -236,7 +264,8 @@ export default function SharedPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Stop sharing this file?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to stop sharing this file publicly? The link will no longer work and anyone with the link will lose access.
+              Are you sure you want to stop sharing this file publicly? The link
+              will no longer work and anyone with the link will lose access.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
