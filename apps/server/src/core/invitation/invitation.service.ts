@@ -20,7 +20,9 @@ export class InvitationService {
     createInviteDto: CreateInviteDto,
     inviterId: string,
     inviterName: string,
-  ): Promise<Invitation & { link: string }> {
+  ): Promise<
+    Invitation & { link: string; email_sent: boolean; email_message?: string }
+  > {
     const token = uuidv4();
     const ttlHours = parseInt(
       this.configService.get('INVITE_TOKEN_TTL_HOURS') || '72',
@@ -42,26 +44,32 @@ export class InvitationService {
       this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const link = `${frontendUrl}/register?inviteToken=${token}`;
 
+    let emailSent = false;
+    let emailMessage: string | undefined;
+
     try {
-      const emailEnabled = this.configService.get('EMAIL_ENABLED') === 'true';
-      if (emailEnabled) {
-        await this.emailService.sendInvitationEmail(
-          createInviteDto.email,
-          link,
-          inviterName,
-          expiresAt,
-        );
-      } else {
-        console.log('Email sending skipped — EMAIL_ENABLED is not true');
-      }
-    } catch (error) {
-      console.warn(
-        'Failed to send invitation email (skipped):',
-        error instanceof Error ? error.message : 'Unknown error',
+      await this.emailService.sendInvitationEmail(
+        createInviteDto.email,
+        link,
+        inviterName,
+        expiresAt,
       );
+      emailSent = true;
+      emailMessage = 'Invitation email sent.';
+    } catch (error) {
+      emailMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to send invitation email.';
+      console.warn('Failed to send invitation email:', emailMessage);
     }
 
-    return { ...saved, link };
+    return {
+      ...saved,
+      link,
+      email_sent: emailSent,
+      email_message: emailMessage,
+    };
   }
 
   async findAll(): Promise<Invitation[]> {

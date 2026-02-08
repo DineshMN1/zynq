@@ -44,7 +44,8 @@ export class AuthService {
    * @throws ForbiddenException if registration is closed and no valid invite
    */
   async register(registerDto: RegisterDto): Promise<User> {
-    const existingUser = await this.userService.findByEmail(registerDto.email);
+    const normalizedEmail = registerDto.email.trim().toLowerCase();
+    const existingUser = await this.userService.findByEmail(normalizedEmail);
     if (existingUser) {
       throw new ConflictException('User already exists');
     }
@@ -54,7 +55,7 @@ export class AuthService {
     if (userCount === 0) {
       return this.userService.create({
         name: registerDto.name,
-        email: registerDto.email,
+        email: normalizedEmail,
         password: registerDto.password,
         role: UserRole.OWNER,
       });
@@ -69,23 +70,38 @@ export class AuthService {
 
     let role: UserRole = UserRole.USER;
 
+    let invitation: Awaited<
+      ReturnType<InvitationService['validateToken']>
+    > | null = null;
+
     if (registerDto.inviteToken) {
-      const invitation = await this.invitationService.validateToken(
+      invitation = await this.invitationService.validateToken(
         registerDto.inviteToken,
       );
       if (!invitation) {
         throw new ForbiddenException('Invalid or expired invitation');
       }
+      const invitedEmail = invitation.email?.trim().toLowerCase();
+      if (invitedEmail && invitedEmail !== normalizedEmail) {
+        throw new ForbiddenException(
+          'Invitation email does not match the registration email',
+        );
+      }
       role = (invitation.role as UserRole) ?? UserRole.USER;
-      await this.invitationService.markAsAccepted(invitation.id);
     }
 
-    return this.userService.create({
+    const createdUser = await this.userService.create({
       name: registerDto.name,
-      email: registerDto.email,
+      email: normalizedEmail,
       password: registerDto.password,
       role,
     });
+
+    if (invitation) {
+      await this.invitationService.markAsAccepted(invitation.id);
+    }
+
+    return createdUser;
   }
 
   /**

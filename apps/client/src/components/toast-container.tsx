@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from '@/hooks/use-toast';
 
 export function ToastContainer() {
   const { toasts } = useToast();
@@ -8,14 +8,22 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 flex flex-col gap-2 z-50">
+    <div
+      className="fixed bottom-4 right-4 flex flex-col gap-2 z-50"
+      aria-live="polite"
+      role="status"
+    >
       {toasts.map((t) => (
         <div
           key={t.id}
           className={`rounded-md shadow-md px-4 py-3 border text-sm ${
-            t.variant === "destructive"
-              ? "bg-red-600 text-white border-red-700"
-              : "bg-background border-muted"
+            t.variant === 'destructive'
+              ? 'bg-red-600 text-white border-red-700'
+              : t.variant === 'warning'
+                ? 'bg-amber-500 text-white border-amber-600'
+                : t.variant === 'success'
+                  ? 'bg-emerald-600 text-white border-emerald-700'
+                  : 'bg-background border-muted'
           }`}
         >
           {t.title && <div className="font-semibold">{t.title}</div>}

@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import * as React from "react";
+import * as React from 'react';
 
-type ToastVariant = "default" | "destructive";
+type ToastVariant = 'default' | 'destructive' | 'success' | 'warning';
 
 export interface ToastProps {
   id: string;
@@ -36,7 +36,7 @@ export function useToast() {
   };
 }
 
-export function showToast(toast: Omit<ToastProps, "id">) {
+export function showToast(toast: Omit<ToastProps, 'id'>) {
   const id = (++toastCount).toString();
   const newToast = { id, ...toast };
   memoryState = [newToast, ...memoryState].slice(0, TOAST_LIMIT);
