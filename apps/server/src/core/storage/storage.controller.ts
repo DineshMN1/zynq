@@ -1,4 +1,12 @@
-import { Controller, Get, Patch, Param, Body, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Patch,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -23,15 +31,16 @@ export class StorageController {
     const usedBytes = Number(currentUser?.storage_used ?? 0);
     const quotaBytes = Number(currentUser?.storage_limit ?? 0);
     const isUnlimited = quotaBytes === 0;
+    const totalBytes = systemStats.totalBytes;
 
     return {
       system: {
-        totalBytes: systemStats.totalBytes,
+        totalBytes,
         usedBytes: systemStats.usedBytes,
         freeBytes: systemStats.freeBytes,
         usedPercentage:
-          systemStats.totalBytes > 0
-            ? Math.round((systemStats.usedBytes / systemStats.totalBytes) * 100)
+          totalBytes > 0
+            ? Math.round((systemStats.usedBytes / totalBytes) * 100)
             : 0,
       },
       user: {
@@ -42,7 +51,9 @@ export class StorageController {
           : Math.max(0, quotaBytes - usedBytes),
         usedPercentage:
           isUnlimited || quotaBytes === 0
-            ? 0
+            ? totalBytes > 0
+              ? Math.round((usedBytes / totalBytes) * 100)
+              : 0
             : Math.round((usedBytes / quotaBytes) * 100),
         isUnlimited,
       },
@@ -53,6 +64,8 @@ export class StorageController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.OWNER)
   async getAllUsersStorage() {
+    const systemStats = await this.storageService.getStorageStats();
+    const totalBytes = systemStats.totalBytes;
     const { items: users } = await this.userService.findAll(1, 1000);
 
     return users.map((user) => {
@@ -69,7 +82,9 @@ export class StorageController {
         quotaBytes,
         usedPercentage:
           isUnlimited || quotaBytes === 0
-            ? 0
+            ? totalBytes > 0
+              ? Math.round((usedBytes / totalBytes) * 100)
+              : 0
             : Math.round((usedBytes / quotaBytes) * 100),
         isUnlimited,
       };
@@ -84,6 +99,8 @@ export class StorageController {
     if (!user) {
       return { error: 'User not found' };
     }
+    const systemStats = await this.storageService.getStorageStats();
+    const totalBytes = systemStats.totalBytes;
 
     const usedBytes = Number(user.storage_used ?? 0);
     const quotaBytes = Number(user.storage_limit ?? 0);
@@ -100,7 +117,9 @@ export class StorageController {
       quotaBytes,
       usedPercentage:
         isUnlimited || quotaBytes === 0
-          ? 0
+          ? totalBytes > 0
+            ? Math.round((usedBytes / totalBytes) * 100)
+            : 0
           : Math.round((usedBytes / quotaBytes) * 100),
       isUnlimited,
       actualUsedBytes,
@@ -115,16 +134,49 @@ export class StorageController {
     @Param('userId') userId: string,
     @Body('storage_quota') storageQuota: number,
   ) {
-    const user = await this.userService.updateStorageLimit(
+    if (
+      storageQuota == null ||
+      Number.isNaN(storageQuota) ||
+      storageQuota < 0
+    ) {
+      throw new BadRequestException(
+        'Storage quota must be a non-negative number',
+      );
+    }
+
+    const user = await this.userService.findById(userId);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const usedBytes = Number(user.storage_used ?? 0);
+    const systemStats = await this.storageService.getStorageStats();
+
+    if (storageQuota !== 0) {
+      if (storageQuota < usedBytes) {
+        throw new BadRequestException(
+          'Storage quota cannot be lower than current usage',
+        );
+      }
+
+      const maxAllowed = usedBytes + systemStats.freeBytes;
+      if (storageQuota > maxAllowed) {
+        throw new BadRequestException(
+          'Storage quota exceeds available system free space',
+        );
+      }
+    }
+
+    const updatedUser = await this.userService.updateStorageLimit(
       userId,
       storageQuota,
     );
 
     return {
-      userId: user.id,
-      name: user.name,
-      quotaBytes: Number(user.storage_limit),
-      usedBytes: Number(user.storage_used),
+      userId: updatedUser.id,
+      name: updatedUser.name,
+      quotaBytes: Number(updatedUser.storage_limit),
+      usedBytes: Number(updatedUser.storage_used),
     };
   }
 }

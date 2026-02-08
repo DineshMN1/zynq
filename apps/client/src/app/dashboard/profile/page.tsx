@@ -27,7 +27,7 @@ import {
   HardDrive,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { authApi } from '@/lib/api';
+import { authApi, storageApi, type StorageOverview } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
@@ -61,6 +61,8 @@ export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [storageOverview, setStorageOverview] =
+    useState<StorageOverview | null>(null);
 
   // Profile form
   const [name, setName] = useState('');
@@ -85,6 +87,19 @@ export default function ProfilePage() {
       setName(user.name);
       setEmail(user.email);
     }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const loadStorage = async () => {
+      try {
+        const overview = await storageApi.getOverview();
+        setStorageOverview(overview);
+      } catch (error) {
+        console.error('Failed to load storage overview:', error);
+      }
+    };
+    loadStorage();
   }, [user]);
 
   useEffect(() => {
@@ -197,12 +212,17 @@ export default function ProfilePage() {
     );
   }
 
-  const storageUsed = user.storage_used || 0;
-  const storageLimit = user.storage_limit || 0;
+  const storageUsed = storageOverview?.user.usedBytes ?? user.storage_used ?? 0;
+  const storageLimit =
+    storageOverview?.user.quotaBytes ?? user.storage_limit ?? 0;
   const isUnlimited = storageLimit === 0;
-  const usagePercentage = isUnlimited
-    ? 0
-    : Math.min(Math.round((storageUsed / storageLimit) * 100), 100);
+  const usagePercentage = storageOverview
+    ? Math.min(storageOverview.user.usedPercentage, 100)
+    : isUnlimited
+      ? 0
+      : Math.min(Math.round((storageUsed / storageLimit) * 100), 100);
+  const systemFreeBytes = storageOverview?.system.freeBytes ?? 0;
+  const systemTotalBytes = storageOverview?.system.totalBytes ?? 0;
 
   return (
     <>
@@ -280,23 +300,30 @@ export default function ProfilePage() {
                 {isUnlimited ? 'Unlimited' : formatBytes(storageLimit)}
               </span>
             </div>
-            {!isUnlimited && (
-              <Progress
-                value={usagePercentage}
-                className={`h-2 ${
-                  usagePercentage >= 90
-                    ? '[&>div]:bg-red-500'
-                    : usagePercentage >= 75
-                      ? '[&>div]:bg-amber-500'
-                      : '[&>div]:bg-primary'
-                }`}
-              />
-            )}
+            <Progress
+              value={usagePercentage}
+              className={`h-2 ${
+                usagePercentage >= 90
+                  ? '[&>div]:bg-red-500'
+                  : usagePercentage >= 75
+                    ? '[&>div]:bg-amber-500'
+                    : '[&>div]:bg-primary'
+              }`}
+            />
             <p className="text-xs text-muted-foreground">
-              {isUnlimited
-                ? 'You have unlimited storage.'
-                : `${usagePercentage}% of your storage is used.`}
+              {storageOverview
+                ? `${usagePercentage}% of system storage is used by you.`
+                : isUnlimited
+                  ? 'You have unlimited storage.'
+                  : `${usagePercentage}% of your storage is used.`}
             </p>
+            {storageOverview &&
+              (user.role === 'admin' || user.role === 'owner') && (
+                <p className="text-xs text-muted-foreground">
+                  System free: {formatBytes(systemFreeBytes)} of{' '}
+                  {formatBytes(systemTotalBytes)}
+                </p>
+              )}
           </CardContent>
         </Card>
 
