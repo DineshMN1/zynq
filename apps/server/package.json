@@ -39,8 +39,8 @@
     "nodemailer": "^7.0.13",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
-    "pg": "^8.11.3",
-    "reflect-metadata": "^0.1.14",
+    "pg": "^8.18.0",
+    "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.19",
     "uuid": "^9.0.1"
