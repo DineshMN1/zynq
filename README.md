@@ -8,6 +8,8 @@ Self‑hosted file storage with roles, invites, sharing, and quotas — your fil
 
 [Quick Start](#quick-start) • [About](#about) • [Features](#features) • [Installation](#installation) • [Support](#support) • [Contributing](#contributing)
 
+<video src="Zynq-Demo.mp4" width="100%" controls></video>
+
 </div>
 
 ---
