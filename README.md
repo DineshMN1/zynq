@@ -8,7 +8,9 @@ Self‑hosted file storage with roles, invites, sharing, and quotas — your fil
 
 [Quick Start](#quick-start) • [About](#about) • [Features](#features) • [Installation](#installation) • [Support](#support) • [Contributing](#contributing)
 
-<video src="Zynq-Demo.mp4" width="100%" controls></video>
+<a href="https://immich.dineshmn.me/s/zynq-demo">
+  <img src="https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Watch_Demo-blue?style=for-the-badge&logoColor=white" alt="Watch Demo" />
+</a>
 
 </div>
 
