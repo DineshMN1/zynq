@@ -373,6 +373,7 @@ export class FileService {
     const now = new Date();
     for (const file of files) {
       file.deleted_at = now;
+      await this.filesRepository.save(file);
       if (!file.is_folder && file.storage_path) {
         const hasActiveRefs = await this.hasActiveStorageReferences(
           file.storage_path,
@@ -384,7 +385,6 @@ export class FileService {
         }
       }
     }
-    await this.filesRepository.save(files);
 
     return { deleted: files.length };
   }
