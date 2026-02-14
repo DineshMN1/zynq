@@ -69,6 +69,7 @@ import { FolderUploadDialog } from '@/features/file/components/folder-upload-dia
 import { DropZoneOverlay } from '@/features/file/components/drop-zone-overlay';
 import { uploadManager } from '@/lib/upload-manager';
 import { formatBytes } from '@/lib/auth';
+import { emitStorageRefresh } from '@/lib/storage-events';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface UploadProgress {
@@ -603,6 +604,7 @@ export default function FilesPage() {
       );
 
       await loadFiles();
+      emitStorageRefresh();
 
       if (uploaded > 0 || errors > 0) {
         const parts: string[] = [];
@@ -672,6 +674,7 @@ export default function FilesPage() {
       // No duplicate, proceed with upload
       await proceedWithUploadForId(file, fileHash, false, progressId);
       await loadFiles();
+      emitStorageRefresh();
       toast({
         title: 'Upload successful',
         description: `${file.name} uploaded.`,
@@ -730,6 +733,7 @@ export default function FilesPage() {
     );
 
     await loadFiles();
+    emitStorageRefresh();
 
     const count = items.length;
     toast({
@@ -872,6 +876,7 @@ export default function FilesPage() {
 
     await uploadMultipleFiles(fileEntries);
     await loadFiles();
+    emitStorageRefresh();
     setPendingFolderUpload(null);
   };
 
@@ -912,6 +917,7 @@ export default function FilesPage() {
       setFolderName('');
       setShowNewFolderDialog(false);
       await loadFiles();
+      emitStorageRefresh();
       toast({
         title: 'Folder created',
         description: 'New folder added successfully.',

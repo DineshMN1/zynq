@@ -36,6 +36,7 @@ import { useState, useEffect } from 'react';
 import type { User, StorageOverview } from '@/lib/api';
 import { storageApi, authApi } from '@/lib/api';
 import { formatBytes, getInitials } from '@/lib/auth';
+import { STORAGE_REFRESH_EVENT } from '@/lib/storage-events';
 import { useTheme } from './ThemeProvider';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -58,6 +59,19 @@ export function Sidebar({ user }: SidebarProps) {
     if (user) {
       loadStorageInfo();
     }
+  }, [user]);
+
+  useEffect(() => {
+    const onStorageRefresh = () => {
+      if (user) {
+        void loadStorageInfo();
+      }
+    };
+
+    window.addEventListener(STORAGE_REFRESH_EVENT, onStorageRefresh);
+    return () => {
+      window.removeEventListener(STORAGE_REFRESH_EVENT, onStorageRefresh);
+    };
   }, [user]);
 
   // Close mobile sidebar on route change

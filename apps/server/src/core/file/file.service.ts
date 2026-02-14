@@ -54,6 +54,50 @@ export class FileService {
     private userService: UserService,
   ) {}
 
+  private resolveStorageTarget(
+    file: Pick<File, 'owner_id' | 'id' | 'storage_path'>,
+  ): {
+    ownerId: string;
+    fileId: string;
+  } {
+    if (file.storage_path) {
+      const match = file.storage_path.match(/^([^/]+)\/(.+)\.enc$/);
+      if (match) {
+        return { ownerId: match[1], fileId: match[2] };
+      }
+    }
+    return { ownerId: file.owner_id, fileId: file.id };
+  }
+
+  private async hasActiveStorageReferences(
+    storagePath: string,
+    excludeFileId: string,
+  ): Promise<boolean> {
+    const refs = await this.filesRepository.count({
+      where: {
+        id: Not(excludeFileId),
+        is_folder: false,
+        storage_path: storagePath,
+        deleted_at: IsNull(),
+      },
+    });
+    return refs > 0;
+  }
+
+  private async hasAnyStorageReferences(
+    storagePath: string,
+    excludeFileId: string,
+  ): Promise<boolean> {
+    const refs = await this.filesRepository.count({
+      where: {
+        id: Not(excludeFileId),
+        is_folder: false,
+        storage_path: storagePath,
+      },
+    });
+    return refs > 0;
+  }
+
   /**
    * Creates a file/folder record. For files, returns uploadUrl for content upload.
    * Validates extension, checks quota, and detects duplicates via SHA-256 hash.
@@ -122,6 +166,50 @@ export class FileService {
             })),
           });
         }
+      }
+    }
+
+    // "Upload anyway" for duplicates: create new metadata that points to the
+    // existing encrypted content, without uploading bytes again.
+    if (
+      createFileDto.fileHash &&
+      !createFileDto.isFolder &&
+      createFileDto.skipDuplicateCheck &&
+      shouldCheckDuplicates(createFileDto.name)
+    ) {
+      const existing = await this.filesRepository.findOne({
+        where: {
+          owner_id: userId,
+          file_hash: createFileDto.fileHash,
+          deleted_at: IsNull(),
+          is_folder: false,
+          storage_path: Not(IsNull()),
+          encrypted_dek: Not(IsNull()),
+          encryption_iv: Not(IsNull()),
+        },
+        order: { created_at: 'DESC' },
+      });
+
+      if (existing) {
+        const linkedFile = this.filesRepository.create({
+          owner_id: userId,
+          name: createFileDto.name,
+          size: createFileDto.size,
+          mime_type: createFileDto.mimeType,
+          parent_id: createFileDto.parentId,
+          is_folder: false,
+          file_hash: createFileDto.fileHash,
+          storage_path: existing.storage_path,
+          encrypted_dek: existing.encrypted_dek,
+          encryption_iv: existing.encryption_iv,
+          encryption_algo: existing.encryption_algo,
+        });
+
+        const savedLinkedFile = await this.filesRepository.save(linkedFile);
+        return {
+          ...savedLinkedFile,
+          uploadUrl: undefined,
+        };
       }
     }
 
@@ -254,7 +342,14 @@ export class FileService {
 
     // Move file to trash in storage
     if (!file.is_folder && file.storage_path) {
-      await this.storageService.moveToTrash(userId, id);
+      const hasActiveRefs = await this.hasActiveStorageReferences(
+        file.storage_path,
+        file.id,
+      );
+      if (!hasActiveRefs) {
+        const target = this.resolveStorageTarget(file);
+        await this.storageService.moveToTrash(target.ownerId, target.fileId);
+      }
     }
   }
 
@@ -279,7 +374,14 @@ export class FileService {
     for (const file of files) {
       file.deleted_at = now;
       if (!file.is_folder && file.storage_path) {
-        await this.storageService.moveToTrash(userId, file.id);
+        const hasActiveRefs = await this.hasActiveStorageReferences(
+          file.storage_path,
+          file.id,
+        );
+        if (!hasActiveRefs) {
+          const target = this.resolveStorageTarget(file);
+          await this.storageService.moveToTrash(target.ownerId, target.fileId);
+        }
       }
     }
     await this.filesRepository.save(files);
@@ -297,13 +399,21 @@ export class FileService {
       throw new NotFoundException('File not found in trash');
     }
 
-    file.deleted_at = null;
-
-    // Restore file from trash in storage
     if (!file.is_folder && file.storage_path) {
-      await this.storageService.restoreFromTrash(userId, id);
+      const hasActiveRefs = await this.hasActiveStorageReferences(
+        file.storage_path,
+        file.id,
+      );
+      if (!hasActiveRefs) {
+        const target = this.resolveStorageTarget(file);
+        await this.storageService.restoreFromTrash(
+          target.ownerId,
+          target.fileId,
+        );
+      }
     }
 
+    file.deleted_at = null;
     return this.filesRepository.save(file);
   }
 
@@ -319,13 +429,27 @@ export class FileService {
 
     // Delete physical file and update storage
     if (!file.is_folder) {
+      let shouldDecreaseStorage = false;
+
       if (file.storage_path) {
-        await this.storageService.deleteFile(userId, id);
+        const hasAnyRefs = await this.hasAnyStorageReferences(
+          file.storage_path,
+          file.id,
+        );
+        if (!hasAnyRefs) {
+          const target = this.resolveStorageTarget(file);
+          await this.storageService.deleteFile(target.ownerId, target.fileId);
+          shouldDecreaseStorage = true;
+        }
+      } else {
+        shouldDecreaseStorage = true;
       }
-      // Always update storage for non-folders (size is bigint, convert to number)
-      const fileSize = Number(file.size);
-      if (fileSize > 0) {
-        await this.userService.updateStorageUsed(userId, -fileSize);
+
+      if (shouldDecreaseStorage) {
+        const fileSize = Number(file.size);
+        if (fileSize > 0) {
+          await this.userService.updateStorageUsed(userId, -fileSize);
+        }
       }
     }
 
@@ -417,8 +541,8 @@ export class FileService {
     }
 
     return this.storageService.downloadFile(
-      file.owner_id,
-      file.id,
+      this.resolveStorageTarget(file).ownerId,
+      this.resolveStorageTarget(file).fileId,
       file.encrypted_dek,
       file.encryption_iv,
     );
@@ -459,8 +583,8 @@ export class FileService {
     }
 
     return this.storageService.downloadFile(
-      userId,
-      id,
+      this.resolveStorageTarget(file).ownerId,
+      this.resolveStorageTarget(file).fileId,
       file.encrypted_dek,
       file.encryption_iv,
     );
@@ -527,8 +651,8 @@ export class FileService {
     }
 
     const data = await this.storageService.downloadFile(
-      file.owner_id,
-      file.id,
+      this.resolveStorageTarget(file).ownerId,
+      this.resolveStorageTarget(file).fileId,
       file.encrypted_dek,
       file.encryption_iv,
     );
@@ -571,17 +695,25 @@ export class FileService {
     let totalSizeFreed = 0;
 
     for (const file of trashedFiles) {
-      // Delete physical file if it exists
+      let shouldDecreaseStorage = false;
+
       if (!file.is_folder && file.storage_path) {
-        await this.storageService.deleteFile(userId, file.id);
+        const hasAnyRefs = await this.hasAnyStorageReferences(
+          file.storage_path,
+          file.id,
+        );
+        if (!hasAnyRefs) {
+          const target = this.resolveStorageTarget(file);
+          await this.storageService.deleteFile(target.ownerId, target.fileId);
+          shouldDecreaseStorage = true;
+        }
+      } else if (!file.is_folder) {
+        shouldDecreaseStorage = true;
       }
 
-      // Track size for non-folders (convert bigint to number)
-      if (!file.is_folder) {
+      if (shouldDecreaseStorage) {
         const fileSize = Number(file.size);
-        if (fileSize > 0) {
-          totalSizeFreed += fileSize;
-        }
+        if (fileSize > 0) totalSizeFreed += fileSize;
       }
 
       await this.filesRepository.delete(file.id);
