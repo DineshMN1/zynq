@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { fileApi, type FileMetadata } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
+import { emitStorageRefresh } from '@/lib/storage-events';
 import {
   getFileIcon,
   getIconColor,
@@ -63,6 +64,7 @@ export default function TrashPage() {
     try {
       await fileApi.restore(id);
       loadTrash();
+      emitStorageRefresh();
     } catch (error) {
       console.error('Failed to restore file:', error);
     }
@@ -78,6 +80,7 @@ export default function TrashPage() {
     try {
       await fileApi.permanentDelete(selectedFileId);
       setFiles(files.filter((f) => f.id !== selectedFileId)); // remove from UI instantly
+      emitStorageRefresh();
       toast({
         title: 'File deleted',
         description: 'The file has been permanently deleted.',
@@ -103,6 +106,7 @@ export default function TrashPage() {
     try {
       await fileApi.emptyTrash();
       setFiles([]); // clear UI
+      emitStorageRefresh();
       toast({
         title: 'Trash emptied',
         description: 'All files have been permanently deleted.',

@@ -64,6 +64,7 @@ describe('FileService', () => {
             findOne: jest.fn(),
             findAndCount: jest.fn(),
             find: jest.fn(),
+            count: jest.fn(),
             delete: jest.fn(),
             createQueryBuilder: jest.fn(() => mockQueryBuilder),
           },
@@ -102,6 +103,7 @@ describe('FileService', () => {
     sharesRepository = module.get(getRepositoryToken(Share));
     storageService = module.get(StorageService);
     userService = module.get(UserService);
+    filesRepository.count.mockResolvedValue(0);
   });
 
   it('should be defined', () => {
@@ -179,6 +181,37 @@ describe('FileService', () => {
       });
 
       expect(storageService.uploadFile).not.toHaveBeenCalled();
+      expect(userService.updateStorageUsed).not.toHaveBeenCalled();
+    });
+
+    it('should create linked metadata without upload when duplicate is allowed', async () => {
+      const existing = {
+        ...mockFile,
+        id: 'file-old',
+        file_hash: 'a'.repeat(64),
+      } as File;
+      const linked = {
+        ...mockFile,
+        id: 'file-new',
+        file_hash: 'a'.repeat(64),
+        storage_path: existing.storage_path,
+      } as File;
+
+      userService.findById.mockResolvedValue(mockUser as any);
+      filesRepository.findOne.mockResolvedValueOnce(existing);
+      filesRepository.create.mockReturnValue(linked);
+      filesRepository.save.mockResolvedValue(linked);
+
+      const result = await service.create('user-123', {
+        name: 'copy.pdf',
+        size: 1024,
+        mimeType: 'application/pdf',
+        fileHash: 'a'.repeat(64),
+        skipDuplicateCheck: true,
+      });
+
+      expect(result.uploadUrl).toBeUndefined();
+      expect(result.storage_path).toBe(existing.storage_path);
       expect(userService.updateStorageUsed).not.toHaveBeenCalled();
     });
   });
@@ -323,6 +356,15 @@ describe('FileService', () => {
       expect(filesRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({ deleted_at: expect.any(Date) }),
       );
+    });
+
+    it('should not move physical file if another active metadata references it', async () => {
+      filesRepository.findOne.mockResolvedValue(mockFile as File);
+      filesRepository.count.mockResolvedValue(1);
+
+      await service.softDelete('file-123', 'user-123');
+
+      expect(storageService.moveToTrash).not.toHaveBeenCalled();
     });
   });
 

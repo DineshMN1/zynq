@@ -39,8 +39,8 @@ COPY --from=backend-builder /build/dist ./dist
 # ── Frontend setup (standalone mode) ────────────────────────
 WORKDIR /app/client
 COPY --from=frontend-builder /build/.next/standalone ./build/
-COPY --from=frontend-builder /build/.next/static ./build/.next/static
-COPY --from=frontend-builder /build/public ./build/public
+COPY --from=frontend-builder /build/.next/static ./build/build/.next/static
+COPY --from=frontend-builder /build/public ./build/build/public
 
 # ── Config files ────────────────────────────────────────────
 COPY docker/nginx.conf /etc/nginx/nginx.conf
