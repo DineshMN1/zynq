@@ -41,7 +41,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
 
 export default function SetupPage() {
   const router = useRouter();
-  const { login, loading: authLoading, needsSetup } = useAuth();
+  const { login, loading: authLoading, needsSetup, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -66,12 +66,12 @@ export default function SetupPage() {
     });
   }, [formData.password, formData.confirmPassword]);
 
-  // If setup is not needed, redirect to login
+  // If setup is already complete, send authenticated users into the app.
   useEffect(() => {
     if (needsSetup === false) {
-      router.replace('/login');
+      router.replace(user ? '/dashboard/files' : '/login');
     }
-  }, [needsSetup, router]);
+  }, [needsSetup, router, user]);
 
   // If auth is still loading, show spinner
   if (authLoading) {

@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
@@ -7,5 +7,19 @@ RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 
+FROM node:20-alpine
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup -S app && adduser -S app -G app
+
+COPY --from=builder /app/.next/standalone ./.next/standalone
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+# Switch to non-root user
+RUN chown -R app:app /app
+USER app
+
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+CMD ["node", ".next/standalone/server.js"]

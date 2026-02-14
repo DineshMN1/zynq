@@ -70,6 +70,7 @@ export interface Share {
   file_id: string;
   grantee_user_id?: string;
   grantee_email?: string;
+  grantee_user?: { id: string; name: string; email: string };
   permission: 'read' | 'write';
   created_by: string;
   created_at: string;
@@ -388,6 +389,7 @@ export const fileApi = {
 
   getShared: () => fetchApi<Share[]>('/files/shared'),
   getPublicShares: () => fetchApi<Share[]>('/files/public-shares'),
+  getPrivateShares: () => fetchApi<Share[]>('/files/private-shares'),
   revokeShare: (shareId: string) =>
     fetchApi<{ success: boolean }>(`/files/shares/${shareId}`, {
       method: 'DELETE',
@@ -502,12 +504,8 @@ export const adminApi = {
     return fetchApi<PaginatedResponse<User>>(`/admin/users?${query}`);
   },
 
-  listUsers: (params: { page?: number; limit?: number }) => {
-    const query = new URLSearchParams();
-    if (params.page) query.append('page', params.page.toString());
-    if (params.limit) query.append('limit', params.limit.toString());
-    return fetchApi<PaginatedResponse<User>>(`/admin/users?${query}`);
-  },
+  listUsers: (params: { page?: number; limit?: number }) =>
+    adminApi.getUsers(params),
 
   updateUser: (id: string, data: { role?: string; storage_limit?: number }) =>
     fetchApi<User>(`/admin/users/${id}`, {
