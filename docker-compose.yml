@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
     container_name: zynqcloud-postgres
     restart: unless-stopped
     environment:
@@ -9,7 +11,6 @@ services:
       POSTGRES_DB: zynqcloud
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./apps/server/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U zynqcloud -d zynqcloud']
       interval: 5s

@@ -124,7 +124,7 @@ zynqCloud is ideal when you need privacy, unlimited storage on your own hardware
 <details>
 <summary><strong>3. How does zynqCloud compare to Nextcloud, Seafile, or Cloudreve?</strong></summary>
 
-- **Simpler stack** — zynqCloud runs as two Node.js containers + PostgreSQL. No PHP, Redis, Apache, Cron, or Aria2 required. `docker compose up` and you're done.
+- **Simpler stack** — zynqCloud runs as one container (frontend + backend via nginx/supervisord) + PostgreSQL. No PHP, Redis, Apache, Cron, or Aria2 required. `docker compose up` and you're done.
 - **Encryption by default** — Every file is encrypted at rest with AES‑256‑GCM using per‑file keys. Nextcloud and Cloudreve treat encryption as an optional plugin.
 - **Built‑in deduplication** — SHA‑256 hashing detects identical files before upload. Duplicates share a single copy on disk.
 - **Modern UI** — Built with Next.js 15 and Tailwind CSS. Responsive, fast, and supports light/dark themes out of the box.
@@ -173,7 +173,7 @@ zynqCloud is designed to run on minimal hardware:
 | **Disk** | 10 GB+ (depends on your files) | SSD recommended |
 | **OS**   | Any Linux with Docker          | Ubuntu 22.04+   |
 
-A single `docker compose up -d --build` deploys PostgreSQL, the backend, and the frontend. Works on any cloud provider (AWS, DigitalOcean, Hetzner, Oracle Cloud free tier) or a home server.
+A single `docker compose up -d --build` deploys PostgreSQL plus one zynqCloud app container that bundles frontend and backend. Works on any cloud provider (AWS, DigitalOcean, Hetzner, Oracle Cloud free tier) or a home server.
 
 </details>
 
@@ -196,7 +196,8 @@ For bulk migration, you can upload folders directly — the folder structure is 
 Before uploading, zynqCloud computes a **SHA‑256 hash** of each file:
 
 - **Client‑side hashing** — The hash is calculated in a background **Web Worker** so the browser UI never freezes, even for large files
-- **Server‑side check** — If a file with the same hash already exists in your account, the upload is skipped and the existing file is referenced instead
+- **Server‑side check** — If a file with the same hash already exists in your account, the API returns a duplicate warning (`ConflictException`) by default
+- **Explicit override** — To proceed anyway, the client must opt in with `skipDuplicateCheck=true` on create/upload flows
 - **Scope** — Deduplication applies to documents and images (PDF, DOCX, PNG, JPG, etc.)
 - **Result** — Identical files are stored only once on disk, saving storage space automatically
 

@@ -13,9 +13,8 @@ WORKDIR /app
 # Create non-root user
 RUN addgroup -S app && adduser -S app -G app
 
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/.next/standalone ./.next/standalone
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
 # Switch to non-root user
@@ -23,4 +22,4 @@ RUN chown -R app:app /app
 USER app
 
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+CMD ["node", ".next/standalone/server.js"]

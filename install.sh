@@ -77,9 +77,9 @@ prompt_input() {
   fi
   read -r input
   if [ -z "$input" ] && [ -n "$default" ]; then
-    eval "$var_name='$default'"
+    printf -v "$var_name" '%s' "$default"
   else
-    eval "$var_name='$input'"
+    printf -v "$var_name" '%s' "$input"
   fi
 }
 
@@ -90,7 +90,7 @@ prompt_secret() {
   echo -en "  ${CYAN}?${NC} ${prompt}: "
   read -rs input
   echo ""
-  eval "$var_name='$input'"
+  printf -v "$var_name" '%s' "$input"
 }
 
 prompt_yesno() {
@@ -109,6 +109,10 @@ prompt_yesno() {
 
 generate_secret() {
   openssl rand -base64 "$1" 2>/dev/null || head -c "$1" /dev/urandom | base64 | tr -d '\n'
+}
+
+escape_sed_replacement() {
+  printf '%s' "$1" | sed -e 's/[\\/&|]/\\&/g'
 }
 
 TOTAL_STEPS=5
@@ -247,6 +251,7 @@ FILE_ENCRYPTION_MASTER_KEY=${ENCRYPTION_KEY}
 DB_PASSWORD=${DB_PASSWORD}
 ZYNQ_DATA_PATH=${DATA_PATH}
 ENVEOF
+chmod 600 "${INSTALL_DIR}/.env"
 
 print_success "Created ${DIM}${INSTALL_DIR}/.env${NC}"
 
@@ -323,16 +328,24 @@ networks:
 COMPOSEEOF
 
 # Replace placeholders with actual values
+ESCAPED_SMTP_ENABLED="$(escape_sed_replacement "${SMTP_ENABLED}")"
+ESCAPED_SMTP_HOST="$(escape_sed_replacement "${SMTP_HOST}")"
+ESCAPED_SMTP_PORT="$(escape_sed_replacement "${SMTP_PORT}")"
+ESCAPED_SMTP_USER="$(escape_sed_replacement "${SMTP_USER}")"
+ESCAPED_SMTP_PASS="$(escape_sed_replacement "${SMTP_PASS}")"
+ESCAPED_SMTP_FROM="$(escape_sed_replacement "${SMTP_FROM}")"
+ESCAPED_CORS_ORIGIN="$(escape_sed_replacement "${CORS_ORIGIN}")"
+ESCAPED_FRONTEND_URL="$(escape_sed_replacement "${FRONTEND_URL}")"
 sed -i.bak \
   -e "s|ZYNQCLOUD_IMAGE_PLACEHOLDER|dineshmn1/zynqcloud:latest|g" \
-  -e "s|SMTP_ENABLED_PLACEHOLDER|${SMTP_ENABLED}|g" \
-  -e "s|SMTP_HOST_PLACEHOLDER|${SMTP_HOST}|g" \
-  -e "s|SMTP_PORT_PLACEHOLDER|${SMTP_PORT}|g" \
-  -e "s|SMTP_USER_PLACEHOLDER|${SMTP_USER}|g" \
-  -e "s|SMTP_PASS_PLACEHOLDER|${SMTP_PASS}|g" \
-  -e "s|SMTP_FROM_PLACEHOLDER|${SMTP_FROM}|g" \
-  -e "s|CORS_ORIGIN_PLACEHOLDER|${CORS_ORIGIN}|g" \
-  -e "s|FRONTEND_URL_PLACEHOLDER|${FRONTEND_URL}|g" \
+  -e "s|SMTP_ENABLED_PLACEHOLDER|${ESCAPED_SMTP_ENABLED}|g" \
+  -e "s|SMTP_HOST_PLACEHOLDER|${ESCAPED_SMTP_HOST}|g" \
+  -e "s|SMTP_PORT_PLACEHOLDER|${ESCAPED_SMTP_PORT}|g" \
+  -e "s|SMTP_USER_PLACEHOLDER|${ESCAPED_SMTP_USER}|g" \
+  -e "s|SMTP_PASS_PLACEHOLDER|${ESCAPED_SMTP_PASS}|g" \
+  -e "s|SMTP_FROM_PLACEHOLDER|${ESCAPED_SMTP_FROM}|g" \
+  -e "s|CORS_ORIGIN_PLACEHOLDER|${ESCAPED_CORS_ORIGIN}|g" \
+  -e "s|FRONTEND_URL_PLACEHOLDER|${ESCAPED_FRONTEND_URL}|g" \
   "${INSTALL_DIR}/docker-compose.yml"
 rm -f "${INSTALL_DIR}/docker-compose.yml.bak"
 
@@ -366,7 +379,7 @@ echo -e "  ${ARROW} Waiting for services to be ready..."
 MAX_RETRIES=30
 RETRY=0
 while [ $RETRY -lt $MAX_RETRIES ]; do
-  if curl -sf http://localhost:4000/api/v1/health >/dev/null 2>&1; then
+  if curl -sf http://localhost:3000/api/v1/health >/dev/null 2>&1; then
     break
   fi
   RETRY=$((RETRY + 1))

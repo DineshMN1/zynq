@@ -8,8 +8,20 @@ describe('AuthController', () => {
   let controller: AuthController;
   let authService: jest.Mocked<AuthService>;
   let configService: jest.Mocked<ConfigService>;
+  let mockUser: {
+    id: string;
+    name: string;
+    email: string;
+    password_hash: string;
+    role: UserRole;
+    storage_used: number;
+    storage_limit: number;
+    created_at: Date;
+    updated_at: Date;
+  };
+  let mockResponse: any;
 
-  const mockUser = {
+  const createMockUser = () => ({
     id: 'user-123',
     name: 'Test User',
     email: 'test@example.com',
@@ -19,14 +31,10 @@ describe('AuthController', () => {
     storage_limit: 10737418240,
     created_at: new Date(),
     updated_at: new Date(),
-  };
-
-  const mockResponse = {
-    cookie: jest.fn(),
-    clearCookie: jest.fn(),
-  } as any;
+  });
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
@@ -55,6 +63,11 @@ describe('AuthController', () => {
     controller = module.get<AuthController>(AuthController);
     authService = module.get(AuthService);
     configService = module.get(ConfigService);
+    mockUser = createMockUser();
+    mockResponse = {
+      cookie: jest.fn(),
+      clearCookie: jest.fn(),
+    };
   });
 
   it('should be defined', () => {

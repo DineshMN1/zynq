@@ -64,6 +64,7 @@ const mockRevokeObjectURL = vi.fn();
 const origWorker = globalThis.Worker;
 const origCreateObjectURL = URL.createObjectURL;
 const origRevokeObjectURL = URL.revokeObjectURL;
+const origRAF = globalThis.requestAnimationFrame;
 
 // Mock requestAnimationFrame
 const mockRAF = vi.fn((cb: FrameRequestCallback) => {
@@ -91,6 +92,7 @@ describe('UploadManager', () => {
     globalThis.Worker = origWorker;
     URL.createObjectURL = origCreateObjectURL;
     URL.revokeObjectURL = origRevokeObjectURL;
+    globalThis.requestAnimationFrame = origRAF;
     vi.restoreAllMocks();
   });
 
@@ -389,15 +391,21 @@ describe('UploadManager', () => {
   });
 
   describe('uploadWithXHR', () => {
-    it('sends FormData via XHR PUT with auth header', async () => {
-      const mockOpen = vi.fn();
-      const mockSend = vi.fn();
-      const mockSetRequestHeader = vi.fn();
-      const mockUploadAddEventListener = vi.fn();
-      const mockAddEventListener = vi.fn();
+    let origXHR: typeof XMLHttpRequest;
+    let mockOpen: ReturnType<typeof vi.fn>;
+    let mockSend: ReturnType<typeof vi.fn>;
+    let mockSetRequestHeader: ReturnType<typeof vi.fn>;
+    let mockUploadAddEventListener: ReturnType<typeof vi.fn>;
+    let mockAddEventListener: ReturnType<typeof vi.fn>;
 
-      // Mock XMLHttpRequest
-      const origXHR = globalThis.XMLHttpRequest;
+    beforeEach(() => {
+      origXHR = globalThis.XMLHttpRequest;
+      mockOpen = vi.fn();
+      mockSend = vi.fn();
+      mockSetRequestHeader = vi.fn();
+      mockUploadAddEventListener = vi.fn();
+      mockAddEventListener = vi.fn();
+
       globalThis.XMLHttpRequest = vi.fn().mockImplementation(() => ({
         open: mockOpen,
         send: mockSend,
@@ -407,7 +415,13 @@ describe('UploadManager', () => {
         readyState: 4,
         status: 200,
       })) as unknown as typeof XMLHttpRequest;
+    });
 
+    afterEach(() => {
+      globalThis.XMLHttpRequest = origXHR;
+    });
+
+    it('sends FormData via XHR PUT with auth header', async () => {
       const mod = await createManager();
       const manager = mod.uploadManager;
 
@@ -438,28 +452,10 @@ describe('UploadManager', () => {
         'Bearer my-token',
       );
       expect(mockSend).toHaveBeenCalled();
-
-      globalThis.XMLHttpRequest = origXHR;
       manager.destroy();
     });
 
     it('does not set Authorization header when token is null', async () => {
-      const mockOpen = vi.fn();
-      const mockSend = vi.fn();
-      const mockSetRequestHeader = vi.fn();
-      const mockAddEventListener = vi.fn();
-
-      const origXHR = globalThis.XMLHttpRequest;
-      globalThis.XMLHttpRequest = vi.fn().mockImplementation(() => ({
-        open: mockOpen,
-        send: mockSend,
-        setRequestHeader: mockSetRequestHeader,
-        upload: { addEventListener: vi.fn() },
-        addEventListener: mockAddEventListener,
-        readyState: 4,
-        status: 200,
-      })) as unknown as typeof XMLHttpRequest;
-
       const mod = await createManager();
       const manager = mod.uploadManager;
 
@@ -480,8 +476,6 @@ describe('UploadManager', () => {
       await uploadPromise;
 
       expect(mockSetRequestHeader).not.toHaveBeenCalled();
-
-      globalThis.XMLHttpRequest = origXHR;
       manager.destroy();
     });
   });

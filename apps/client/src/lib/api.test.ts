@@ -102,6 +102,7 @@ describe('API Client', () => {
     });
 
     it('throws ApiError on non-OK response', async () => {
+      expect.assertions(4);
       mockFetch.mockResolvedValue({
         ok: false,
         status: 403,
@@ -114,10 +115,9 @@ describe('API Client', () => {
           ),
       });
 
-      await expect(authApi.me()).rejects.toThrow(ApiError);
-
       try {
         await authApi.me();
+        throw new Error('Expected authApi.me() to throw');
       } catch (e) {
         expect(e).toBeInstanceOf(ApiError);
         expect((e as ApiError).statusCode).toBe(403);
@@ -127,6 +127,7 @@ describe('API Client', () => {
     });
 
     it('throws ApiError with fallback message when response is not JSON', async () => {
+      expect.assertions(3);
       mockFetch.mockResolvedValue({
         ok: false,
         status: 500,
@@ -135,6 +136,7 @@ describe('API Client', () => {
 
       try {
         await authApi.me();
+        throw new Error('Expected authApi.me() to throw');
       } catch (e) {
         expect(e).toBeInstanceOf(ApiError);
         expect((e as ApiError).statusCode).toBe(500);

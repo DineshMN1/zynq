@@ -49,6 +49,7 @@ describe('FileController', () => {
             emptyTrash: jest.fn(),
             getSharedWithMe: jest.fn(),
             getPublicSharesByUser: jest.fn(),
+            getPrivateSharesByUser: jest.fn(),
             revokeShare: jest.fn(),
             bulkSoftDelete: jest.fn(),
             checkDuplicate: jest.fn(),
@@ -163,6 +164,22 @@ describe('FileController', () => {
       expect(fileService.getPublicSharesByUser).toHaveBeenCalledWith(
         'user-123',
       );
+    });
+  });
+
+  describe('getPrivateShares', () => {
+    it('should delegate to fileService.getPrivateSharesByUser', async () => {
+      const privateShares = [{ id: 'share-1' }];
+      fileService.getPrivateSharesByUser.mockResolvedValue(
+        privateShares as any,
+      );
+
+      const result = await controller.getPrivateShares(mockUser as any);
+
+      expect(fileService.getPrivateSharesByUser).toHaveBeenCalledWith(
+        'user-123',
+      );
+      expect(result).toEqual(privateShares);
     });
   });
 
