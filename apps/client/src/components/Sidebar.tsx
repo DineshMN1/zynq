@@ -17,6 +17,7 @@ import {
   PanelLeft,
   HardDrive,
   Activity,
+  Menu,
 } from 'lucide-react';
 import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -29,12 +30,14 @@ import {
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import type { User, StorageOverview } from '@/lib/api';
 import { storageApi, authApi } from '@/lib/api';
 import { formatBytes, getInitials } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface SidebarProps {
   user: User | null;
@@ -45,8 +48,10 @@ export function Sidebar({ user }: SidebarProps) {
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [storageInfo, setStorageInfo] = useState<StorageOverview | null>(null);
   const [loadingStorage, setLoadingStorage] = useState(true);
+  const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
 
   useEffect(() => {
@@ -54,6 +59,11 @@ export function Sidebar({ user }: SidebarProps) {
       loadStorageInfo();
     }
   }, [user]);
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   const loadStorageInfo = async () => {
     try {
@@ -123,6 +133,7 @@ export function Sidebar({ user }: SidebarProps) {
     icon: React.ElementType;
   }) => {
     const isActive = isActiveLink(href);
+    const showLabel = isMobile || !collapsed;
     const link = (
       <Link
         href={href}
@@ -131,15 +142,15 @@ export function Sidebar({ user }: SidebarProps) {
           isActive
             ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
             : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50',
-          collapsed && 'justify-center px-2',
+          !showLabel && 'justify-center px-2',
         )}
       >
         <Icon className="h-4 w-4 shrink-0" />
-        {!collapsed && <span>{label}</span>}
+        {showLabel && <span>{label}</span>}
       </Link>
     );
 
-    if (!collapsed) return link;
+    if (showLabel) return link;
 
     return (
       <Tooltip>
@@ -153,7 +164,7 @@ export function Sidebar({ user }: SidebarProps) {
 
   const SectionHeader = ({ title }: { title: string }) => (
     <>
-      {!collapsed ? (
+      {isMobile || !collapsed ? (
         <p className="px-3 mb-2 text-xs font-medium text-sidebar-foreground/50 uppercase tracking-wider">
           {title}
         </p>
@@ -163,21 +174,21 @@ export function Sidebar({ user }: SidebarProps) {
     </>
   );
 
-  return (
+  const sidebarContent = (
     <aside
       className={cn(
         'flex flex-col h-full bg-sidebar border-r border-sidebar-border transition-all duration-200',
-        collapsed ? 'w-[60px]' : 'w-[240px]',
+        isMobile ? 'w-full' : collapsed ? 'w-[60px]' : 'w-[240px]',
       )}
     >
       {/* Logo Header */}
       <div
         className={cn(
           'h-14 flex items-center border-b border-sidebar-border px-3',
-          collapsed && 'justify-center',
+          !isMobile && collapsed && 'justify-center',
         )}
       >
-        {!collapsed ? (
+        {isMobile || !collapsed ? (
           <Link href="/dashboard/files" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
               <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
@@ -228,10 +239,10 @@ export function Sidebar({ user }: SidebarProps) {
       <div
         className={cn(
           'px-3 py-3 border-t border-sidebar-border',
-          collapsed && 'px-2',
+          !isMobile && collapsed && 'px-2',
         )}
       >
-        {!collapsed ? (
+        {isMobile || !collapsed ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="text-sidebar-foreground/60">Storage</span>
@@ -298,19 +309,22 @@ export function Sidebar({ user }: SidebarProps) {
       <div
         className={cn(
           'px-2 py-2 border-t border-sidebar-border',
-          collapsed && 'px-1',
+          !isMobile && collapsed && 'px-1',
         )}
       >
         {user ? (
           <div
-            className={cn('flex items-center gap-2', collapsed && 'flex-col')}
+            className={cn(
+              'flex items-center gap-2',
+              !isMobile && collapsed && 'flex-col',
+            )}
           >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   className={cn(
                     'flex items-center gap-2 p-2 rounded-md hover:bg-sidebar-accent transition-colors text-left flex-1 min-w-0',
-                    collapsed && 'justify-center w-full',
+                    !isMobile && collapsed && 'justify-center w-full',
                   )}
                 >
                   <Avatar className="h-8 w-8 shrink-0">
@@ -318,7 +332,7 @@ export function Sidebar({ user }: SidebarProps) {
                       {getInitials(user.name)}
                     </AvatarFallback>
                   </Avatar>
-                  {!collapsed && (
+                  {(isMobile || !collapsed) && (
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-sidebar-foreground truncate">
                         {user.name}
@@ -331,7 +345,7 @@ export function Sidebar({ user }: SidebarProps) {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                align={collapsed ? 'center' : 'start'}
+                align={!isMobile && collapsed ? 'center' : 'start'}
                 side="top"
                 className="w-56 mb-1"
               >
@@ -380,30 +394,73 @@ export function Sidebar({ user }: SidebarProps) {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Collapse button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCollapsed(!collapsed)}
-              className={cn(
-                'h-8 w-8 shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent',
-                collapsed && 'mt-1',
-              )}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? (
-                <PanelLeft className="h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4" />
-              )}
-            </Button>
+            {/* Collapse button — desktop only */}
+            {!isMobile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCollapsed(!collapsed)}
+                className={cn(
+                  'h-8 w-8 shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                  collapsed && 'mt-1',
+                )}
+                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {collapsed ? (
+                  <PanelLeft className="h-4 w-4" />
+                ) : (
+                  <PanelLeftClose className="h-4 w-4" />
+                )}
+              </Button>
+            )}
           </div>
         ) : (
-          <div className={cn('p-2', collapsed && 'flex justify-center')}>
+          <div
+            className={cn(
+              'p-2',
+              !isMobile && collapsed && 'flex justify-center',
+            )}
+          >
             <div className="h-8 w-8 rounded-full bg-sidebar-accent animate-pulse" />
           </div>
         )}
       </div>
     </aside>
   );
+
+  // Mobile: render sidebar in a Sheet overlay
+  if (isMobile) {
+    return (
+      <>
+        {/* Mobile top bar */}
+        <div className="fixed top-0 left-0 right-0 z-40 h-14 bg-sidebar border-b border-sidebar-border flex items-center px-3 gap-3">
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-sidebar-foreground"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="p-0 w-[280px] bg-sidebar">
+              {sidebarContent}
+            </SheetContent>
+          </Sheet>
+          <Link href="/dashboard/files" className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-sidebar-primary flex items-center justify-center">
+              <HardDrive className="h-3.5 w-3.5 text-sidebar-primary-foreground" />
+            </div>
+            <span className="font-semibold text-sidebar-foreground text-sm">
+              ZynqCloud
+            </span>
+          </Link>
+        </div>
+      </>
+    );
+  }
+
+  // Desktop: render sidebar normally
+  return sidebarContent;
 }

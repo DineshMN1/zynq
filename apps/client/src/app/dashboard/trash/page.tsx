@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,20 +18,23 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 import {
   Trash2,
   MoreVertical,
   RotateCcw,
   XCircle,
   Loader2,
-  File,
-  Folder,
-} from "lucide-react";
-import { fileApi, type FileMetadata } from "@/lib/api";
-import { formatBytes } from "@/lib/auth";
-import { motion } from "framer-motion";
-import { toast } from "@/hooks/use-toast";
+} from 'lucide-react';
+import { fileApi, type FileMetadata } from '@/lib/api';
+import { formatBytes } from '@/lib/auth';
+import {
+  getFileIcon,
+  getIconColor,
+  getIconBgColor,
+} from '@/features/file/utils/file-icons';
+import { motion } from 'framer-motion';
+import { toast } from '@/hooks/use-toast';
 
 export default function TrashPage() {
   const [files, setFiles] = useState<FileMetadata[]>([]);
@@ -50,7 +53,7 @@ export default function TrashPage() {
       const response = await fileApi.trash({ page: 1, limit: 50 });
       setFiles(response.items);
     } catch (error) {
-      console.error("Failed to load trash:", error);
+      console.error('Failed to load trash:', error);
     } finally {
       setLoading(false);
     }
@@ -61,7 +64,7 @@ export default function TrashPage() {
       await fileApi.restore(id);
       loadTrash();
     } catch (error) {
-      console.error("Failed to restore file:", error);
+      console.error('Failed to restore file:', error);
     }
   };
 
@@ -76,15 +79,15 @@ export default function TrashPage() {
       await fileApi.permanentDelete(selectedFileId);
       setFiles(files.filter((f) => f.id !== selectedFileId)); // remove from UI instantly
       toast({
-        title: "File deleted",
-        description: "The file has been permanently deleted.",
+        title: 'File deleted',
+        description: 'The file has been permanently deleted.',
       });
     } catch (error) {
-      console.error("Failed to permanently delete file:", error);
+      console.error('Failed to permanently delete file:', error);
       toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to delete file permanently.",
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to delete file permanently.',
       });
     } finally {
       setDeleteDialogOpen(false);
@@ -101,15 +104,15 @@ export default function TrashPage() {
       await fileApi.emptyTrash();
       setFiles([]); // clear UI
       toast({
-        title: "Trash emptied",
-        description: "All files have been permanently deleted.",
+        title: 'Trash emptied',
+        description: 'All files have been permanently deleted.',
       });
     } catch (error) {
-      console.error("Failed to empty trash:", error);
+      console.error('Failed to empty trash:', error);
       toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to empty trash.",
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to empty trash.',
       });
     } finally {
       setEmptyTrashDialogOpen(false);
@@ -163,13 +166,30 @@ export default function TrashPage() {
             >
               <Card className="p-4 hover:border-primary/50 transition-colors">
                 <div className="flex items-start justify-between mb-3">
-                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                    {file.is_folder ? (
-                      <Folder className="h-5 w-5 text-muted-foreground" />
-                    ) : (
-                      <File className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </div>
+                  {(() => {
+                    const Icon = getFileIcon(
+                      file.name,
+                      file.mime_type || '',
+                      file.is_folder,
+                    );
+                    const iconColor = getIconColor(
+                      file.name,
+                      file.mime_type || '',
+                      file.is_folder,
+                    );
+                    const iconBg = getIconBgColor(
+                      file.name,
+                      file.mime_type || '',
+                      file.is_folder,
+                    );
+                    return (
+                      <div
+                        className={`h-10 w-10 rounded-lg ${iconBg} flex items-center justify-center`}
+                      >
+                        <Icon className={`h-5 w-5 ${iconColor}`} />
+                      </div>
+                    );
+                  })()}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -196,7 +216,7 @@ export default function TrashPage() {
                     {file.name}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {formatBytes(file.size)}
+                    {file.is_folder ? 'Folder' : formatBytes(Number(file.size))}
                   </p>
                 </div>
               </Card>
@@ -211,7 +231,8 @@ export default function TrashPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Permanently delete this file?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the file from the server.
+              This action cannot be undone. This will permanently delete the
+              file from the server.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -227,12 +248,16 @@ export default function TrashPage() {
       </AlertDialog>
 
       {/* Empty Trash Confirmation Dialog */}
-      <AlertDialog open={emptyTrashDialogOpen} onOpenChange={setEmptyTrashDialogOpen}>
+      <AlertDialog
+        open={emptyTrashDialogOpen}
+        onOpenChange={setEmptyTrashDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Empty trash?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to empty the trash? This will permanently delete all files and cannot be undone.
+              Are you sure you want to empty the trash? This will permanently
+              delete all files and cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

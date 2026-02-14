@@ -543,6 +543,13 @@ export class FileService {
     });
   }
 
+  async getPrivateSharesByUser(userId: string): Promise<Share[]> {
+    return this.sharesRepository.find({
+      where: { created_by: userId, is_public: false },
+      relations: ['file', 'grantee_user'],
+    });
+  }
+
   async revokeShare(shareId: string, userId: string): Promise<void> {
     const share = await this.sharesRepository.findOne({
       where: { id: shareId, created_by: userId },

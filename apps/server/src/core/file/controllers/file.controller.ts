@@ -10,7 +10,6 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  InternalServerErrorException,
   Res,
   UseInterceptors,
   UploadedFile,
@@ -111,6 +110,11 @@ export class FileController {
   @Get('public-shares')
   getPublicShares(@CurrentUser() user: User) {
     return this.fileService.getPublicSharesByUser(user.id);
+  }
+
+  @Get('private-shares')
+  getPrivateShares(@CurrentUser() user: User) {
+    return this.fileService.getPrivateSharesByUser(user.id);
   }
 
   @Delete('shares/:shareId')
@@ -214,7 +218,10 @@ export class FileController {
   ) {
     const archive = archiver('zip', { zlib: { level: 9 } });
     archive.on('error', () => {
-      throw new InternalServerErrorException('Failed to create archive');
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Failed to create archive' });
+      }
+      res.end();
     });
 
     res.set({
