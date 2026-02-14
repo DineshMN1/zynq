@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
-import { authApi, type User } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -12,23 +13,14 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading } = useAuth();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const userData = await authApi.me();
-        setUser(userData);
-      } catch {
-        router.push('/login');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, [router]);
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [loading, user, router]);
 
   if (loading) {
     return (
@@ -45,7 +37,9 @@ export default function DashboardLayout({
   return (
     <div className="h-screen flex overflow-hidden bg-background">
       <Sidebar user={user} />
-      <main className="flex-1 overflow-auto transition-colors duration-200">
+      <main
+        className={`flex-1 overflow-auto transition-colors duration-200 ${isMobile ? 'pt-14' : ''}`}
+      >
         {children}
       </main>
     </div>

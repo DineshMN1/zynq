@@ -13,6 +13,7 @@ import {
   Check,
   Download,
   Lock,
+  Users,
 } from 'lucide-react';
 import { fileApi, type Share } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
@@ -36,22 +37,26 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export default function SharedPage() {
-  const [privateShares, setPrivateShares] = useState<Share[]>([]);
+  const [sharedWithMe, setSharedWithMe] = useState<Share[]>([]);
   const [publicShares, setPublicShares] = useState<Share[]>([]);
+  const [sharedByMe, setSharedByMe] = useState<Share[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
   const [selectedShareId, setSelectedShareId] = useState<string | null>(null);
+  const [revokeType, setRevokeType] = useState<'public' | 'private'>('public');
 
   const loadShares = useCallback(async () => {
     try {
       setLoading(true);
-      const [privateData, publicData] = await Promise.all([
-        fileApi.getShared(), // shared *with me*
-        fileApi.getPublicShares(), // shared *by me* publicly
+      const [withMeData, publicData, byMeData] = await Promise.all([
+        fileApi.getShared(),
+        fileApi.getPublicShares(),
+        fileApi.getPrivateShares(),
       ]);
-      setPrivateShares(privateData);
+      setSharedWithMe(withMeData);
       setPublicShares(publicData);
+      setSharedByMe(byMeData);
     } catch (error) {
       console.error('Failed to load shared files:', error);
     } finally {
@@ -63,8 +68,9 @@ export default function SharedPage() {
     loadShares();
   }, [loadShares]);
 
-  const handleRevokeShare = (shareId: string) => {
+  const handleRevokeShare = (shareId: string, type: 'public' | 'private') => {
     setSelectedShareId(shareId);
+    setRevokeType(type);
     setRevokeDialogOpen(true);
   };
 
@@ -72,10 +78,17 @@ export default function SharedPage() {
     if (!selectedShareId) return;
     try {
       await fileApi.revokeShare(selectedShareId);
-      setPublicShares(publicShares.filter((s) => s.id !== selectedShareId));
+      if (revokeType === 'public') {
+        setPublicShares(publicShares.filter((s) => s.id !== selectedShareId));
+      } else {
+        setSharedByMe(sharedByMe.filter((s) => s.id !== selectedShareId));
+      }
       toast({
         title: 'Share revoked',
-        description: 'Public link has been disabled.',
+        description:
+          revokeType === 'public'
+            ? 'Public link has been disabled.'
+            : 'Private share has been revoked.',
       });
     } catch (error) {
       console.error('Failed to revoke share:', error);
@@ -130,7 +143,8 @@ export default function SharedPage() {
     }
   };
 
-  const totalItems = privateShares.length + publicShares.length;
+  const totalItems =
+    sharedWithMe.length + publicShares.length + sharedByMe.length;
 
   return (
     <div className="p-6 space-y-6">
@@ -237,7 +251,9 @@ export default function SharedPage() {
                               variant="destructive"
                               size="sm"
                               className="w-full"
-                              onClick={() => handleRevokeShare(share.id)}
+                              onClick={() =>
+                                handleRevokeShare(share.id, 'public')
+                              }
                             >
                               <Trash2 className="h-3 w-3 mr-1" />
                               Stop Sharing
@@ -252,14 +268,108 @@ export default function SharedPage() {
             </section>
           )}
 
+          {/* Shared by Me (Private) */}
+          {sharedByMe.length > 0 && (
+            <section>
+              <h2 className="text-xl font-semibold mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" /> Shared by Me
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {sharedByMe.map((share, index) => {
+                  const fileName = share.file?.name ?? 'File';
+                  const mimeType = share.file?.mime_type ?? '';
+                  const isFolder = !!share.file?.is_folder;
+                  const IconComponent = getFileIcon(
+                    fileName,
+                    mimeType,
+                    isFolder,
+                  );
+                  const iconColor = getIconColor(fileName, mimeType, isFolder);
+                  const iconBgColor = getIconBgColor(
+                    fileName,
+                    mimeType,
+                    isFolder,
+                  );
+                  return (
+                    <motion.div
+                      key={share.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                    >
+                      <Card className="p-4 h-full hover:border-primary/50 transition-colors">
+                        <div className="flex h-full flex-col">
+                          <div className="flex items-start justify-between">
+                            <div
+                              className={`h-12 w-12 rounded-xl flex items-center justify-center ${iconBgColor}`}
+                            >
+                              <IconComponent
+                                className={`h-6 w-6 ${iconColor}`}
+                              />
+                            </div>
+                            <Badge
+                              variant={
+                                share.permission === 'write'
+                                  ? 'default'
+                                  : 'secondary'
+                              }
+                              className="gap-1"
+                            >
+                              <Lock className="h-3 w-3" />
+                              {share.permission}
+                            </Badge>
+                          </div>
+                          <div className="mt-3">
+                            <p
+                              className="font-medium truncate"
+                              title={share.file?.name}
+                            >
+                              {share.file?.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Shared with{' '}
+                              {share.grantee_user?.name ||
+                                share.grantee_email ||
+                                'Unknown'}
+                            </p>
+                            {share.file && (
+                              <p className="text-xs text-muted-foreground">
+                                {share.file.is_folder
+                                  ? 'Folder'
+                                  : formatBytes(Number(share.file.size || 0))}
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-auto pt-4">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="w-full"
+                              onClick={() =>
+                                handleRevokeShare(share.id, 'private')
+                              }
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Revoke Access
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {/* Shared with Me */}
-          {privateShares.length > 0 && (
+          {sharedWithMe.length > 0 && (
             <section>
               <h2 className="text-xl font-semibold mb-3 flex items-center gap-2">
                 <Share2 className="h-4 w-4 text-primary" /> Shared With Me
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {privateShares.map((share, index) => {
+                {sharedWithMe.map((share, index) => {
                   const fileName = share.file?.name ?? 'File';
                   const mimeType = share.file?.mime_type ?? '';
                   const isFolder = !!share.file?.is_folder;
@@ -346,10 +456,15 @@ export default function SharedPage() {
       <AlertDialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Stop sharing this file?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {revokeType === 'public'
+                ? 'Stop sharing this file?'
+                : 'Revoke access?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to stop sharing this file publicly? The link
-              will no longer work and anyone with the link will lose access.
+              {revokeType === 'public'
+                ? 'Are you sure you want to stop sharing this file publicly? The link will no longer work and anyone with the link will lose access.'
+                : "Are you sure you want to revoke this user's access to the file? They will no longer be able to view or download it."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -358,7 +473,7 @@ export default function SharedPage() {
               onClick={confirmRevokeShare}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Stop Sharing
+              {revokeType === 'public' ? 'Stop Sharing' : 'Revoke Access'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

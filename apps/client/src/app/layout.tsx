@@ -1,11 +1,18 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import { ThemeProvider } from "@/components/ThemeProvider";
-import { AuthProvider } from "@/context/AuthContext";
+import type { Metadata, Viewport } from 'next';
+import './globals.css';
+import { ThemeProvider } from '@/components/ThemeProvider';
+import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata: Metadata = {
-  title: "ZynqCloud",
-  description: "Secure, fast, and completely self-hosted file storage with role-based access control and team collaboration.",
+  title: 'ZynqCloud',
+  description:
+    'Secure, fast, and completely self-hosted file storage with role-based access control and team collaboration.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -24,9 +31,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <AuthProvider>
-          <ThemeProvider>
-            {children}
-          </ThemeProvider>
+          <ThemeProvider>{children}</ThemeProvider>
         </AuthProvider>
       </body>
     </html>
