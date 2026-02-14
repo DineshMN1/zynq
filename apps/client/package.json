@@ -88,7 +88,7 @@
     "react-resizable-panels": "^3.0.3",
     "react-responsive-masonry": "^2.7.1",
     "react-rough-notation": "^1.0.5",
-    "react-syntax-highlighter": "^15.6.1",
+    "react-syntax-highlighter": "^16.1.0",
     "react-wrap-balancer": "^1.1.1",
     "recharts": "^3.0.2",
     "simplex-noise": "^4.0.3",
