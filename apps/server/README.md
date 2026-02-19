@@ -6,8 +6,8 @@ NestJS REST API for file management.
 
 ```bash
 cp .env.example .env
-npm install
-npm run start:dev
+pnpm install
+pnpm run start:dev
 ```
 
 API runs at http://localhost:4000/api/v1
@@ -15,27 +15,29 @@ API runs at http://localhost:4000/api/v1
 ## Scripts
 
 ```bash
-npm run start:dev    # Development
-npm run build        # Build
-npm run start:prod   # Production
-npm run lint         # Lint
-npm run test         # Tests
+pnpm run start:dev    # Development
+pnpm run build        # Build
+pnpm run start:prod   # Production
+pnpm run lint         # Lint
+pnpm run test         # Tests
 ```
 
 ## Environment
 
-See `.env.example` for all options. Key variables:
+See `.env.example` for backend-only development. For self-host production deployment, use root `.env.example`.
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_*` | PostgreSQL connection |
-| `JWT_SECRET` | Auth secret (32+ chars) |
-| `S3_*` | Storage configuration |
-| `SMTP_*` | Email settings |
+| Variable                     | Description                          |
+| ---------------------------- | ------------------------------------ |
+| `DATABASE_*`                 | PostgreSQL connection                |
+| `JWT_SECRET`                 | Auth secret (32+ chars)              |
+| `FILE_STORAGE_PATH`          | Local file storage path              |
+| `FILE_ENCRYPTION_MASTER_KEY` | Base64 32-byte encryption master key |
+| `SMTP_*`                     | Email settings                       |
 
 ## API Endpoints
 
 ### Auth
+
 - `POST /auth/register` - Register (first user = owner)
 - `POST /auth/login` - Login
 - `POST /auth/logout` - Logout
@@ -44,6 +46,7 @@ See `.env.example` for all options. Key variables:
 - `POST /auth/reset-password` - Reset password
 
 ### Files
+
 - `GET /files` - List files
 - `POST /files` - Create file/folder
 - `GET /files/:id/download` - Download
@@ -51,6 +54,7 @@ See `.env.example` for all options. Key variables:
 - `POST /files/:id/restore` - Restore
 
 ### Admin
+
 - `GET /admin/users` - List users
 - `POST /invites` - Create invite
 - `GET /settings/smtp` - SMTP config
@@ -58,8 +62,8 @@ See `.env.example` for all options. Key variables:
 
 ## User Roles
 
-| Role | Access |
-|------|--------|
-| Owner | Full system access |
+| Role  | Access                |
+| ----- | --------------------- |
+| Owner | Full system access    |
 | Admin | Manage users, invites |
-| User | Own files only |
+| User  | Own files only        |

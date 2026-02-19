@@ -31,9 +31,49 @@ If you stop using zynqCloud, your files and database remain fully on your server
 ## Quick Start
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/DineshMN1/zynq/main/install.sh | bash
+```
+
+### Before Running `install.sh`
+
+Keep these ready:
+
+1. A Linux server with Docker + Docker Compose plugin installed
+2. Open port for app access (default `3000`, or your custom `APP_PORT`)
+3. Domain name (optional, but recommended for production)
+4. SMTP details if you want invite/password-reset emails (host, port, secure mode, user, password, from address)
+5. Storage path decision for uploads (`ZYNQ_DATA_PATH`)
+6. Secure place to store generated secrets (`JWT_SECRET`, `FILE_ENCRYPTION_MASTER_KEY`)
+
+### Interactive Fields Asked By `install.sh`
+
+The installer wizard prompts for:
+
+1. Install directory
+2. Domain/IP
+3. App port
+4. Data path
+5. Docker image tag
+6. Database user
+7. Database name
+8. Database password
+9. JWT secret
+10. File encryption master key (base64)
+11. Public registration toggle
+12. Invite token TTL (hours)
+13. SMTP enable toggle
+14. SMTP host/port/secure/user/password/from (if SMTP enabled)
+15. Optional `.env` review/edit before startup
+
+If password/secret fields are left empty, secure values are auto-generated.
+
+Or manual:
+
+```bash
 git clone https://github.com/DineshMN1/zynq.git
 cd zynq
-docker compose up -d --build
+cp .env.example .env
+docker compose up -d
 ```
 
 Open `http://localhost:3000` → Create your admin account → Done.
@@ -58,27 +98,41 @@ Open `http://localhost:3000` → Create your admin account → Done.
 **Docker (recommended)**
 
 ```bash
-docker compose up -d --build
+cp .env.example .env
+docker compose up -d
 ```
 
 **Development**
 
 ```bash
 pnpm install
-pnpm turbo run dev
+docker compose -f docker-compose.dev.yml up -d
 ```
 
 ---
 
 ## Configuration
 
-Copy `apps/server/.env.example` to `apps/server/.env` and configure:
+Copy `.env.example` to `.env` and configure:
 
-| Variable     | Description             |
-| ------------ | ----------------------- |
-| `JWT_SECRET` | Auth secret (32+ chars) |
-| `DATABASE_*` | PostgreSQL connection   |
-| `SMTP_*`     | Email settings          |
+| Variable         | Description             |
+| ---------------- | ----------------------- |
+| `JWT_SECRET`     | Auth secret (32+ chars) |
+| `DATABASE_*`     | PostgreSQL connection   |
+| `ZYNQ_DATA_PATH` | Host path for file data |
+| `SMTP_*`         | Email settings          |
+
+## Operations
+
+- Backup and restore runbook: `docs/backup-restore.md`
+- Backup script: `scripts/backup.sh`
+- Restore script: `scripts/restore.sh`
+
+## Ports
+
+- External default: `3000` (`APP_PORT`)
+- App container port: `80`
+- Internal only: frontend `3000`, backend `4000` (not exposed externally)
 
 ---
 
@@ -173,7 +227,7 @@ zynqCloud is designed to run on minimal hardware:
 | **Disk** | 10 GB+ (depends on your files) | SSD recommended |
 | **OS**   | Any Linux with Docker          | Ubuntu 22.04+   |
 
-A single `docker compose up -d --build` deploys PostgreSQL plus one zynqCloud app container that bundles frontend and backend. Works on any cloud provider (AWS, DigitalOcean, Hetzner, Oracle Cloud free tier) or a home server.
+A single `docker compose up -d` deploys PostgreSQL plus one zynqCloud app container that bundles frontend and backend. Works on any cloud provider (AWS, DigitalOcean, Hetzner, Oracle Cloud free tier) or a home server.
 
 </details>
 
@@ -233,10 +287,10 @@ This pulls the latest images and restarts the containers. Your data is stored in
 For version‑pinned deployments, use a specific tag:
 
 ```yaml
-image: yourusername/zynqcloud-backend:v1.2.0
+image: yourusername/zynqcloud:v1.2.0
 ```
 
-Database migrations run automatically on startup — no manual steps required.
+Database migrations run automatically via the one-shot `migrate` service in `docker-compose.yml` before the app starts.
 
 </details>
 

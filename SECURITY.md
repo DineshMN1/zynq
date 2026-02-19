@@ -4,13 +4,15 @@
 
 If you discover a security vulnerability, please report it privately:
 
-**Email:** security@zynqcloud.io (or create a private GitHub security advisory)
+**Email:** mndinesh674@gmail.com (or create a private GitHub security advisory)
 
 **Do NOT:**
+
 - Open a public issue
 - Disclose publicly before we've addressed it
 
 **We will:**
+
 - Acknowledge within 48 hours
 - Provide an estimated fix timeline
 - Credit you in the release notes (if desired)
@@ -18,7 +20,7 @@ If you discover a security vulnerability, please report it privately:
 ## Supported Versions
 
 | Version | Supported |
-|---------|-----------|
+| ------- | --------- |
 | 1.x.x   | Yes       |
 | < 1.0   | No        |
 
@@ -31,4 +33,4 @@ When self-hosting zynqCloud:
 3. Change default database passwords
 4. Keep dependencies updated
 5. Use firewall rules to restrict access
-6. Regular backups
+6. Run regular backups (DB + files + `FILE_ENCRYPTION_MASTER_KEY`)

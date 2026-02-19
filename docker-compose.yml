@@ -1,18 +1,16 @@
 services:
   postgres:
-    build:
-      context: .
-      dockerfile: docker/postgres.Dockerfile
+    image: postgres:16-alpine
     container_name: zynqcloud-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: zynqcloud
-      POSTGRES_PASSWORD: supersecret_db_pass
-      POSTGRES_DB: zynqcloud
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U zynqcloud -d zynqcloud']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,39 +18,60 @@ services:
     networks:
       - zynqcloud-network
 
-  zynqcloud:
-    build: .
-    container_name: zynqcloud
-    restart: unless-stopped
+  migrate:
+    image: ${ZYNQCLOUD_IMAGE:-dineshmn1/zynqcloud:latest}
+    container_name: zynqcloud-migrate
+    restart: 'no'
     depends_on:
       postgres:
         condition: service_healthy
+    command: ['node', '/app/server/dist/database/run-migrations.js']
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
+    networks:
+      - zynqcloud-network
+
+  zynqcloud:
+    image: ${ZYNQCLOUD_IMAGE:-dineshmn1/zynqcloud:latest}
+    container_name: zynqcloud
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgresql://zynqcloud:supersecret_db_pass@postgres:5432/zynqcloud
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      DATABASE_USER: zynqcloud
-      DATABASE_PASSWORD: supersecret_db_pass
-      DATABASE_NAME: zynqcloud
-      JWT_SECRET: ${JWT_SECRET:-zynqcloud_dev_secret_change_in_production_32chars}
-      # Local file storage
+      DATABASE_URL: postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
       FILE_STORAGE_PATH: /data/files
-      # Encryption master key (32 bytes base64 encoded) - CHANGE IN PRODUCTION!
-      FILE_ENCRYPTION_MASTER_KEY: ${FILE_ENCRYPTION_MASTER_KEY:-YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=}
-      # Email settings
-      EMAIL_ENABLED: 'true'
-      SMTP_HOST: smtp.gmail.com
-      SMTP_PORT: 587
-      SMTP_SECURE: 'false'
-      SMTP_USER: your-email@gmail.com
-      SMTP_PASS: your-app-password
-      SMTP_FROM: 'ZynqCloud <no-reply@yourdomain.com>'
-      CORS_ORIGIN: http://localhost:3000
-      FRONTEND_URL: http://localhost:3000
+      FILE_ENCRYPTION_MASTER_KEY: ${FILE_ENCRYPTION_MASTER_KEY}
+      EMAIL_ENABLED: ${EMAIL_ENABLED}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_SECURE: ${SMTP_SECURE}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      INVITE_TOKEN_TTL_HOURS: ${INVITE_TOKEN_TTL_HOURS}
+      PUBLIC_REGISTRATION: ${PUBLIC_REGISTRATION}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      FRONTEND_URL: ${FRONTEND_URL}
+      RATE_LIMIT_TTL: ${RATE_LIMIT_TTL}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX}
     ports:
-      - '3000:80'
+      - '${APP_PORT:-3000}:80'
     volumes:
       - zynq_files:/data/files
     networks:
@@ -66,7 +85,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${ZYNQ_DATA_PATH:-./data/files}
+      device: ${ZYNQ_DATA_PATH}
 
 networks:
   zynqcloud-network:

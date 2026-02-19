@@ -8,7 +8,7 @@
 FROM node:20-alpine AS backend-builder
 WORKDIR /build
 COPY apps/server/package*.json ./
-RUN npm ci
+RUN npm install
 COPY apps/server/ .
 RUN npm run build
 
@@ -33,7 +33,7 @@ RUN addgroup -S app && adduser -S app -G app
 # ── Backend setup ───────────────────────────────────────────
 WORKDIR /app/server
 COPY apps/server/package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 COPY --from=backend-builder /build/dist ./dist
 
 # ── Frontend setup (standalone mode) ────────────────────────
