@@ -70,6 +70,14 @@ export class AddEncryptionColumns1738500000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    const hasStorageQuota = await queryRunner.hasColumn(
+      'users',
+      'storage_quota',
+    );
+    if (hasStorageQuota) {
+      await queryRunner.dropColumn('users', 'storage_quota');
+    }
+
     const hasEncryptionAlgo = await queryRunner.hasColumn(
       'files',
       'encryption_algo',

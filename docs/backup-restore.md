@@ -43,7 +43,7 @@ scripts/backup.sh --output-dir /path/to/backups
 ```bash
 TS=$(date +%Y%m%d-%H%M%S)
 docker compose --env-file .env exec -T postgres \
-  pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" > "backups/db-$TS.sql"
+  pg_dump -U "$DATABASE_USER" -d "$DATABASE_NAME" > "backups/db-$TS.sql"
 ```
 
 ### 2.2 Backup Files
@@ -56,6 +56,7 @@ tar -czf "backups/files-$TS.tar.gz" -C "$(dirname "$ZYNQ_DATA_PATH")" "$(basenam
 ### 2.3 Backup Encryption Key (Critical)
 
 ```bash
+TS=$(date +%Y%m%d-%H%M%S)
 grep '^FILE_ENCRYPTION_MASTER_KEY=' .env > "backups/key-$TS.env"
 chmod 600 "backups/key-$TS.env"
 ```
@@ -101,7 +102,7 @@ docker compose --env-file .env up -d postgres
 
 ```bash
 cat backups/db-YYYYMMDD-HHMMSS.sql | docker compose --env-file .env exec -T postgres \
-  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+  psql -U "$DATABASE_USER" -d "$DATABASE_NAME"
 ```
 
 ### 3.5 Start Full Stack

@@ -115,12 +115,13 @@ docker compose -f docker-compose.dev.yml up -d
 
 Copy `.env.example` to `.env` and configure:
 
-| Variable         | Description             |
-| ---------------- | ----------------------- |
-| `JWT_SECRET`     | Auth secret (32+ chars) |
-| `DATABASE_*`     | PostgreSQL connection   |
-| `ZYNQ_DATA_PATH` | Host path for file data |
-| `SMTP_*`         | Email settings          |
+| Variable                     | Description                                                 |
+| ---------------------------- | ----------------------------------------------------------- |
+| `JWT_SECRET`                 | Auth secret (32+ chars)                                     |
+| `DATABASE_*`                 | PostgreSQL connection                                       |
+| `FILE_ENCRYPTION_MASTER_KEY` | Master key for file encryption (critical: back up securely) |
+| `ZYNQ_DATA_PATH`             | Host path for file data                                     |
+| `SMTP_*`                     | Email settings                                              |
 
 ## Operations
 

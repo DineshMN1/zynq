@@ -70,8 +70,8 @@ set -a
 . ./.env
 set +a
 
-: "${POSTGRES_USER:?POSTGRES_USER is required in .env}"
-: "${POSTGRES_DB:?POSTGRES_DB is required in .env}"
+: "${DATABASE_USER:?DATABASE_USER is required in .env}"
+: "${DATABASE_NAME:?DATABASE_NAME is required in .env}"
 : "${ZYNQ_DATA_PATH:?ZYNQ_DATA_PATH is required in .env}"
 
 if [ -n "$KEY_BACKUP" ]; then
@@ -83,7 +83,7 @@ if [ -n "$KEY_BACKUP" ]; then
   CUR_KEY="${FILE_ENCRYPTION_MASTER_KEY:-}"
   if [ -n "$CUR_KEY" ] && [ "$NEW_KEY" != "$CUR_KEY" ]; then
     echo "Warning: key file differs from current .env key."
-    echo "Restore encrypted files will fail unless .env uses the original key."
+    echo "Restoring encrypted files will fail unless .env uses the original key."
     if [ "$ASSUME_YES" != "true" ]; then
       printf "Continue anyway? [y/N]: "
       read -r ans
@@ -114,13 +114,25 @@ fi
 echo "Starting postgres..."
 docker compose --env-file .env up -d postgres
 
+echo "Waiting for postgres readiness..."
+attempt=0
+max_attempts=30
+until docker compose --env-file .env exec -T postgres pg_isready -U "$DATABASE_USER" >/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge "$max_attempts" ]; then
+    echo "Postgres did not become ready in time." >&2
+    exit 1
+  fi
+  sleep 2
+done
+
 mkdir -p "$(dirname "$ZYNQ_DATA_PATH")"
 echo "Restoring file archive..."
 tar -xzf "$FILES_BACKUP" -C "$(dirname "$ZYNQ_DATA_PATH")"
 
 echo "Restoring database..."
 cat "$DB_BACKUP" | docker compose --env-file .env exec -T postgres \
-  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+  psql -U "$DATABASE_USER" -d "$DATABASE_NAME"
 
 echo "Starting full stack..."
 docker compose --env-file .env up -d

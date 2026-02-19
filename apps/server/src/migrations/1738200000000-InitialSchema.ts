@@ -133,11 +133,12 @@ export class InitialSchema1738200000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS password_resets`);
-    await queryRunner.query(`DROP TABLE IF EXISTS settings`);
-    await queryRunner.query(`DROP TABLE IF EXISTS shares`);
-    await queryRunner.query(`DROP TABLE IF EXISTS files`);
-    await queryRunner.query(`DROP TABLE IF EXISTS invitations`);
-    await queryRunner.query(`DROP TABLE IF EXISTS users`);
+    await queryRunner.query(`DROP TABLE IF EXISTS password_resets CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS settings CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS shares CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS files CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS invitations CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS users CASCADE`);
+    await queryRunner.query(`DROP EXTENSION IF EXISTS "uuid-ossp"`);
   }
 }

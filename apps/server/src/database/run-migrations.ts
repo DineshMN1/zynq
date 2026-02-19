@@ -9,6 +9,7 @@ async function run() {
 run()
   .then(() => {
     console.log('Migrations completed successfully.');
+    process.exit(0);
   })
   .catch(async (error) => {
     console.error('Migration failed:', error);

@@ -37,9 +37,9 @@ SMTP_SECURE="${SMTP_SECURE:-false}"
 SMTP_USER="${SMTP_USER:-}"
 SMTP_PASS="${SMTP_PASS:-}"
 SMTP_FROM="${SMTP_FROM:-zynqCloud <no-reply@localhost>}"
-POSTGRES_USER="${POSTGRES_USER:-zynqcloud}"
-POSTGRES_DB="${POSTGRES_DB:-zynqcloud}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
+DATABASE_USER="${DATABASE_USER:-${POSTGRES_USER:-zynqcloud}}"
+DATABASE_NAME="${DATABASE_NAME:-${POSTGRES_DB:-zynqcloud}}"
+DATABASE_PASSWORD="${DATABASE_PASSWORD:-${POSTGRES_PASSWORD:-}}"
 JWT_SECRET="${JWT_SECRET:-}"
 FILE_ENCRYPTION_MASTER_KEY="${FILE_ENCRYPTION_MASTER_KEY:-}"
 PUBLIC_REGISTRATION="${PUBLIC_REGISTRATION:-false}"
@@ -203,13 +203,13 @@ services:
     container_name: zynqcloud-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      test: ['CMD-SHELL', 'pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -227,8 +227,8 @@ services:
     command: ['node', '/app/server/dist/database/run-migrations.js']
     environment:
       NODE_ENV: production
-      DATABASE_HOST: ${DATABASE_HOST}
-      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: ${DATABASE_NAME}
@@ -245,9 +245,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}
-      DATABASE_HOST: ${DATABASE_HOST}
-      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_URL: postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST:-postgres}:${DATABASE_PORT:-5432}/${DATABASE_NAME}
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: ${DATABASE_NAME}
@@ -284,7 +284,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${ZYNQ_DATA_PATH}
+      device: ${ZYNQ_DATA_PATH:?ZYNQ_DATA_PATH is required}
 
 networks:
   zynqcloud-network:
@@ -304,10 +304,6 @@ ZYNQCLOUD_IMAGE=dineshmn1/zynqcloud:latest
 APP_PORT=3000
 
 # Database (used by postgres service and app)
-POSTGRES_USER=zynqcloud
-POSTGRES_PASSWORD=change_this_db_password
-POSTGRES_DB=zynqcloud
-
 DATABASE_HOST=postgres
 DATABASE_PORT=5432
 DATABASE_USER=zynqcloud
@@ -347,21 +343,29 @@ ENVEXAMPLEEOF
 }
 
 parse_args() {
+  require_value() {
+    if [ $# -lt 2 ] || [ -z "${2:-}" ] || [ "${2#--}" != "$2" ]; then
+      echo -e "${RED}Missing value for option: $1${NC}"
+      usage
+      exit 1
+    fi
+  }
+
   while [ $# -gt 0 ]; do
     case "$1" in
-      --dir) INSTALL_DIR="$2"; shift 2 ;;
-      --domain) DOMAIN="$2"; shift 2 ;;
-      --port) APP_PORT="$2"; shift 2 ;;
-      --image) APP_IMAGE="$2"; shift 2 ;;
-      --data-path) DATA_PATH="$2"; DATA_PATH_SET="true"; shift 2 ;;
+      --dir) require_value "$@"; INSTALL_DIR="$2"; shift 2 ;;
+      --domain) require_value "$@"; DOMAIN="$2"; shift 2 ;;
+      --port) require_value "$@"; APP_PORT="$2"; shift 2 ;;
+      --image) require_value "$@"; APP_IMAGE="$2"; shift 2 ;;
+      --data-path) require_value "$@"; DATA_PATH="$2"; DATA_PATH_SET="true"; shift 2 ;;
       --smtp-enable) SMTP_ENABLED="true"; shift ;;
-      --smtp-host) SMTP_HOST="$2"; shift 2 ;;
-      --smtp-port) SMTP_PORT="$2"; shift 2 ;;
-      --smtp-secure) SMTP_SECURE="$2"; shift 2 ;;
-      --smtp-user) SMTP_USER="$2"; shift 2 ;;
-      --smtp-pass) SMTP_PASS="$2"; shift 2 ;;
-      --smtp-from) SMTP_FROM="$2"; shift 2 ;;
-      --use-https) USE_HTTPS="$2"; shift 2 ;;
+      --smtp-host) require_value "$@"; SMTP_HOST="$2"; shift 2 ;;
+      --smtp-port) require_value "$@"; SMTP_PORT="$2"; shift 2 ;;
+      --smtp-secure) require_value "$@"; SMTP_SECURE="$2"; shift 2 ;;
+      --smtp-user) require_value "$@"; SMTP_USER="$2"; shift 2 ;;
+      --smtp-pass) require_value "$@"; SMTP_PASS="$2"; shift 2 ;;
+      --smtp-from) require_value "$@"; SMTP_FROM="$2"; shift 2 ;;
+      --use-https) require_value "$@"; USE_HTTPS="$2"; shift 2 ;;
       --edit-env) EDIT_ENV="true"; shift ;;
       --no-edit-env) EDIT_ENV="false"; shift ;;
       --template-only) TEMPLATE_ONLY="true"; shift ;;
@@ -394,13 +398,13 @@ configure_interactive() {
   fi
   prompt APP_IMAGE "Docker image" "$APP_IMAGE"
 
-  prompt POSTGRES_USER "Database user" "$POSTGRES_USER"
-  prompt POSTGRES_DB "Database name" "$POSTGRES_DB"
+  prompt DATABASE_USER "Database user" "$DATABASE_USER"
+  prompt DATABASE_NAME "Database name" "$DATABASE_NAME"
 
-  if [ -z "$POSTGRES_PASSWORD" ]; then
-    POSTGRES_PASSWORD="$(generate_password)"
+  if [ -z "$DATABASE_PASSWORD" ]; then
+    DATABASE_PASSWORD="$(generate_password)"
   fi
-  prompt_secret POSTGRES_PASSWORD "Database password" "$POSTGRES_PASSWORD"
+  prompt_secret DATABASE_PASSWORD "Database password" "$DATABASE_PASSWORD"
 
   if [ -z "$JWT_SECRET" ]; then
     JWT_SECRET="$(generate_base64_32)"
@@ -473,8 +477,8 @@ write_env() {
     cookie_domain="localhost"
   fi
 
-  if [ -z "$POSTGRES_PASSWORD" ]; then
-    POSTGRES_PASSWORD="$(generate_password)"
+  if [ -z "$DATABASE_PASSWORD" ]; then
+    DATABASE_PASSWORD="$(generate_password)"
   fi
   if [ -z "$JWT_SECRET" ]; then
     JWT_SECRET="$(generate_base64_32)"
@@ -507,15 +511,11 @@ ZYNQCLOUD_IMAGE=${APP_IMAGE}
 APP_PORT=${APP_PORT}
 ZYNQ_DATA_PATH=${DATA_PATH}
 
-POSTGRES_USER=${POSTGRES_USER}
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-POSTGRES_DB=${POSTGRES_DB}
-
 DATABASE_HOST=postgres
 DATABASE_PORT=5432
-DATABASE_USER=${POSTGRES_USER}
-DATABASE_PASSWORD=${POSTGRES_PASSWORD}
-DATABASE_NAME=${POSTGRES_DB}
+DATABASE_USER=${DATABASE_USER}
+DATABASE_PASSWORD=${DATABASE_PASSWORD}
+DATABASE_NAME=${DATABASE_NAME}
 
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRES_IN=7d
@@ -576,6 +576,7 @@ edit_env_if_requested() {
 
 start_stack() {
   cd "$INSTALL_DIR"
+  need_cmd curl
 
   log "Pulling images"
   docker compose --env-file .env pull
@@ -626,7 +627,6 @@ main() {
   validate_inputs
 
   need_cmd docker
-  need_cmd curl
   if ! docker compose version >/dev/null 2>&1; then
     echo -e "${RED}Docker Compose plugin is required (docker compose ...)${NC}"
     exit 1

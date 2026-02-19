@@ -52,7 +52,8 @@ pnpm --filter @zynqcloud/client build
 ## Build Docker image locally
 
 ```bash
-docker build -t dineshmn1/zynqcloud:local .
+docker build -t zynqcloud:local .
+ZYNQCLOUD_IMAGE=zynqcloud:local docker compose up -d
 ```
 
 ## Run built app locally (server)

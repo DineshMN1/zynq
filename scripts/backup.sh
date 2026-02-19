@@ -34,8 +34,8 @@ set -a
 . ./.env
 set +a
 
-: "${POSTGRES_USER:?POSTGRES_USER is required in .env}"
-: "${POSTGRES_DB:?POSTGRES_DB is required in .env}"
+: "${DATABASE_USER:?DATABASE_USER is required in .env}"
+: "${DATABASE_NAME:?DATABASE_NAME is required in .env}"
 : "${ZYNQ_DATA_PATH:?ZYNQ_DATA_PATH is required in .env}"
 
 mkdir -p "$OUTPUT_DIR"
@@ -48,19 +48,23 @@ META_FILE="$OUTPUT_DIR/manifest-$TS.txt"
 
 printf "Creating DB backup: %s\n" "$DB_FILE"
 docker compose --env-file .env exec -T postgres \
-  pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" > "$DB_FILE"
+  pg_dump -U "$DATABASE_USER" -d "$DATABASE_NAME" > "$DB_FILE"
 
 printf "Creating file backup: %s\n" "$FILES_FILE"
 tar -czf "$FILES_FILE" -C "$(dirname "$ZYNQ_DATA_PATH")" "$(basename "$ZYNQ_DATA_PATH")"
 
 printf "Saving encryption key: %s\n" "$KEY_FILE"
+if ! grep -q '^FILE_ENCRYPTION_MASTER_KEY=' .env; then
+  echo "Missing FILE_ENCRYPTION_MASTER_KEY in .env" >&2
+  exit 1
+fi
 grep '^FILE_ENCRYPTION_MASTER_KEY=' .env > "$KEY_FILE"
 chmod 600 "$KEY_FILE"
 
 cat > "$META_FILE" <<META
 created_at=$TS
-postgres_user=$POSTGRES_USER
-postgres_db=$POSTGRES_DB
+database_user=$DATABASE_USER
+database_name=$DATABASE_NAME
 zynq_data_path=$ZYNQ_DATA_PATH
 db_file=$(basename "$DB_FILE")
 files_file=$(basename "$FILES_FILE")
