@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# zynqCloud one-command installer
+# zynqcloud one-command installer
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/DineshMN1/zynq/main/install.sh | bash
 
@@ -9,6 +9,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+BLUE='\033[0;34m'
 WHITE='\033[1;37m'
 DIM='\033[2m'
 NC='\033[0m'
@@ -16,6 +17,8 @@ NC='\033[0m'
 CHECK="${GREEN}✓${NC}"
 WARN="${YELLOW}!${NC}"
 INFO="${CYAN}→${NC}"
+APP_NAME="zynqcloud"
+APP_WORDMARK="ZYNQCLOUD"
 
 INSTALL_DIR="${INSTALL_DIR:-$HOME/zynqcloud}"
 DOMAIN="${DOMAIN:-localhost}"
@@ -36,7 +39,7 @@ SMTP_PORT="${SMTP_PORT:-587}"
 SMTP_SECURE="${SMTP_SECURE:-false}"
 SMTP_USER="${SMTP_USER:-}"
 SMTP_PASS="${SMTP_PASS:-}"
-SMTP_FROM="${SMTP_FROM:-zynqCloud <no-reply@localhost>}"
+SMTP_FROM="${SMTP_FROM:-zynqcloud <no-reply@localhost>}"
 DATABASE_USER="${DATABASE_USER:-${POSTGRES_USER:-zynqcloud}}"
 DATABASE_NAME="${DATABASE_NAME:-${POSTGRES_DB:-zynqcloud}}"
 DATABASE_PASSWORD="${DATABASE_PASSWORD:-${POSTGRES_PASSWORD:-}}"
@@ -50,7 +53,7 @@ EDIT_ENV="${EDIT_ENV:-ask}"
 
 usage() {
   cat <<USAGE
-zynqCloud installer
+${APP_NAME} installer
 
 Options:
   --dir <path>           Install directory (default: \$HOME/zynqcloud)
@@ -91,6 +94,10 @@ need_cmd() {
     echo -e "${RED}Missing required command: $1${NC}"
     exit 1
   }
+}
+
+print_banner() {
+  echo -e "${BLUE}Z Y N Q C L O U D${NC}"
 }
 
 is_tty() {
@@ -169,6 +176,118 @@ prompt_yesno() {
   fi
 }
 
+decode_base64() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl base64 -d -A 2>/dev/null
+    return
+  fi
+
+  if printf 'QQ==' | base64 --decode >/dev/null 2>&1; then
+    base64 --decode 2>/dev/null
+    return
+  fi
+
+  if printf 'QQ==' | base64 -d >/dev/null 2>&1; then
+    base64 -d 2>/dev/null
+    return
+  fi
+
+  base64 -D 2>/dev/null
+}
+
+is_valid_base64_32() {
+  local key="$1"
+  local decoded_len
+
+  if [ -z "$key" ]; then
+    return 1
+  fi
+
+  decoded_len="$(printf '%s' "$key" | decode_base64 | wc -c | tr -d '[:space:]')" || return 1
+  [ "$decoded_len" = "32" ]
+}
+
+is_valid_jwt_secret() {
+  local secret="$1"
+  [ "${#secret}" -ge 32 ]
+}
+
+prompt_jwt_secret() {
+  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+    if ! is_valid_jwt_secret "$JWT_SECRET"; then
+      JWT_SECRET="$(generate_base64_32)"
+      warn "Generated JWT_SECRET (missing/weak input)"
+    fi
+    return
+  fi
+
+  echo "JWT secret must be at least 32 characters."
+
+  while true; do
+    local choice
+    echo -en "${CYAN}?${NC} JWT secret: [g]enerate / [p]aste ${DIM}(default: g)${NC}: "
+    read -r choice
+    choice="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')"
+    [ -z "$choice" ] && choice="g"
+
+    case "$choice" in
+      g|generate)
+        JWT_SECRET="$(generate_base64_32)"
+        ok "Generated JWT_SECRET"
+        return
+        ;;
+      p|paste)
+        prompt_secret JWT_SECRET "Paste JWT secret (min 32 chars)" ""
+        if is_valid_jwt_secret "$JWT_SECRET"; then
+          return
+        fi
+        warn "Invalid JWT secret. It must be at least 32 characters."
+        ;;
+      *)
+        warn "Invalid choice. Use 'g' (generate) or 'p' (paste)."
+        ;;
+    esac
+  done
+}
+
+prompt_file_encryption_key() {
+  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+    if ! is_valid_base64_32 "$FILE_ENCRYPTION_MASTER_KEY"; then
+      FILE_ENCRYPTION_MASTER_KEY="$(generate_base64_32)"
+      warn "Generated FILE_ENCRYPTION_MASTER_KEY (missing/invalid input)"
+    fi
+    return
+  fi
+
+  echo "File encryption key must decode from base64 to exactly 32 bytes."
+
+  while true; do
+    local choice
+    echo -en "${CYAN}?${NC} File encryption master key: [g]enerate / [p]aste ${DIM}(default: g)${NC}: "
+    read -r choice
+    choice="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')"
+    [ -z "$choice" ] && choice="g"
+
+    case "$choice" in
+      g|generate)
+        FILE_ENCRYPTION_MASTER_KEY="$(generate_base64_32)"
+        ok "Generated FILE_ENCRYPTION_MASTER_KEY"
+        return
+        ;;
+      p|paste)
+        prompt_secret FILE_ENCRYPTION_MASTER_KEY "Paste file encryption master key (base64 32 bytes)" ""
+        if is_valid_base64_32 "$FILE_ENCRYPTION_MASTER_KEY"; then
+          return
+        fi
+        warn "Invalid key. It must be valid base64 and decode to exactly 32 bytes."
+        ;;
+      *)
+        warn "Invalid choice. Use 'g' (generate) or 'p' (paste)."
+        ;;
+    esac
+  done
+}
+
 generate_base64_32() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -base64 32 | tr -d '\n'
@@ -186,12 +305,16 @@ generate_password() {
 }
 
 download_or_copy_templates() {
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local script_dir=""
+  if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  elif [ -n "${0:-}" ] && [ "${0}" != "bash" ] && [ -f "${0}" ]; then
+    script_dir="$(cd "$(dirname "${0}")" && pwd)"
+  fi
 
   mkdir -p "$INSTALL_DIR"
 
-  if [ -f "$script_dir/docker-compose.yml" ] && [ -f "$script_dir/.env.example" ]; then
+  if [ -n "$script_dir" ] && [ -f "$script_dir/docker-compose.yml" ] && [ -f "$script_dir/.env.example" ]; then
     cp "$script_dir/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
     cp "$script_dir/.env.example" "$INSTALL_DIR/.env.example"
     ok "Copied local templates"
@@ -293,7 +416,7 @@ COMPOSEEOF
 
     cat > "$INSTALL_DIR/.env.example" <<'ENVEXAMPLEEOF'
 # ============================================================
-# zynqCloud Self-Host Environment
+# zynqcloud Self-Host Environment
 # Copy this file to .env before running `docker compose up -d`
 # ============================================================
 
@@ -336,7 +459,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=
 SMTP_PASS=
-SMTP_FROM=zynqCloud <no-reply@yourdomain.com>
+SMTP_FROM=zynqcloud <no-reply@yourdomain.com>
 ENVEXAMPLEEOF
     ok "Wrote built-in templates"
   fi
@@ -406,15 +529,9 @@ configure_interactive() {
   fi
   prompt_secret DATABASE_PASSWORD "Database password" "$DATABASE_PASSWORD"
 
-  if [ -z "$JWT_SECRET" ]; then
-    JWT_SECRET="$(generate_base64_32)"
-  fi
-  prompt_secret JWT_SECRET "JWT secret" "$JWT_SECRET"
+  prompt_jwt_secret
 
-  if [ -z "$FILE_ENCRYPTION_MASTER_KEY" ]; then
-    FILE_ENCRYPTION_MASTER_KEY="$(generate_base64_32)"
-  fi
-  prompt_secret FILE_ENCRYPTION_MASTER_KEY "File encryption master key (base64 32 bytes)" "$FILE_ENCRYPTION_MASTER_KEY"
+  prompt_file_encryption_key
 
   prompt_yesno PUBLIC_REGISTRATION "Enable public registration?" "$PUBLIC_REGISTRATION"
   prompt INVITE_TOKEN_TTL_HOURS "Invite token TTL (hours)" "$INVITE_TOKEN_TTL_HOURS"
@@ -453,6 +570,7 @@ validate_inputs() {
       exit 1
       ;;
   esac
+
 }
 
 write_env() {
@@ -480,11 +598,13 @@ write_env() {
   if [ -z "$DATABASE_PASSWORD" ]; then
     DATABASE_PASSWORD="$(generate_password)"
   fi
-  if [ -z "$JWT_SECRET" ]; then
+  if ! is_valid_jwt_secret "$JWT_SECRET"; then
     JWT_SECRET="$(generate_base64_32)"
+    warn "Generated JWT_SECRET (missing/weak input)"
   fi
-  if [ -z "$FILE_ENCRYPTION_MASTER_KEY" ]; then
+  if ! is_valid_base64_32 "$FILE_ENCRYPTION_MASTER_KEY"; then
     FILE_ENCRYPTION_MASTER_KEY="$(generate_base64_32)"
+    warn "Generated FILE_ENCRYPTION_MASTER_KEY (missing/invalid input)"
   fi
 
   if [ "$SMTP_ENABLED" != "true" ]; then
@@ -493,7 +613,7 @@ write_env() {
     SMTP_SECURE="false"
     SMTP_USER=""
     SMTP_PASS=""
-    SMTP_FROM="zynqCloud <no-reply@${DOMAIN}>"
+    SMTP_FROM="zynqcloud <no-reply@${DOMAIN}>"
   fi
 
   mkdir -p "$DATA_PATH"
@@ -504,7 +624,7 @@ write_env() {
   fi
 
   cat > "$INSTALL_DIR/.env" <<ENVEOF
-# zynqCloud Environment (generated)
+# zynqcloud Environment (generated)
 # $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
 ZYNQCLOUD_IMAGE=${APP_IMAGE}
@@ -609,20 +729,27 @@ print_summary() {
   fi
 
   echo ""
-  echo -e "${WHITE}zynqCloud is ready${NC}"
+  echo -e "${WHITE}Congratulations! ${APP_NAME} is ready.${NC}"
   echo "  Stack dir : $INSTALL_DIR"
   echo "  Compose   : $INSTALL_DIR/docker-compose.yml"
   echo "  Env file  : $INSTALL_DIR/.env"
   echo "  Data path : $DATA_PATH"
-  echo "  URL       : $install_url"
   echo ""
-  echo "Coolify / Dokploy template files:"
-  echo "  1) docker-compose.yml"
-  echo "  2) .env"
+  echo -e "${CYAN}Your app is ready at:${NC}"
+  echo -e "${WHITE}${install_url}${NC}"
+  echo -e "${DIM}\"Own your files. Own your cloud.\"${NC}"
   echo ""
+
+  if [ "$TEMPLATE_ONLY" = "true" ]; then
+    echo "Generated deployment files:"
+    echo "  - docker-compose.yml"
+    echo "  - .env"
+    echo ""
+  fi
 }
 
 main() {
+  print_banner
   parse_args "$@"
   validate_inputs
 
@@ -639,7 +766,7 @@ main() {
   validate_inputs
 
   echo ""
-  log "Preparing zynqCloud in $INSTALL_DIR"
+  log "Preparing ${APP_NAME} in $INSTALL_DIR"
 
   download_or_copy_templates
   write_env
