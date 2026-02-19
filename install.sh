@@ -72,7 +72,8 @@ Options:
   --edit-env             Open generated .env in editor before start
   --no-edit-env          Do not open .env editor
   --template-only        Generate files only, do not start containers
-  --non-interactive      Never prompt; use defaults/flags/env
+  --interactive          Enable prompts for setup values
+  --non-interactive      Never prompt; use defaults/flags/env (default)
   --help                 Show this help
 USAGE
 }
@@ -492,6 +493,7 @@ parse_args() {
       --edit-env) EDIT_ENV="true"; shift ;;
       --no-edit-env) EDIT_ENV="false"; shift ;;
       --template-only) TEMPLATE_ONLY="true"; shift ;;
+      --interactive) NON_INTERACTIVE="false"; shift ;;
       --non-interactive) NON_INTERACTIVE="true"; shift ;;
       --help|-h) usage; exit 0 ;;
       *)
@@ -699,10 +701,24 @@ start_stack() {
   need_cmd curl
 
   log "Pulling images"
-  docker compose --env-file .env pull
+  if ! docker compose --env-file .env pull; then
+    echo ""
+    warn "Image pull failed."
+    echo "Fix .env and retry:"
+    echo "  ${EDITOR:-nano} $INSTALL_DIR/.env"
+    echo "  cd $INSTALL_DIR && docker compose --env-file .env pull"
+    exit 1
+  fi
 
   log "Starting containers"
-  docker compose --env-file .env up -d
+  if ! docker compose --env-file .env up -d; then
+    echo ""
+    warn "Container startup failed."
+    echo "Fix .env and retry:"
+    echo "  ${EDITOR:-nano} $INSTALL_DIR/.env"
+    echo "  cd $INSTALL_DIR && docker compose --env-file .env up -d"
+    exit 1
+  fi
 
   local tries=45
   local i=0
@@ -718,6 +734,9 @@ start_stack() {
 
   warn "Health check timeout. Check logs:"
   echo "  docker compose --env-file .env logs -f"
+  echo "To edit config and retry:"
+  echo "  ${EDITOR:-nano} $INSTALL_DIR/.env"
+  echo "  cd $INSTALL_DIR && docker compose --env-file .env up -d"
 }
 
 print_summary() {
