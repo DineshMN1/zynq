@@ -42,7 +42,13 @@ Always test your Docker image locally before pushing to production:
 
 ```bash
 # Build the image locally
-docker compose build
+docker build -t yourusername/zynqcloud:test .
+
+# Prepare environment
+cp .env.example .env
+
+# Use the locally built image for a test run
+sed -i.bak 's|^ZYNQCLOUD_IMAGE=.*|ZYNQCLOUD_IMAGE=yourusername/zynqcloud:test|' .env
 
 # Start all services
 docker compose up -d
@@ -61,6 +67,7 @@ docker compose logs -f
 
 # Stop when done testing
 docker compose down
+rm -f .env.bak
 ```
 
 ## Step 5: Push a Release
@@ -84,6 +91,9 @@ This will automatically:
 2. Push to Docker Hub as `yourusername/zynqcloud:latest` and `yourusername/zynqcloud:1.0.0`
 3. Create a GitHub Release with auto-generated release notes and source code
 4. Attach `docker-compose.yml` and `install.sh` as release assets
+5. Include `.env.example` for self-host users
+
+On deployment, the one-shot `migrate` service in `docker-compose.yml` runs schema migrations before the app starts.
 
 ## Step 6: Verify
 
@@ -109,6 +119,7 @@ Or manually:
 ```bash
 git clone https://github.com/DineshMN1/zynq.git
 cd zynq
+cp .env.example .env
 docker compose up -d
 ```
 

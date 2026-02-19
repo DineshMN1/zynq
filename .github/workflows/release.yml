@@ -50,6 +50,7 @@ jobs:
           generate_release_notes: true
           files: |
             docker-compose.yml
+            .env.example
             install.sh
           body: |
             ## Docker Image

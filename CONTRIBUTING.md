@@ -5,22 +5,23 @@ Thanks for your interest in contributing to zynqCloud!
 ## Getting Started
 
 ```bash
-git clone https://github.com/your-username/zynq.git
+git clone https://github.com/DineshMN1/zynq.git
 cd zynq
 
-# Start services
-docker compose up -d postgres
+# Install workspace dependencies
+pnpm install
+
+# Start development stack (postgres + backend + frontend)
+docker compose -f docker-compose.dev.yml up -d
 
 # Backend
 cd apps/server
 cp .env.example .env
-npm install
-npm run start:dev
+pnpm run start:dev
 
 # Frontend (new terminal)
 cd apps/client
-npm install
-npm run dev
+pnpm run dev
 ```
 
 ## Before Submitting
@@ -30,13 +31,13 @@ Run these checks locally:
 ```bash
 # Backend
 cd apps/server
-npm run lint
-npm run test
+pnpm run lint
+pnpm run test
 
 # Frontend
 cd apps/client
-npm run lint
-npm run build
+pnpm run lint
+pnpm run build
 ```
 
 ## Pull Request Process

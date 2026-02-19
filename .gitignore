@@ -2,6 +2,7 @@
 # Dependencies
 # ===============================
 node_modules/
+**/node_modules/
 .pnp
 .pnp.*
 .yarn/*
@@ -10,6 +11,8 @@ node_modules/
 !.yarn/releases
 !.yarn/versions
 .pnpm-store/
+**/package-lock.json
+apps/*/pnpm-lock.yaml
 
 # ===============================
 # Build Outputs
@@ -89,6 +92,7 @@ docker-data/
 tmp/
 temp/
 *.tmp
+*.tsbuildinfo
 
 # ===============================
 # Turborepo
@@ -108,3 +112,4 @@ temp/
 .txt
 test.md
 README1.md
+Zynq-Demo.mp4

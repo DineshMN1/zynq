@@ -1,82 +1,116 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ============================================================
-# zynqCloud Installer
-# Self-hosted file cloud — your files, your server, your control
-# ============================================================
+# zynqCloud one-command installer
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/DineshMN1/zynq/main/install.sh | bash
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 DIM='\033[2m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Symbols
 CHECK="${GREEN}✓${NC}"
-CROSS="${RED}✗${NC}"
-ARROW="${CYAN}→${NC}"
 WARN="${YELLOW}!${NC}"
+INFO="${CYAN}→${NC}"
 
-print_banner() {
-  echo ""
-  echo -e "${CYAN}${BOLD}"
-  echo "  ╔══════════════════════════════════════════╗"
-  echo "  ║                                          ║"
-  echo "  ║          ███████╗██╗   ██╗███╗   ██╗     ║"
-  echo "  ║          ╚══███╔╝╚██╗ ██╔╝████╗  ██║     ║"
-  echo "  ║            ███╔╝  ╚████╔╝ ██╔██╗ ██║     ║"
-  echo "  ║           ███╔╝    ╚██╔╝  ██║╚██╗██║     ║"
-  echo "  ║          ███████╗   ██║   ██║ ╚████║     ║"
-  echo "  ║          ╚══════╝   ╚═╝   ╚═╝  ╚═══╝     ║"
-  echo "  ║                                          ║"
-  echo -e "  ║       ${WHITE}zynqCloud${CYAN} — Self-hosted File Cloud   ║"
-  echo "  ║                                          ║"
-  echo "  ╚══════════════════════════════════════════╝"
-  echo -e "${NC}"
-  echo -e "  ${DIM}Your files. Your cloud. Your control.${NC}"
-  echo ""
+INSTALL_DIR="${INSTALL_DIR:-$HOME/zynqcloud}"
+DOMAIN="${DOMAIN:-localhost}"
+APP_PORT="${APP_PORT:-3000}"
+APP_IMAGE="${ZYNQCLOUD_IMAGE:-dineshmn1/zynqcloud:latest}"
+DATA_PATH="${ZYNQ_DATA_PATH:-${INSTALL_DIR}/data/files}"
+DATA_PATH_SET="false"
+if [ "${ZYNQ_DATA_PATH+x}" = "x" ]; then
+  DATA_PATH_SET="true"
+fi
+SMTP_ENABLED="${EMAIL_ENABLED:-false}"
+TEMPLATE_ONLY="false"
+NON_INTERACTIVE="false"
+USE_HTTPS="${USE_HTTPS:-auto}"
+
+SMTP_HOST="${SMTP_HOST:-smtp.example.com}"
+SMTP_PORT="${SMTP_PORT:-587}"
+SMTP_SECURE="${SMTP_SECURE:-false}"
+SMTP_USER="${SMTP_USER:-}"
+SMTP_PASS="${SMTP_PASS:-}"
+SMTP_FROM="${SMTP_FROM:-zynqCloud <no-reply@localhost>}"
+DATABASE_USER="${DATABASE_USER:-${POSTGRES_USER:-zynqcloud}}"
+DATABASE_NAME="${DATABASE_NAME:-${POSTGRES_DB:-zynqcloud}}"
+DATABASE_PASSWORD="${DATABASE_PASSWORD:-${POSTGRES_PASSWORD:-}}"
+JWT_SECRET="${JWT_SECRET:-}"
+FILE_ENCRYPTION_MASTER_KEY="${FILE_ENCRYPTION_MASTER_KEY:-}"
+PUBLIC_REGISTRATION="${PUBLIC_REGISTRATION:-false}"
+INVITE_TOKEN_TTL_HOURS="${INVITE_TOKEN_TTL_HOURS:-72}"
+RATE_LIMIT_TTL="${RATE_LIMIT_TTL:-60000}"
+RATE_LIMIT_MAX="${RATE_LIMIT_MAX:-100}"
+EDIT_ENV="${EDIT_ENV:-ask}"
+
+usage() {
+  cat <<USAGE
+zynqCloud installer
+
+Options:
+  --dir <path>           Install directory (default: \$HOME/zynqcloud)
+  --domain <host>        Public domain/ip (default: localhost)
+  --port <port>          Host port for app (default: 3000)
+  --image <image:tag>    Docker image (default: dineshmn1/zynqcloud:latest)
+  --data-path <path>     Host path for user files
+  --smtp-enable          Enable SMTP in generated .env
+  --smtp-host <host>
+  --smtp-port <port>
+  --smtp-secure <bool>
+  --smtp-user <user>
+  --smtp-pass <pass>
+  --smtp-from <from>
+  --use-https <auto|true|false>
+  --edit-env             Open generated .env in editor before start
+  --no-edit-env          Do not open .env editor
+  --template-only        Generate files only, do not start containers
+  --non-interactive      Never prompt; use defaults/flags/env
+  --help                 Show this help
+USAGE
 }
 
-print_step() {
-  echo -e "\n${BLUE}${BOLD}[$1/$TOTAL_STEPS]${NC} ${WHITE}${BOLD}$2${NC}"
-  echo -e "${DIM}$(printf '%.0s─' {1..50})${NC}"
+log() {
+  echo -e "${INFO} $*"
 }
 
-print_success() {
-  echo -e "  ${CHECK} $1"
+ok() {
+  echo -e "${CHECK} $*"
 }
 
-print_error() {
-  echo -e "  ${CROSS} $1"
+warn() {
+  echo -e "${WARN} $*"
 }
 
-print_warning() {
-  echo -e "  ${WARN} $1"
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo -e "${RED}Missing required command: $1${NC}"
+    exit 1
+  }
 }
 
-print_info() {
-  echo -e "  ${ARROW} $1"
+is_tty() {
+  [ -t 0 ]
 }
 
-prompt_input() {
-  local prompt="$1"
-  local default="$2"
-  local var_name="$3"
+prompt() {
+  local var_name="$1"
+  local label="$2"
+  local default="$3"
+  local input
 
-  if [ -n "$default" ]; then
-    echo -en "  ${CYAN}?${NC} ${prompt} ${DIM}(${default})${NC}: "
-  else
-    echo -en "  ${CYAN}?${NC} ${prompt}: "
+  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+    printf -v "$var_name" '%s' "$default"
+    return
   fi
+
+  echo -en "${CYAN}?${NC} ${label} ${DIM}(${default})${NC}: "
   read -r input
-  if [ -z "$input" ] && [ -n "$default" ]; then
+  if [ -z "${input}" ]; then
     printf -v "$var_name" '%s' "$default"
   else
     printf -v "$var_name" '%s' "$input"
@@ -84,192 +118,98 @@ prompt_input() {
 }
 
 prompt_secret() {
-  local prompt="$1"
-  local var_name="$2"
+  local var_name="$1"
+  local label="$2"
+  local default="$3"
+  local input
 
-  echo -en "  ${CYAN}?${NC} ${prompt}: "
+  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+    printf -v "$var_name" '%s' "$default"
+    return
+  fi
+
+  if [ -n "$default" ]; then
+    echo -en "${CYAN}?${NC} ${label} ${DIM}(leave empty to keep existing)${NC}: "
+  else
+    echo -en "${CYAN}?${NC} ${label}: "
+  fi
   read -rs input
   echo ""
-  printf -v "$var_name" '%s' "$input"
+  if [ -z "$input" ]; then
+    printf -v "$var_name" '%s' "$default"
+  else
+    printf -v "$var_name" '%s' "$input"
+  fi
 }
 
 prompt_yesno() {
-  local prompt="$1"
-  local default="$2"
+  local var_name="$1"
+  local label="$2"
+  local default="$3"
+  local input
 
-  if [ "$default" = "y" ]; then
-    echo -en "  ${CYAN}?${NC} ${prompt} ${DIM}(Y/n)${NC}: "
+  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+    printf -v "$var_name" '%s' "$default"
+    return
+  fi
+
+  if [ "$default" = "true" ]; then
+    echo -en "${CYAN}?${NC} ${label} ${DIM}(Y/n)${NC}: "
   else
-    echo -en "  ${CYAN}?${NC} ${prompt} ${DIM}(y/N)${NC}: "
+    echo -en "${CYAN}?${NC} ${label} ${DIM}(y/N)${NC}: "
   fi
   read -r input
-  input="${input:-$default}"
-  [[ "$input" =~ ^[Yy] ]]
-}
-
-generate_secret() {
-  openssl rand -base64 "$1" 2>/dev/null || head -c "$1" /dev/urandom | base64 | tr -d '\n'
-}
-
-escape_sed_replacement() {
-  printf '%s' "$1" | sed -e 's/[\\/&|]/\\&/g'
-}
-
-TOTAL_STEPS=5
-INSTALL_DIR="${INSTALL_DIR:-$HOME/zynqcloud}"
-
-# ============================================================
-# Main
-# ============================================================
-
-print_banner
-
-echo -e "${WHITE}${BOLD}Welcome to the zynqCloud installer!${NC}"
-echo -e "${DIM}This script will set up zynqCloud on your server.${NC}"
-echo ""
-
-# ────────────────────────────────────────────────────────────
-# Step 1: Check Prerequisites
-# ────────────────────────────────────────────────────────────
-print_step 1 "Checking prerequisites"
-
-MISSING=0
-
-# Docker
-if command -v docker &>/dev/null; then
-  DOCKER_VERSION=$(docker --version | grep -oP '\d+\.\d+\.\d+' | head -1)
-  print_success "Docker ${DIM}v${DOCKER_VERSION}${NC}"
-else
-  print_error "Docker is not installed"
-  print_info "Install: ${CYAN}https://docs.docker.com/get-docker/${NC}"
-  MISSING=1
-fi
-
-# Docker Compose
-if docker compose version &>/dev/null 2>&1; then
-  COMPOSE_VERSION=$(docker compose version | grep -oP '\d+\.\d+\.\d+' | head -1)
-  print_success "Docker Compose ${DIM}v${COMPOSE_VERSION}${NC}"
-elif command -v docker-compose &>/dev/null; then
-  COMPOSE_VERSION=$(docker-compose --version | grep -oP '\d+\.\d+\.\d+' | head -1)
-  print_success "Docker Compose ${DIM}v${COMPOSE_VERSION}${NC} (legacy)"
-else
-  print_error "Docker Compose is not installed"
-  print_info "Install: ${CYAN}https://docs.docker.com/compose/install/${NC}"
-  MISSING=1
-fi
-
-# curl
-if command -v curl &>/dev/null; then
-  print_success "curl"
-else
-  print_warning "curl not found (optional, used for health checks)"
-fi
-
-# openssl
-if command -v openssl &>/dev/null; then
-  print_success "openssl"
-else
-  print_warning "openssl not found (will use /dev/urandom for secrets)"
-fi
-
-if [ "$MISSING" -eq 1 ]; then
-  echo ""
-  print_error "${RED}Missing required dependencies. Please install them and re-run this script.${NC}"
-  exit 1
-fi
-
-echo ""
-print_success "${GREEN}All prerequisites met!${NC}"
-
-# ────────────────────────────────────────────────────────────
-# Step 2: Configuration
-# ────────────────────────────────────────────────────────────
-print_step 2 "Configuration"
-
-prompt_input "Install directory" "$INSTALL_DIR" INSTALL_DIR
-prompt_input "Domain or IP (for CORS/frontend URL)" "localhost" DOMAIN
-
-if [ "$DOMAIN" = "localhost" ]; then
-  PROTOCOL="http"
-  FRONTEND_URL="http://localhost:3000"
-  CORS_ORIGIN="http://localhost:3000"
-else
-  if prompt_yesno "Use HTTPS?" "y"; then
-    PROTOCOL="https"
+  input="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]')"
+  if [ -z "$input" ]; then
+    printf -v "$var_name" '%s' "$default"
+  elif [ "$input" = "y" ] || [ "$input" = "yes" ]; then
+    printf -v "$var_name" 'true'
   else
-    PROTOCOL="http"
+    printf -v "$var_name" 'false'
   fi
-  FRONTEND_URL="${PROTOCOL}://${DOMAIN}"
-  CORS_ORIGIN="${PROTOCOL}://${DOMAIN}"
-fi
+}
 
-prompt_input "PostgreSQL password" "$(generate_secret 16 | tr -dc 'a-zA-Z0-9' | head -c 20)" DB_PASSWORD
+generate_base64_32() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 32 | tr -d '\n'
+  else
+    head -c 32 /dev/urandom | base64 | tr -d '\n'
+  fi
+}
 
-# JWT Secret
-JWT_SECRET=$(generate_secret 32)
-print_info "JWT secret auto-generated ${DIM}(stored in .env)${NC}"
+generate_password() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 16
+  else
+    head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n'
+  fi
+}
 
-# Encryption key
-ENCRYPTION_KEY=$(generate_secret 32)
-print_info "Encryption master key auto-generated ${DIM}(stored in .env)${NC}"
+download_or_copy_templates() {
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# SMTP
-echo ""
-if prompt_yesno "Configure SMTP for email invites & password reset?" "n"; then
-  SMTP_ENABLED="true"
-  prompt_input "SMTP host" "smtp.gmail.com" SMTP_HOST
-  prompt_input "SMTP port" "587" SMTP_PORT
-  prompt_input "SMTP user" "" SMTP_USER
-  prompt_secret "SMTP password" SMTP_PASS
-  prompt_input "From address" "zynqCloud <no-reply@${DOMAIN}>" SMTP_FROM
-else
-  SMTP_ENABLED="false"
-  SMTP_HOST="smtp.example.com"
-  SMTP_PORT="587"
-  SMTP_USER=""
-  SMTP_PASS=""
-  SMTP_FROM="zynqCloud <no-reply@localhost>"
-fi
+  mkdir -p "$INSTALL_DIR"
 
-prompt_input "Data storage path" "${INSTALL_DIR}/data/files" DATA_PATH
-
-# ────────────────────────────────────────────────────────────
-# Step 3: Generate Files
-# ────────────────────────────────────────────────────────────
-print_step 3 "Generating configuration files"
-
-mkdir -p "$INSTALL_DIR"
-mkdir -p "$DATA_PATH"
-
-# Write .env
-cat > "${INSTALL_DIR}/.env" <<ENVEOF
-# zynqCloud Environment — Generated by installer
-# $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-
-JWT_SECRET=${JWT_SECRET}
-FILE_ENCRYPTION_MASTER_KEY=${ENCRYPTION_KEY}
-DB_PASSWORD=${DB_PASSWORD}
-ZYNQ_DATA_PATH=${DATA_PATH}
-ENVEOF
-chmod 600 "${INSTALL_DIR}/.env"
-
-print_success "Created ${DIM}${INSTALL_DIR}/.env${NC}"
-
-# Write docker-compose.yml
-cat > "${INSTALL_DIR}/docker-compose.yml" <<'COMPOSEEOF'
+  if [ -f "$script_dir/docker-compose.yml" ] && [ -f "$script_dir/.env.example" ]; then
+    cp "$script_dir/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
+    cp "$script_dir/.env.example" "$INSTALL_DIR/.env.example"
+    ok "Copied local templates"
+  else
+    cat > "$INSTALL_DIR/docker-compose.yml" <<'COMPOSEEOF'
 services:
   postgres:
     image: postgres:16-alpine
     container_name: zynqcloud-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: zynqcloud
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: zynqcloud
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zynqcloud -d zynqcloud"]
+      test: ['CMD-SHELL', 'pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -277,36 +217,60 @@ services:
     networks:
       - zynqcloud-network
 
-  zynqcloud:
-    image: ZYNQCLOUD_IMAGE_PLACEHOLDER
-    container_name: zynqcloud
-    restart: unless-stopped
+  migrate:
+    image: ${ZYNQCLOUD_IMAGE:-dineshmn1/zynqcloud:latest}
+    container_name: zynqcloud-migrate
+    restart: 'no'
     depends_on:
       postgres:
         condition: service_healthy
+    command: ['node', '/app/server/dist/database/run-migrations.js']
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
+    networks:
+      - zynqcloud-network
+
+  zynqcloud:
+    image: ${ZYNQCLOUD_IMAGE:-dineshmn1/zynqcloud:latest}
+    container_name: zynqcloud
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgresql://zynqcloud:${DB_PASSWORD}@postgres:5432/zynqcloud
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      DATABASE_USER: zynqcloud
-      DATABASE_PASSWORD: ${DB_PASSWORD}
-      DATABASE_NAME: zynqcloud
+      DATABASE_URL: postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST:-postgres}:${DATABASE_PORT:-5432}/${DATABASE_NAME}
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
       JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
       FILE_STORAGE_PATH: /data/files
       FILE_ENCRYPTION_MASTER_KEY: ${FILE_ENCRYPTION_MASTER_KEY}
-      EMAIL_ENABLED: "SMTP_ENABLED_PLACEHOLDER"
-      SMTP_HOST: SMTP_HOST_PLACEHOLDER
-      SMTP_PORT: SMTP_PORT_PLACEHOLDER
-      SMTP_SECURE: "false"
-      SMTP_USER: SMTP_USER_PLACEHOLDER
-      SMTP_PASS: SMTP_PASS_PLACEHOLDER
-      SMTP_FROM: "SMTP_FROM_PLACEHOLDER"
-      CORS_ORIGIN: CORS_ORIGIN_PLACEHOLDER
-      FRONTEND_URL: FRONTEND_URL_PLACEHOLDER
+      EMAIL_ENABLED: ${EMAIL_ENABLED}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_SECURE: ${SMTP_SECURE}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      INVITE_TOKEN_TTL_HOURS: ${INVITE_TOKEN_TTL_HOURS}
+      PUBLIC_REGISTRATION: ${PUBLIC_REGISTRATION}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      FRONTEND_URL: ${FRONTEND_URL}
+      RATE_LIMIT_TTL: ${RATE_LIMIT_TTL}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX}
     ports:
-      - "3000:80"
+      - '${APP_PORT:-3000}:80'
     volumes:
       - zynq_files:/data/files
     networks:
@@ -320,106 +284,375 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${ZYNQ_DATA_PATH}
+      device: ${ZYNQ_DATA_PATH:?ZYNQ_DATA_PATH is required}
 
 networks:
   zynqcloud-network:
     driver: bridge
 COMPOSEEOF
 
-# Replace placeholders with actual values
-ESCAPED_SMTP_ENABLED="$(escape_sed_replacement "${SMTP_ENABLED}")"
-ESCAPED_SMTP_HOST="$(escape_sed_replacement "${SMTP_HOST}")"
-ESCAPED_SMTP_PORT="$(escape_sed_replacement "${SMTP_PORT}")"
-ESCAPED_SMTP_USER="$(escape_sed_replacement "${SMTP_USER}")"
-ESCAPED_SMTP_PASS="$(escape_sed_replacement "${SMTP_PASS}")"
-ESCAPED_SMTP_FROM="$(escape_sed_replacement "${SMTP_FROM}")"
-ESCAPED_CORS_ORIGIN="$(escape_sed_replacement "${CORS_ORIGIN}")"
-ESCAPED_FRONTEND_URL="$(escape_sed_replacement "${FRONTEND_URL}")"
-sed -i.bak \
-  -e "s|ZYNQCLOUD_IMAGE_PLACEHOLDER|dineshmn1/zynqcloud:latest|g" \
-  -e "s|SMTP_ENABLED_PLACEHOLDER|${ESCAPED_SMTP_ENABLED}|g" \
-  -e "s|SMTP_HOST_PLACEHOLDER|${ESCAPED_SMTP_HOST}|g" \
-  -e "s|SMTP_PORT_PLACEHOLDER|${ESCAPED_SMTP_PORT}|g" \
-  -e "s|SMTP_USER_PLACEHOLDER|${ESCAPED_SMTP_USER}|g" \
-  -e "s|SMTP_PASS_PLACEHOLDER|${ESCAPED_SMTP_PASS}|g" \
-  -e "s|SMTP_FROM_PLACEHOLDER|${ESCAPED_SMTP_FROM}|g" \
-  -e "s|CORS_ORIGIN_PLACEHOLDER|${ESCAPED_CORS_ORIGIN}|g" \
-  -e "s|FRONTEND_URL_PLACEHOLDER|${ESCAPED_FRONTEND_URL}|g" \
-  "${INSTALL_DIR}/docker-compose.yml"
-rm -f "${INSTALL_DIR}/docker-compose.yml.bak"
+    cat > "$INSTALL_DIR/.env.example" <<'ENVEXAMPLEEOF'
+# ============================================================
+# zynqCloud Self-Host Environment
+# Copy this file to .env before running `docker compose up -d`
+# ============================================================
 
-print_success "Created ${DIM}${INSTALL_DIR}/docker-compose.yml${NC}"
+# Docker image to pull
+ZYNQCLOUD_IMAGE=dineshmn1/zynqcloud:latest
 
-# ────────────────────────────────────────────────────────────
-# Step 4: Start Services
-# ────────────────────────────────────────────────────────────
-print_step 4 "Starting zynqCloud"
+# Public port on host (host:container => APP_PORT:80)
+APP_PORT=3000
 
-cd "$INSTALL_DIR"
+# Database (used by postgres service and app)
+DATABASE_HOST=postgres
+DATABASE_PORT=5432
+DATABASE_USER=zynqcloud
+DATABASE_PASSWORD=change_this_db_password
+DATABASE_NAME=zynqcloud
 
-echo -e "  ${ARROW} Pulling Docker images..."
-docker compose pull 2>&1 | while read -r line; do
-  echo -e "    ${DIM}${line}${NC}"
-done
+# Auth / crypto (required)
+JWT_SECRET=replace_with_strong_secret_at_least_32_chars
+JWT_EXPIRES_IN=7d
+COOKIE_DOMAIN=localhost
+FILE_ENCRYPTION_MASTER_KEY=replace_with_32_byte_base64_key
 
-echo -e "  ${ARROW} Starting containers..."
-docker compose up -d 2>&1 | while read -r line; do
-  echo -e "    ${DIM}${line}${NC}"
-done
+# File storage on host
+ZYNQ_DATA_PATH=./data/files
 
-print_success "Containers started!"
+# App behavior
+EMAIL_ENABLED=false
+INVITE_TOKEN_TTL_HOURS=72
+PUBLIC_REGISTRATION=false
+RATE_LIMIT_TTL=60000
+RATE_LIMIT_MAX=100
 
-# ────────────────────────────────────────────────────────────
-# Step 5: Health Check
-# ────────────────────────────────────────────────────────────
-print_step 5 "Verifying installation"
+# URLs (use your real domain in production)
+CORS_ORIGIN=http://localhost:3000
+FRONTEND_URL=http://localhost:3000
 
-echo -e "  ${ARROW} Waiting for services to be ready..."
-MAX_RETRIES=30
-RETRY=0
-while [ $RETRY -lt $MAX_RETRIES ]; do
-  if curl -sf http://localhost:3000/api/v1/health >/dev/null 2>&1; then
-    break
+# SMTP (used when EMAIL_ENABLED=true)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=zynqCloud <no-reply@yourdomain.com>
+ENVEXAMPLEEOF
+    ok "Wrote built-in templates"
   fi
-  RETRY=$((RETRY + 1))
-  sleep 2
-  echo -en "\r  ${ARROW} Waiting for backend... ${DIM}(${RETRY}/${MAX_RETRIES})${NC}  "
-done
+}
 
-echo ""
+parse_args() {
+  require_value() {
+    if [ $# -lt 2 ] || [ -z "${2:-}" ] || [ "${2#--}" != "$2" ]; then
+      echo -e "${RED}Missing value for option: $1${NC}"
+      usage
+      exit 1
+    fi
+  }
 
-if [ $RETRY -lt $MAX_RETRIES ]; then
-  print_success "Backend is healthy!"
-else
-  print_warning "Backend didn't respond yet (it may still be starting)"
-  print_info "Check logs: ${CYAN}docker compose -f ${INSTALL_DIR}/docker-compose.yml logs -f${NC}"
-fi
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dir) require_value "$@"; INSTALL_DIR="$2"; shift 2 ;;
+      --domain) require_value "$@"; DOMAIN="$2"; shift 2 ;;
+      --port) require_value "$@"; APP_PORT="$2"; shift 2 ;;
+      --image) require_value "$@"; APP_IMAGE="$2"; shift 2 ;;
+      --data-path) require_value "$@"; DATA_PATH="$2"; DATA_PATH_SET="true"; shift 2 ;;
+      --smtp-enable) SMTP_ENABLED="true"; shift ;;
+      --smtp-host) require_value "$@"; SMTP_HOST="$2"; shift 2 ;;
+      --smtp-port) require_value "$@"; SMTP_PORT="$2"; shift 2 ;;
+      --smtp-secure) require_value "$@"; SMTP_SECURE="$2"; shift 2 ;;
+      --smtp-user) require_value "$@"; SMTP_USER="$2"; shift 2 ;;
+      --smtp-pass) require_value "$@"; SMTP_PASS="$2"; shift 2 ;;
+      --smtp-from) require_value "$@"; SMTP_FROM="$2"; shift 2 ;;
+      --use-https) require_value "$@"; USE_HTTPS="$2"; shift 2 ;;
+      --edit-env) EDIT_ENV="true"; shift ;;
+      --no-edit-env) EDIT_ENV="false"; shift ;;
+      --template-only) TEMPLATE_ONLY="true"; shift ;;
+      --non-interactive) NON_INTERACTIVE="true"; shift ;;
+      --help|-h) usage; exit 0 ;;
+      *)
+        echo -e "${RED}Unknown option: $1${NC}"
+        usage
+        exit 1
+        ;;
+    esac
+  done
+  if [ "$DATA_PATH_SET" != "true" ]; then
+    DATA_PATH="${INSTALL_DIR}/data/files"
+  fi
+}
 
-# ────────────────────────────────────────────────────────────
-# Done!
-# ────────────────────────────────────────────────────────────
-echo ""
-echo -e "${GREEN}${BOLD}"
-echo "  ╔══════════════════════════════════════════╗"
-echo "  ║                                          ║"
-echo "  ║    zynqCloud installed successfully!      ║"
-echo "  ║                                          ║"
-echo "  ╚══════════════════════════════════════════╝"
-echo -e "${NC}"
+configure_interactive() {
+  local old_install_dir="$INSTALL_DIR"
+  prompt INSTALL_DIR "Install directory" "$INSTALL_DIR"
+  if [ "$DATA_PATH_SET" != "true" ] && [ "$DATA_PATH" = "${old_install_dir}/data/files" ]; then
+    DATA_PATH="${INSTALL_DIR}/data/files"
+  fi
+  prompt DOMAIN "Domain or IP" "$DOMAIN"
+  prompt APP_PORT "App port" "$APP_PORT"
+  local prev_data_path="$DATA_PATH"
+  prompt DATA_PATH "Data path" "$DATA_PATH"
+  if [ "$DATA_PATH" != "$prev_data_path" ]; then
+    DATA_PATH_SET="true"
+  fi
+  prompt APP_IMAGE "Docker image" "$APP_IMAGE"
 
-echo -e "  ${ARROW} Open ${CYAN}${BOLD}${FRONTEND_URL}${NC} in your browser"
-echo -e "  ${ARROW} Create your admin account on first visit"
-echo ""
-echo -e "  ${DIM}Useful commands:${NC}"
-echo -e "    ${WHITE}cd ${INSTALL_DIR}${NC}"
-echo -e "    ${WHITE}docker compose logs -f${NC}         ${DIM}# View logs${NC}"
-echo -e "    ${WHITE}docker compose restart${NC}         ${DIM}# Restart services${NC}"
-echo -e "    ${WHITE}docker compose down${NC}            ${DIM}# Stop services${NC}"
-echo -e "    ${WHITE}docker compose pull && docker compose up -d${NC}  ${DIM}# Update${NC}"
-echo ""
-echo -e "  ${DIM}Config: ${INSTALL_DIR}/.env${NC}"
-echo -e "  ${DIM}Data:   ${DATA_PATH}${NC}"
-echo ""
-echo -e "  ${MAGENTA}${BOLD}Your files. Your cloud. Your control.${NC}"
-echo ""
+  prompt DATABASE_USER "Database user" "$DATABASE_USER"
+  prompt DATABASE_NAME "Database name" "$DATABASE_NAME"
+
+  if [ -z "$DATABASE_PASSWORD" ]; then
+    DATABASE_PASSWORD="$(generate_password)"
+  fi
+  prompt_secret DATABASE_PASSWORD "Database password" "$DATABASE_PASSWORD"
+
+  if [ -z "$JWT_SECRET" ]; then
+    JWT_SECRET="$(generate_base64_32)"
+  fi
+  prompt_secret JWT_SECRET "JWT secret" "$JWT_SECRET"
+
+  if [ -z "$FILE_ENCRYPTION_MASTER_KEY" ]; then
+    FILE_ENCRYPTION_MASTER_KEY="$(generate_base64_32)"
+  fi
+  prompt_secret FILE_ENCRYPTION_MASTER_KEY "File encryption master key (base64 32 bytes)" "$FILE_ENCRYPTION_MASTER_KEY"
+
+  prompt_yesno PUBLIC_REGISTRATION "Enable public registration?" "$PUBLIC_REGISTRATION"
+  prompt INVITE_TOKEN_TTL_HOURS "Invite token TTL (hours)" "$INVITE_TOKEN_TTL_HOURS"
+
+  prompt_yesno SMTP_ENABLED "Enable SMTP?" "$SMTP_ENABLED"
+  if [ "$SMTP_ENABLED" = "true" ]; then
+    prompt SMTP_HOST "SMTP host" "$SMTP_HOST"
+    prompt SMTP_PORT "SMTP port" "$SMTP_PORT"
+    prompt_yesno SMTP_SECURE "SMTP secure/TLS?" "$SMTP_SECURE"
+    prompt SMTP_USER "SMTP user" "$SMTP_USER"
+    prompt_secret SMTP_PASS "SMTP password" "$SMTP_PASS"
+    prompt SMTP_FROM "SMTP from" "$SMTP_FROM"
+  fi
+}
+
+validate_inputs() {
+  case "$APP_PORT" in
+    ''|*[!0-9]*)
+      echo -e "${RED}APP_PORT must be numeric (got: $APP_PORT)${NC}"
+      exit 1
+      ;;
+  esac
+
+  case "$USE_HTTPS" in
+    auto|true|false) ;;
+    *)
+      echo -e "${RED}--use-https must be auto|true|false${NC}"
+      exit 1
+      ;;
+  esac
+
+  case "$EDIT_ENV" in
+    ask|true|false) ;;
+    *)
+      echo -e "${RED}EDIT_ENV must be ask|true|false${NC}"
+      exit 1
+      ;;
+  esac
+}
+
+write_env() {
+  local protocol
+  if [ "$DOMAIN" = "localhost" ]; then
+    protocol="http"
+  else
+    case "$USE_HTTPS" in
+      true) protocol="https" ;;
+      false) protocol="http" ;;
+      auto) protocol="https" ;;
+    esac
+  fi
+
+  local frontend_url="${protocol}://${DOMAIN}"
+  if [ "$DOMAIN" = "localhost" ]; then
+    frontend_url="http://localhost:${APP_PORT}"
+  fi
+
+  local cookie_domain="$DOMAIN"
+  if [ "$DOMAIN" = "localhost" ]; then
+    cookie_domain="localhost"
+  fi
+
+  if [ -z "$DATABASE_PASSWORD" ]; then
+    DATABASE_PASSWORD="$(generate_password)"
+  fi
+  if [ -z "$JWT_SECRET" ]; then
+    JWT_SECRET="$(generate_base64_32)"
+  fi
+  if [ -z "$FILE_ENCRYPTION_MASTER_KEY" ]; then
+    FILE_ENCRYPTION_MASTER_KEY="$(generate_base64_32)"
+  fi
+
+  if [ "$SMTP_ENABLED" != "true" ]; then
+    SMTP_HOST="smtp.example.com"
+    SMTP_PORT="587"
+    SMTP_SECURE="false"
+    SMTP_USER=""
+    SMTP_PASS=""
+    SMTP_FROM="zynqCloud <no-reply@${DOMAIN}>"
+  fi
+
+  mkdir -p "$DATA_PATH"
+
+  if [ -f "$INSTALL_DIR/.env" ]; then
+    cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.bak.$(date +%s)"
+    warn "Existing .env backed up"
+  fi
+
+  cat > "$INSTALL_DIR/.env" <<ENVEOF
+# zynqCloud Environment (generated)
+# $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+ZYNQCLOUD_IMAGE=${APP_IMAGE}
+APP_PORT=${APP_PORT}
+ZYNQ_DATA_PATH=${DATA_PATH}
+
+DATABASE_HOST=postgres
+DATABASE_PORT=5432
+DATABASE_USER=${DATABASE_USER}
+DATABASE_PASSWORD=${DATABASE_PASSWORD}
+DATABASE_NAME=${DATABASE_NAME}
+
+JWT_SECRET=${JWT_SECRET}
+JWT_EXPIRES_IN=7d
+COOKIE_DOMAIN=${cookie_domain}
+FILE_ENCRYPTION_MASTER_KEY=${FILE_ENCRYPTION_MASTER_KEY}
+
+EMAIL_ENABLED=${SMTP_ENABLED}
+SMTP_HOST=${SMTP_HOST}
+SMTP_PORT=${SMTP_PORT}
+SMTP_SECURE=${SMTP_SECURE}
+SMTP_USER=${SMTP_USER}
+SMTP_PASS=${SMTP_PASS}
+SMTP_FROM=${SMTP_FROM}
+
+INVITE_TOKEN_TTL_HOURS=${INVITE_TOKEN_TTL_HOURS}
+PUBLIC_REGISTRATION=${PUBLIC_REGISTRATION}
+RATE_LIMIT_TTL=${RATE_LIMIT_TTL}
+RATE_LIMIT_MAX=${RATE_LIMIT_MAX}
+
+CORS_ORIGIN=${frontend_url}
+FRONTEND_URL=${frontend_url}
+ENVEOF
+
+  chmod 600 "$INSTALL_DIR/.env"
+  ok "Created $INSTALL_DIR/.env"
+}
+
+edit_env_if_requested() {
+  local should_edit="$EDIT_ENV"
+  if [ "$should_edit" = "ask" ]; then
+    if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+      should_edit="false"
+    else
+      prompt_yesno should_edit "Review/edit .env before starting containers?" "true"
+    fi
+  fi
+
+  if [ "$should_edit" != "true" ]; then
+    return
+  fi
+
+  local editor="${EDITOR:-}"
+  if [ -z "$editor" ]; then
+    if command -v nano >/dev/null 2>&1; then
+      editor="nano"
+    elif command -v vi >/dev/null 2>&1; then
+      editor="vi"
+    fi
+  fi
+
+  if [ -z "$editor" ]; then
+    warn "No editor found. Skipping interactive edit."
+    return
+  fi
+
+  "$editor" "$INSTALL_DIR/.env"
+}
+
+start_stack() {
+  cd "$INSTALL_DIR"
+  need_cmd curl
+
+  log "Pulling images"
+  docker compose --env-file .env pull
+
+  log "Starting containers"
+  docker compose --env-file .env up -d
+
+  local tries=45
+  local i=0
+  log "Checking health endpoint"
+  while [ "$i" -lt "$tries" ]; do
+    if curl -fsS "http://localhost:${APP_PORT}/health" >/dev/null 2>&1; then
+      ok "Service healthy at http://localhost:${APP_PORT}"
+      return
+    fi
+    i=$((i + 1))
+    sleep 2
+  done
+
+  warn "Health check timeout. Check logs:"
+  echo "  docker compose --env-file .env logs -f"
+}
+
+print_summary() {
+  local install_url="http://localhost:${APP_PORT}"
+  if [ "$DOMAIN" != "localhost" ]; then
+    local proto="https"
+    [ "$USE_HTTPS" = "false" ] && proto="http"
+    install_url="${proto}://${DOMAIN}"
+  fi
+
+  echo ""
+  echo -e "${WHITE}zynqCloud is ready${NC}"
+  echo "  Stack dir : $INSTALL_DIR"
+  echo "  Compose   : $INSTALL_DIR/docker-compose.yml"
+  echo "  Env file  : $INSTALL_DIR/.env"
+  echo "  Data path : $DATA_PATH"
+  echo "  URL       : $install_url"
+  echo ""
+  echo "Coolify / Dokploy template files:"
+  echo "  1) docker-compose.yml"
+  echo "  2) .env"
+  echo ""
+}
+
+main() {
+  parse_args "$@"
+  validate_inputs
+
+  need_cmd docker
+  if ! docker compose version >/dev/null 2>&1; then
+    echo -e "${RED}Docker Compose plugin is required (docker compose ...)${NC}"
+    exit 1
+  fi
+
+  if [ "$NON_INTERACTIVE" != "true" ] && is_tty; then
+    configure_interactive
+  fi
+
+  validate_inputs
+
+  echo ""
+  log "Preparing zynqCloud in $INSTALL_DIR"
+
+  download_or_copy_templates
+  write_env
+  edit_env_if_requested
+
+  if [ "$TEMPLATE_ONLY" = "true" ]; then
+    ok "Template-only mode: containers not started"
+    print_summary
+    exit 0
+  fi
+
+  start_stack
+  print_summary
+}
+
+main "$@"
