@@ -4,16 +4,19 @@ services:
     image: postgres:16-alpine
     container_name: zynqcloud-postgres-dev
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-zynqcloud}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supersecret_db_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-zynqcloud}
+      POSTGRES_USER: ${DATABASE_USER:-zynqcloud}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-supersecret_db_pass}
+      POSTGRES_DB: ${DATABASE_NAME:-zynqcloud}
     ports:
       - '5432:5432'
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./apps/server/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U zynqcloud -d zynqcloud']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${DATABASE_USER:-zynqcloud} -d ${DATABASE_NAME:-zynqcloud}',
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,20 +27,21 @@ services:
   backend:
     image: node:20-alpine
     container_name: zynqcloud-backend-dev
-    working_dir: /workspace/apps/server
-    command: sh -c "corepack enable && pnpm config set store-dir /workspace/.pnpm-store && pnpm install --filter @zynqcloud/server... && pnpm run start:dev"
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm config set store-dir /workspace/.pnpm-store && pnpm install --frozen-lockfile && pnpm --filter @zynqcloud/server start:dev"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
+      CI: 'true'
       NODE_ENV: development
       PORT: 4000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-zynqcloud}:${POSTGRES_PASSWORD:-supersecret_db_pass}@postgres:5432/${POSTGRES_DB:-zynqcloud}
+      DATABASE_URL: postgresql://${DATABASE_USER:-zynqcloud}:${DATABASE_PASSWORD:-supersecret_db_pass}@postgres:5432/${DATABASE_NAME:-zynqcloud}
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
-      DATABASE_USER: ${POSTGRES_USER:-zynqcloud}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-supersecret_db_pass}
-      DATABASE_NAME: ${POSTGRES_DB:-zynqcloud}
+      DATABASE_USER: ${DATABASE_USER:-zynqcloud}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-supersecret_db_pass}
+      DATABASE_NAME: ${DATABASE_NAME:-zynqcloud}
       JWT_SECRET: ${JWT_SECRET:-zynqcloud_dev_secret_change_in_production_32chars}
       FILE_STORAGE_PATH: /data/files
       FILE_ENCRYPTION_MASTER_KEY: ${FILE_ENCRYPTION_MASTER_KEY:-YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=}
@@ -48,7 +52,7 @@ services:
       - '4000:4000'
     volumes:
       - .:/workspace
-      - backend_node_modules:/workspace/apps/server/node_modules
+      - workspace_node_modules:/workspace/node_modules
       - pnpm_store:/workspace/.pnpm-store
       - zynq_dev_files:/data/files
     networks:
@@ -57,17 +61,18 @@ services:
   frontend:
     image: node:20-alpine
     container_name: zynqcloud-frontend-dev
-    working_dir: /workspace/apps/client
-    command: sh -c "corepack enable && pnpm config set store-dir /workspace/.pnpm-store && pnpm install --filter @zynqcloud/client... && pnpm run dev"
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm config set store-dir /workspace/.pnpm-store && pnpm install --frozen-lockfile && pnpm --filter @zynqcloud/client dev"
     depends_on:
       - backend
     environment:
+      CI: 'true'
       NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
     ports:
       - '3000:3000'
     volumes:
       - .:/workspace
-      - frontend_node_modules:/workspace/apps/client/node_modules
+      - workspace_node_modules:/workspace/node_modules
       - pnpm_store:/workspace/.pnpm-store
     networks:
       - zynqcloud-dev
@@ -75,9 +80,7 @@ services:
 volumes:
   postgres_dev_data:
     driver: local
-  backend_node_modules:
-    driver: local
-  frontend_node_modules:
+  workspace_node_modules:
     driver: local
   pnpm_store:
     driver: local

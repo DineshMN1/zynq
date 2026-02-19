@@ -36,6 +36,19 @@ Stop:
 pnpm docker:down
 ```
 
+## Run production with Docker
+
+```bash
+cp .env.example .env
+pnpm docker:prod
+```
+
+Logs:
+
+```bash
+docker compose --env-file .env logs -f zynqcloud migrate postgres
+```
+
 ## Build for production
 
 ```bash
