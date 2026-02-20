@@ -72,6 +72,7 @@ import { uploadManager } from '@/lib/upload-manager';
 import { formatBytes } from '@/lib/auth';
 import { emitStorageRefresh } from '@/lib/storage-events';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface UploadProgress {
   id: string;
@@ -147,6 +148,10 @@ export default function FilesPage() {
   const [pendingDuplicates, setPendingDuplicates] = useState<DuplicateItem[]>(
     [],
   );
+
+  // Folder drop modal (in-app drag zone — avoids browser webkitdirectory popup)
+  const [showFolderDropModal, setShowFolderDropModal] = useState(false);
+  const [folderModalDragActive, setFolderModalDragActive] = useState(false);
 
   // Folder upload confirmation state
   const [showFolderUploadDialog, setShowFolderUploadDialog] = useState(false);
@@ -386,9 +391,8 @@ export default function FilesPage() {
     const file = files.find((f) => f.id === id);
     if (file?.is_folder) {
       handleOpenFolder(file);
-    } else {
-      toggleSelect(id);
     }
+    // Single click on a file does nothing — use checkbox or Ctrl+click to select
   };
 
   const handleBulkDelete = () => {
@@ -451,6 +455,72 @@ export default function FilesPage() {
   };
 
   const handleUploadFileClick = () => fileInputRef.current?.click();
+
+  const handleFolderModalDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFolderModalDragActive(false);
+
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) return;
+
+    const entries: FileSystemEntry[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const entry = item.webkitGetAsEntry?.();
+        if (entry && entry.isDirectory) entries.push(entry);
+      }
+    }
+
+    if (entries.length === 0) {
+      toast({
+        title: 'Drop a folder',
+        description: 'Please drop a folder, not individual files.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setShowFolderDropModal(false);
+
+    const allFilesWithPaths: { file: File; relativePath: string }[] = [];
+    for (const entry of entries) {
+      const filesFromEntry = await traverseEntry(entry);
+      allFilesWithPaths.push(...filesFromEntry);
+    }
+
+    if (allFilesWithPaths.length === 0) {
+      toast({
+        title: 'Empty folder',
+        description: 'The folder contains no files.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const rootFolderName =
+      entries.find((e) => e.isDirectory)?.name || 'Dropped Folder';
+    const totalSize = allFilesWithPaths.reduce(
+      (sum, f) => sum + f.file.size,
+      0,
+    );
+
+    setPendingFolderUpload({
+      files: allFilesWithPaths.map((f) => {
+        const newFile = new File([f.file], f.file.name, { type: f.file.type });
+        Object.defineProperty(newFile, 'webkitRelativePath', {
+          value: f.relativePath,
+          writable: false,
+        });
+        return newFile;
+      }),
+      folderName: rootFolderName,
+      totalSize,
+      fileCount: allFilesWithPaths.length,
+    });
+    setShowFolderUploadDialog(true);
+  };
 
   const uploadFileWithProgress = (
     url: string,
@@ -1312,13 +1382,7 @@ export default function FilesPage() {
                     Upload Files
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() =>
-                      toast({
-                        title: 'Drag & drop to upload folders',
-                        description:
-                          'Drop a folder anywhere on this page to upload it.',
-                      })
-                    }
+                    onClick={() => setShowFolderDropModal(true)}
                     className="gap-2"
                   >
                     <Folder className="h-4 w-4" />
@@ -1502,6 +1566,62 @@ export default function FilesPage() {
           onUpload={handleFolderUploadProceed}
           onCancel={handleFolderUploadCancel}
         />
+
+        {/* Folder Drop Modal — in-app drag zone, no browser security popup */}
+        <Dialog
+          open={showFolderDropModal}
+          onOpenChange={setShowFolderDropModal}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Upload Folder</DialogTitle>
+              <DialogDescription>
+                Drag and drop your folder into the zone below.
+              </DialogDescription>
+            </DialogHeader>
+            <div
+              className={cn(
+                'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed transition-colors duration-150 h-48 cursor-default',
+                folderModalDragActive
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted-foreground/25 hover:border-muted-foreground/50',
+              )}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFolderModalDragActive(true);
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFolderModalDragActive(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFolderModalDragActive(false);
+              }}
+              onDrop={handleFolderModalDrop}
+            >
+              <Folder
+                className={cn(
+                  'h-10 w-10 transition-colors',
+                  folderModalDragActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground/50',
+                )}
+              />
+              <p className="text-sm font-medium text-muted-foreground">
+                {folderModalDragActive
+                  ? 'Release to upload'
+                  : 'Drop your folder here'}
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                Folders and all subfolders are supported
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog
           open={deleteConfirm.open}

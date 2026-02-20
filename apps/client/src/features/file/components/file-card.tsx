@@ -1,9 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
@@ -13,13 +10,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  MoreVertical,
+  MoreHorizontal,
   Download,
   Trash2,
   Link as LinkIcon,
   UserPlus,
-  Globe,
-  Lock,
   Pencil,
   Eye,
 } from 'lucide-react';
@@ -49,7 +44,7 @@ interface FileCardProps {
 
 export function FileCard({
   file,
-  index,
+  index: _index,
   onOpenFolder,
   onDelete,
   onShareUser,
@@ -71,13 +66,8 @@ export function FileCard({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-      console.error('Download failed:', err);
-      toast({
-        title: 'Error downloading',
-        description: 'Unable to download file.',
-        variant: 'destructive',
-      });
+    } catch {
+      toast({ title: 'Download failed', variant: 'destructive' });
     }
   };
 
@@ -85,163 +75,150 @@ export function FileCard({
   const IconComponent = getFileIcon(file.name, file.mime_type, file.is_folder);
   const iconColor = getIconColor(file.name, file.mime_type, file.is_folder);
   const iconBgColor = getIconBgColor(file.name, file.mime_type, file.is_folder);
+  const isShared =
+    (file.publicShareCount ?? 0) > 0 || (file.privateShareCount ?? 0) > 0;
 
-  const handleCardClick = (e: React.MouseEvent) => {
+  const handleClick = (e: React.MouseEvent) => {
     if (onCardClick) {
       onCardClick(file.id, e);
       return;
     }
-    if (file.is_folder) {
-      onOpenFolder(file);
-    }
+    if (file.is_folder) onOpenFolder(file);
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.03 }}
+    <div
+      className={cn(
+        'group relative flex flex-col items-center px-2 py-3 rounded-lg cursor-pointer transition-colors duration-100 select-none',
+        'hover:bg-muted/50',
+        isSelected && 'bg-primary/5 ring-1 ring-primary/30',
+      )}
+      onClick={handleClick}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (file.is_folder) onOpenFolder(file);
+        else if (onPreview) onPreview(file);
+      }}
     >
-      <Card
-        className={cn(
-          'group relative p-4 transition-all duration-200 cursor-pointer',
-          'hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5',
-          'active:translate-y-0 active:shadow-sm',
-          isSelected &&
-            'border-primary bg-primary/5 shadow-md ring-1 ring-primary/20',
-        )}
-        onClick={handleCardClick}
+      {/* Checkbox — top-left, appears on hover/selected */}
+      {hasSelect && (
+        <div
+          className="absolute top-1.5 left-1.5 z-10"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect!(file.id);
+          }}
+        >
+          <Checkbox
+            checked={isSelected}
+            className={cn(
+              'h-4 w-4 border-muted-foreground/50 bg-background transition-opacity',
+              isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+            )}
+            tabIndex={-1}
+          />
+        </div>
+      )}
+
+      {/* Kebab menu — top-right, appears on hover */}
+      <div
+        className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            {hasSelect && (
-              <div
-                className={cn(
-                  'shrink-0 transition-opacity duration-200',
-                  isSelected
-                    ? 'opacity-100'
-                    : 'opacity-0 group-hover:opacity-100',
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelect(file.id);
-                }}
-              >
-                <Checkbox
-                  checked={isSelected}
-                  className="h-5 w-5 border-2 border-muted-foreground/50 data-[state=checked]:border-primary"
-                  tabIndex={-1}
-                />
-              </div>
-            )}
-            <div
-              className={cn(
-                'h-12 w-12 rounded-xl flex items-center justify-center transition-transform duration-200',
-                'group-hover:scale-105',
-                iconBgColor,
-              )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-background/80"
             >
-              <IconComponent className={cn('h-6 w-6', iconColor)} />
-            </div>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              {!file.is_folder && onPreview && (
-                <DropdownMenuItem
-                  onClick={() => onPreview(file)}
-                  className="gap-2"
-                >
-                  <Eye className="h-4 w-4" />
-                  Preview
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={handleDownload} className="gap-2">
-                <Download className="h-4 w-4" />
-                {file.is_folder ? 'Download folder (zip)' : 'Download'}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-
-              {onRename && (
-                <DropdownMenuItem
-                  onClick={() => onRename(file.id)}
-                  className="gap-2"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Rename
-                </DropdownMenuItem>
-              )}
-
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            {!file.is_folder && onPreview && (
               <DropdownMenuItem
-                onClick={() => onShareUser(file.id)}
-                className="gap-2"
+                onClick={() => onPreview(file)}
+                className="gap-2 text-sm"
               >
-                <UserPlus className="h-4 w-4" />
-                Share
+                <Eye className="h-4 w-4" />
+                Preview
               </DropdownMenuItem>
-
-              <DropdownMenuItem
-                onClick={() => onSharePublic(file.id)}
-                className="gap-2"
-              >
-                <LinkIcon className="h-4 w-4" />
-                Get Public Link
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem
-                onClick={() => onDelete(file.id)}
-                className="gap-2 text-destructive focus:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-                Move to Trash
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="space-y-1.5">
-          <p
-            className="font-medium truncate text-sm leading-tight"
-            title={file.name}
-          >
-            {file.name}
-          </p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-xs text-muted-foreground">
-              {file.is_folder ? 'Folder' : formatBytes(Number(file.size || 0))}
-            </p>
-            {(file.publicShareCount ?? 0) > 0 && (
-              <Badge
-                variant="secondary"
-                className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0 gap-1"
-              >
-                <Globe className="h-3 w-3" />
-                Shared
-              </Badge>
             )}
-            {(file.privateShareCount ?? 0) > 0 && (
-              <Badge
-                variant="secondary"
-                className="text-[10px] px-1.5 py-0 h-5 font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0 gap-1"
+            <DropdownMenuItem
+              onClick={handleDownload}
+              className="gap-2 text-sm"
+            >
+              <Download className="h-4 w-4" />
+              {file.is_folder ? 'Download as zip' : 'Download'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {onRename && (
+              <DropdownMenuItem
+                onClick={() => onRename(file.id)}
+                className="gap-2 text-sm"
               >
-                <Lock className="h-3 w-3" />
-                Shared
-              </Badge>
+                <Pencil className="h-4 w-4" />
+                Rename
+              </DropdownMenuItem>
             )}
-          </div>
-        </div>
-      </Card>
-    </motion.div>
+            <DropdownMenuItem
+              onClick={() => onShareUser(file.id)}
+              className="gap-2 text-sm"
+            >
+              <UserPlus className="h-4 w-4" />
+              Share with user
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onSharePublic(file.id)}
+              className="gap-2 text-sm"
+            >
+              <LinkIcon className="h-4 w-4" />
+              Copy public link
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onDelete(file.id)}
+              className="gap-2 text-sm text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+              Move to Trash
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Shared dot — top-right, hidden when kebab is visible */}
+      {isShared && (
+        <div className="absolute top-1.5 right-1.5 z-10 h-2 w-2 rounded-full bg-blue-400 group-hover:hidden" />
+      )}
+
+      {/* Large centered icon */}
+      <div
+        className={cn(
+          'h-16 w-16 rounded-2xl flex items-center justify-center mb-2 transition-transform duration-150 group-hover:scale-105',
+          iconBgColor,
+        )}
+      >
+        <IconComponent className={cn('h-8 w-8', iconColor)} />
+      </div>
+
+      {/* File name */}
+      <p
+        className="text-xs text-center leading-tight w-full truncate px-1 font-medium text-foreground/80"
+        title={file.name}
+      >
+        {file.name}
+      </p>
+
+      {/* Sub-label */}
+      <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+        {file.is_folder
+          ? file.size > 0
+            ? formatBytes(Number(file.size))
+            : 'Folder'
+          : formatBytes(Number(file.size || 0))}
+      </p>
+    </div>
   );
 }

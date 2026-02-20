@@ -1,20 +1,13 @@
 'use client';
 
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  File as FileIcon,
-  Folder,
-  Upload,
-  Loader2,
-  LayoutGrid,
-  List,
-} from 'lucide-react';
+import { Upload, Loader2, LayoutGrid, List } from 'lucide-react';
 import { type FileMetadata } from '@/lib/api';
 import { FileCard } from './file-card';
 import { FileListRow } from './file-list-row';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
 
 interface FileGridProps {
   files: FileMetadata[];
@@ -45,14 +38,11 @@ export function FileGrid({
   onToggleSelect,
   onCardClick,
 }: FileGridProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
-  // Load view preference from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('zynq-view-mode') as ViewMode;
-    if (saved === 'grid' || saved === 'list') {
-      setViewMode(saved);
-    }
+    if (saved === 'grid' || saved === 'list') setViewMode(saved);
   }, []);
 
   const handleViewChange = (mode: ViewMode) => {
@@ -62,16 +52,9 @@ export function FileGrid({
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-4">
-        <div className="relative">
-          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-          <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-ping" />
-        </div>
-        <p className="text-sm text-muted-foreground font-medium">
-          Loading your files...
-        </p>
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading files…</p>
       </div>
     );
   }
@@ -79,175 +62,88 @@ export function FileGrid({
   if (files.length === 0) {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
+        transition={{ duration: 0.3 }}
+        className="flex flex-col items-center justify-center py-24 gap-4"
       >
-        <Card className="p-12 text-center border-dashed border-2 bg-muted/20">
-          <div className="flex flex-col items-center gap-6">
-            <div className="relative">
-              <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                <Folder className="h-10 w-10 text-primary/60" />
-              </div>
-              <div className="absolute -bottom-1 -right-1 h-8 w-8 rounded-lg bg-muted flex items-center justify-center border-2 border-background">
-                <Upload className="h-4 w-4 text-muted-foreground" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h3 className="font-semibold text-lg text-foreground">
-                No files here yet
-              </h3>
-              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                Start by uploading files or creating a new folder. You can also
-                drag and drop files here.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3 justify-center text-xs text-muted-foreground">
-              <span className="px-3 py-1.5 rounded-full bg-muted">
-                Drag & drop files
-              </span>
-              <span className="px-3 py-1.5 rounded-full bg-muted">
-                Upload button above
-              </span>
-              <span className="px-3 py-1.5 rounded-full bg-muted">
-                Ctrl+V to paste
-              </span>
-            </div>
-          </div>
-        </Card>
+        <div className="h-16 w-16 rounded-2xl bg-muted/60 flex items-center justify-center">
+          <Upload className="h-7 w-7 text-muted-foreground/60" />
+        </div>
+        <div className="text-center space-y-1">
+          <p className="text-sm font-medium text-foreground">
+            No files here yet
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Upload files or drag and drop into this folder
+          </p>
+        </div>
       </motion.div>
     );
   }
 
-  // Separate folders and files for better organization
-  const folders = files.filter((f) => f.is_folder);
-  const regularFiles = files.filter((f) => !f.is_folder);
+  // Folders first, then files
+  const sorted = [
+    ...files.filter((f) => f.is_folder),
+    ...files.filter((f) => !f.is_folder),
+  ];
 
   return (
-    <div className="space-y-4">
-      {/* View Toggle - Nextcloud style */}
-      <div className="flex items-center justify-end gap-1">
+    <div className="space-y-2">
+      {/* View toggle */}
+      <div className="flex items-center justify-end gap-0.5">
         <Button
-          variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+          variant="ghost"
           size="icon"
-          className="h-8 w-8"
-          onClick={() => handleViewChange('grid')}
-          title="Grid view"
-        >
-          <LayoutGrid className="h-4 w-4" />
-        </Button>
-        <Button
-          variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-          size="icon"
-          className="h-8 w-8"
+          className={cn(
+            'h-8 w-8',
+            viewMode === 'list' && 'bg-muted text-foreground',
+          )}
           onClick={() => handleViewChange('list')}
           title="List view"
         >
           <List className="h-4 w-4" />
         </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'h-8 w-8',
+            viewMode === 'grid' && 'bg-muted text-foreground',
+          )}
+          onClick={() => handleViewChange('grid')}
+          title="Grid view"
+        >
+          <LayoutGrid className="h-4 w-4" />
+        </Button>
       </div>
 
       <AnimatePresence mode="wait">
-        {viewMode === 'grid' ? (
-          <motion.div
-            key="grid"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="space-y-6"
-          >
-            {/* Folders section */}
-            {folders.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Folder className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    Folders ({folders.length})
-                  </h3>
-                </div>
-                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-                  {folders.map((file, index) => (
-                    <FileCard
-                      key={file.id}
-                      file={file}
-                      index={index}
-                      onOpenFolder={onOpenFolder}
-                      onDelete={onDelete}
-                      onShareUser={onShareUser}
-                      onSharePublic={onSharePublic}
-                      onRename={onRename}
-                      onPreview={onPreview}
-                      isSelected={selectedIds?.has(file.id)}
-                      onToggleSelect={onToggleSelect}
-                      onCardClick={onCardClick}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Files section */}
-            {regularFiles.length > 0 && (
-              <div className="space-y-3">
-                {folders.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <FileIcon className="h-4 w-4 text-muted-foreground" />
-                    <h3 className="text-sm font-medium text-muted-foreground">
-                      Files ({regularFiles.length})
-                    </h3>
-                  </div>
-                )}
-                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-                  {regularFiles.map((file, index) => (
-                    <FileCard
-                      key={file.id}
-                      file={file}
-                      index={folders.length + index}
-                      onOpenFolder={onOpenFolder}
-                      onDelete={onDelete}
-                      onShareUser={onShareUser}
-                      onSharePublic={onSharePublic}
-                      onRename={onRename}
-                      onPreview={onPreview}
-                      isSelected={selectedIds?.has(file.id)}
-                      onToggleSelect={onToggleSelect}
-                      onCardClick={onCardClick}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </motion.div>
-        ) : (
+        {viewMode === 'list' ? (
           <motion.div
             key="list"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.12 }}
           >
-            {/* List View - Nextcloud style */}
-            <Card className="overflow-hidden">
-              {/* Table Header */}
-              <div className="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2.5 border-b bg-muted/30 text-sm font-medium text-muted-foreground">
-                <div className="w-8 shrink-0" /> {/* Checkbox column */}
+            {/* Nextcloud-style list — full-width table */}
+            <div className="rounded-lg border bg-card overflow-hidden">
+              {/* Header row */}
+              <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/20 text-xs font-medium text-muted-foreground select-none">
+                <div className="w-5 shrink-0" />
                 <div className="flex-1 min-w-0">Name</div>
-                <div className="hidden sm:block w-20 shrink-0" />{' '}
-                {/* Shared column */}
-                <div className="hidden sm:block w-24 shrink-0 text-right">
+                <div className="hidden sm:block w-28 shrink-0 text-right">
                   Size
                 </div>
-                <div className="hidden md:block w-32 shrink-0 text-right">
+                <div className="hidden md:block w-36 shrink-0 text-right">
                   Modified
                 </div>
-                <div className="w-16 shrink-0" /> {/* Actions column */}
+                <div className="w-20 shrink-0" />
               </div>
 
-              {/* Table Body */}
-              <div className="divide-y">
-                {/* Folders first */}
-                {folders.map((file, index) => (
+              <div className="divide-y divide-border/50">
+                {sorted.map((file, index) => (
                   <FileListRow
                     key={file.id}
                     file={file}
@@ -263,25 +159,34 @@ export function FileGrid({
                     onCardClick={onCardClick}
                   />
                 ))}
-                {/* Then files */}
-                {regularFiles.map((file, index) => (
-                  <FileListRow
-                    key={file.id}
-                    file={file}
-                    index={folders.length + index}
-                    onOpenFolder={onOpenFolder}
-                    onDelete={onDelete}
-                    onShareUser={onShareUser}
-                    onSharePublic={onSharePublic}
-                    onRename={onRename}
-                    onPreview={onPreview}
-                    isSelected={selectedIds?.has(file.id)}
-                    onToggleSelect={onToggleSelect}
-                    onCardClick={onCardClick}
-                  />
-                ))}
               </div>
-            </Card>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="grid"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-1"
+          >
+            {sorted.map((file, index) => (
+              <FileCard
+                key={file.id}
+                file={file}
+                index={index}
+                onOpenFolder={onOpenFolder}
+                onDelete={onDelete}
+                onShareUser={onShareUser}
+                onSharePublic={onSharePublic}
+                onRename={onRename}
+                onPreview={onPreview}
+                isSelected={selectedIds?.has(file.id)}
+                onToggleSelect={onToggleSelect}
+                onCardClick={onCardClick}
+              />
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
