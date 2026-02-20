@@ -67,7 +67,7 @@
     "embla-carousel-auto-scroll": "^8.6.0",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
-    "estree-walker": "2.0.2",
+    "estree-walker": "3.0.3",
     "framer-motion": "^12.23.12",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.544.0",
