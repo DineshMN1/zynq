@@ -12,6 +12,7 @@ import { Loader2, Download, X } from 'lucide-react';
 import { type FileMetadata, fileApi } from '@/lib/api';
 import { getFileIcon, getIconColor } from '@/features/file/utils/file-icons';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast';
 
 interface FilePreviewDialogProps {
   file: FileMetadata;
@@ -95,24 +96,26 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
   const iconColor = getIconColor(file.name, file.mime_type, false);
 
   useEffect(() => {
-    let url: string | null = null;
+    let stale = false;
+    let createdUrl: string | null = null;
 
     const load = async () => {
       setLoading(true);
       setError('');
       try {
         const { blob } = await fileApi.download(file.id);
+        if (stale) return;
         if (previewType === 'text' || previewType === 'code') {
           const text = await blob.text();
-          setTextContent(text);
+          if (!stale) setTextContent(text);
         } else if (previewType !== 'none') {
-          url = URL.createObjectURL(blob);
-          setBlobUrl(url);
+          createdUrl = URL.createObjectURL(blob);
+          if (!stale) setBlobUrl(createdUrl);
         }
       } catch {
-        setError('Failed to load preview.');
+        if (!stale) setError('Failed to load preview.');
       } finally {
-        setLoading(false);
+        if (!stale) setLoading(false);
       }
     };
 
@@ -123,7 +126,8 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
     }
 
     return () => {
-      if (url) URL.revokeObjectURL(url);
+      stale = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
   }, [file.id, previewType]);
 
@@ -138,8 +142,13 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error('Download failed:', err);
+      toast({
+        title: 'Download failed',
+        description: 'Unable to download this file.',
+        variant: 'destructive',
+      });
     }
   };
 

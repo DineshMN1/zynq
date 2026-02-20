@@ -140,6 +140,12 @@ export default function FilesPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Callback ref: sets webkitdirectory when the input mounts so the native
+  // OS folder picker (not a file picker) opens on click.
+  const setFolderInputRef = useCallback((el: HTMLInputElement | null) => {
+    if (el) el.setAttribute('webkitdirectory', '');
+  }, []);
+
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [publicLink, setPublicLink] = useState<string | null>(null);
@@ -456,6 +462,27 @@ export default function FilesPage() {
 
   const handleUploadFileClick = () => fileInputRef.current?.click();
 
+  const handleFolderInputChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    const allFiles = Array.from(fileList);
+    const rootFolderName =
+      allFiles[0]?.webkitRelativePath?.split('/')[0] || 'Uploaded Folder';
+    const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
+
+    setPendingFolderUpload({
+      files: allFiles,
+      folderName: rootFolderName,
+      totalSize,
+      fileCount: allFiles.length,
+    });
+    setShowFolderUploadDialog(true);
+    e.target.value = '';
+  };
+
   const handleFolderModalDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -500,7 +527,7 @@ export default function FilesPage() {
     }
 
     const rootFolderName =
-      entries.find((e) => e.isDirectory)?.name || 'Dropped Folder';
+      entries.find((entry) => entry.isDirectory)?.name || 'Dropped Folder';
     const totalSize = allFilesWithPaths.reduce(
       (sum, f) => sum + f.file.size,
       0,
@@ -1284,7 +1311,7 @@ export default function FilesPage() {
 
     // Get root folder name from first entry
     const rootFolderName =
-      entries.find((e) => e.isDirectory)?.name || 'Dropped Folder';
+      entries.find((entry) => entry.isDirectory)?.name || 'Dropped Folder';
     const totalSize = allFilesWithPaths.reduce(
       (sum, f) => sum + f.file.size,
       0,
@@ -1381,12 +1408,11 @@ export default function FilesPage() {
                     <FileIcon className="h-4 w-4" />
                     Upload Files
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setShowFolderDropModal(true)}
-                    className="gap-2"
-                  >
-                    <Folder className="h-4 w-4" />
-                    Upload Folder
+                  <DropdownMenuItem asChild className="gap-2">
+                    <label htmlFor="folder-upload-input">
+                      <Folder className="h-4 w-4" />
+                      Upload Folder
+                    </label>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1395,6 +1421,14 @@ export default function FilesPage() {
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
+                className="hidden"
+                multiple
+              />
+              <input
+                id="folder-upload-input"
+                type="file"
+                ref={setFolderInputRef}
+                onChange={handleFolderInputChange}
                 className="hidden"
                 multiple
               />
@@ -1863,7 +1897,13 @@ export default function FilesPage() {
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') void submitRename();
+              if (
+                e.key === 'Enter' &&
+                renameValue.trim() &&
+                renameDialog.fileId &&
+                renameValue.trim() !== renameDialog.currentName
+              )
+                void submitRename();
             }}
             autoFocus
           />
