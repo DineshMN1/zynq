@@ -58,6 +58,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
 import { FileGrid } from '@/features/file/components/file-grid';
+import { FilePreviewDialog } from '@/features/file/components/file-preview-dialog';
 import { FileBreadcrumb } from '@/features/file/components/file-breadcrumb';
 import { CreateFolderDialog } from '@/features/file/components/create-folder-dialog';
 import { PublicLinkDialog } from '@/features/share/components/public-link-dialog';
@@ -71,6 +72,7 @@ import { uploadManager } from '@/lib/upload-manager';
 import { formatBytes } from '@/lib/auth';
 import { emitStorageRefresh } from '@/lib/storage-events';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface UploadProgress {
   id: string;
@@ -137,7 +139,12 @@ export default function FilesPage() {
   }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
+
+  // Callback ref: sets webkitdirectory when the input mounts so the native
+  // OS folder picker (not a file picker) opens on click.
+  const setFolderInputRef = useCallback((el: HTMLInputElement | null) => {
+    if (el) el.setAttribute('webkitdirectory', '');
+  }, []);
 
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState('');
@@ -147,6 +154,10 @@ export default function FilesPage() {
   const [pendingDuplicates, setPendingDuplicates] = useState<DuplicateItem[]>(
     [],
   );
+
+  // Folder drop modal (in-app drag zone — avoids browser webkitdirectory popup)
+  const [showFolderDropModal, setShowFolderDropModal] = useState(false);
+  const [folderModalDragActive, setFolderModalDragActive] = useState(false);
 
   // Folder upload confirmation state
   const [showFolderUploadDialog, setShowFolderUploadDialog] = useState(false);
@@ -191,6 +202,17 @@ export default function FilesPage() {
   // Drag & drop state
   const [isDragActive, setIsDragActive] = useState(false);
   const dragCounter = useRef(0);
+
+  // Rename state
+  const [renameDialog, setRenameDialog] = useState<{
+    open: boolean;
+    fileId: string | null;
+    currentName: string;
+  }>({ open: false, fileId: null, currentName: '' });
+  const [renameValue, setRenameValue] = useState('');
+
+  // Preview state
+  const [previewFile, setPreviewFile] = useState<FileMetadata | null>(null);
 
   const currentFolderId = pathStack[pathStack.length - 1]?.id;
   const skipHistoryPush = useRef(false);
@@ -375,9 +397,8 @@ export default function FilesPage() {
     const file = files.find((f) => f.id === id);
     if (file?.is_folder) {
       handleOpenFolder(file);
-    } else {
-      toggleSelect(id);
     }
+    // Single click on a file does nothing — use checkbox or Ctrl+click to select
   };
 
   const handleBulkDelete = () => {
@@ -440,7 +461,93 @@ export default function FilesPage() {
   };
 
   const handleUploadFileClick = () => fileInputRef.current?.click();
-  const handleUploadFolderClick = () => folderInputRef.current?.click();
+
+  const handleFolderInputChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    const allFiles = Array.from(fileList);
+    const rootFolderName =
+      allFiles[0]?.webkitRelativePath?.split('/')[0] || 'Uploaded Folder';
+    const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
+
+    setPendingFolderUpload({
+      files: allFiles,
+      folderName: rootFolderName,
+      totalSize,
+      fileCount: allFiles.length,
+    });
+    setShowFolderUploadDialog(true);
+    e.target.value = '';
+  };
+
+  const handleFolderModalDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFolderModalDragActive(false);
+
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) return;
+
+    const entries: FileSystemEntry[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const entry = item.webkitGetAsEntry?.();
+        if (entry && entry.isDirectory) entries.push(entry);
+      }
+    }
+
+    if (entries.length === 0) {
+      toast({
+        title: 'Drop a folder',
+        description: 'Please drop a folder, not individual files.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setShowFolderDropModal(false);
+
+    const allFilesWithPaths: { file: File; relativePath: string }[] = [];
+    for (const entry of entries) {
+      const filesFromEntry = await traverseEntry(entry);
+      allFilesWithPaths.push(...filesFromEntry);
+    }
+
+    if (allFilesWithPaths.length === 0) {
+      toast({
+        title: 'Empty folder',
+        description: 'The folder contains no files.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const rootFolderName =
+      entries.find((entry) => entry.isDirectory)?.name || 'Dropped Folder';
+    const totalSize = allFilesWithPaths.reduce(
+      (sum, f) => sum + f.file.size,
+      0,
+    );
+
+    setPendingFolderUpload({
+      files: allFilesWithPaths.map((f) => {
+        const newFile = new File([f.file], f.file.name, { type: f.file.type });
+        Object.defineProperty(newFile, 'webkitRelativePath', {
+          value: f.relativePath,
+          writable: false,
+        });
+        return newFile;
+      }),
+      folderName: rootFolderName,
+      totalSize,
+      fileCount: allFilesWithPaths.length,
+    });
+    setShowFolderUploadDialog(true);
+  };
 
   const uploadFileWithProgress = (
     url: string,
@@ -783,28 +890,6 @@ export default function FilesPage() {
     }
   };
 
-  const handleFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList || fileList.length === 0) return;
-
-    const allFiles = Array.from(fileList);
-
-    // Extract folder name from the first file's relative path
-    const firstPath = allFiles[0]?.webkitRelativePath || '';
-    const rootFolderName = firstPath.split('/')[0] || 'Unknown Folder';
-
-    const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
-
-    setPendingFolderUpload({
-      files: allFiles,
-      folderName: rootFolderName,
-      totalSize,
-      fileCount: allFiles.length,
-    });
-    setShowFolderUploadDialog(true);
-    e.target.value = '';
-  };
-
   const handleFolderUploadProceed = async () => {
     setShowFolderUploadDialog(false);
     if (!pendingFolderUpload) return;
@@ -949,6 +1034,31 @@ export default function FilesPage() {
   const handlePublicShare = (fileId: string) => {
     const file = files.find((f) => f.id === fileId);
     if (file) setShareConfirm({ open: true, file });
+  };
+
+  const handleRenameOpen = (id: string) => {
+    const file = files.find((f) => f.id === id);
+    if (!file) return;
+    setRenameValue(file.name);
+    setRenameDialog({ open: true, fileId: id, currentName: file.name });
+  };
+
+  const submitRename = async () => {
+    if (!renameDialog.fileId || !renameValue.trim()) return;
+    try {
+      const updated = await fileApi.rename(
+        renameDialog.fileId,
+        renameValue.trim(),
+      );
+      setFiles((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+      setRenameDialog({ open: false, fileId: null, currentName: '' });
+    } catch {
+      toast({ title: 'Rename failed', variant: 'destructive' });
+    }
+  };
+
+  const handlePreview = (file: FileMetadata) => {
+    setPreviewFile(file);
   };
 
   const handleShareType = (fileId: string) => {
@@ -1201,7 +1311,7 @@ export default function FilesPage() {
 
     // Get root folder name from first entry
     const rootFolderName =
-      entries.find((e) => e.isDirectory)?.name || 'Dropped Folder';
+      entries.find((entry) => entry.isDirectory)?.name || 'Dropped Folder';
     const totalSize = allFilesWithPaths.reduce(
       (sum, f) => sum + f.file.size,
       0,
@@ -1298,12 +1408,11 @@ export default function FilesPage() {
                     <FileIcon className="h-4 w-4" />
                     Upload Files
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleUploadFolderClick}
-                    className="gap-2"
-                  >
-                    <Folder className="h-4 w-4" />
-                    Upload Folder
+                  <DropdownMenuItem asChild className="gap-2">
+                    <label htmlFor="folder-upload-input">
+                      <Folder className="h-4 w-4" />
+                      Upload Folder
+                    </label>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1316,14 +1425,12 @@ export default function FilesPage() {
                 multiple
               />
               <input
+                id="folder-upload-input"
                 type="file"
-                ref={folderInputRef}
-                onChange={handleFolderChange}
+                ref={setFolderInputRef}
+                onChange={handleFolderInputChange}
                 className="hidden"
-                {...({
-                  webkitdirectory: '',
-                  directory: '',
-                } as React.InputHTMLAttributes<HTMLInputElement>)}
+                multiple
               />
             </div>
           </div>
@@ -1425,6 +1532,8 @@ export default function FilesPage() {
           onDelete={handleDelete}
           onShareUser={handleShareType}
           onSharePublic={handlePublicShare}
+          onRename={handleRenameOpen}
+          onPreview={handlePreview}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onCardClick={handleCardClick}
@@ -1491,6 +1600,62 @@ export default function FilesPage() {
           onUpload={handleFolderUploadProceed}
           onCancel={handleFolderUploadCancel}
         />
+
+        {/* Folder Drop Modal — in-app drag zone, no browser security popup */}
+        <Dialog
+          open={showFolderDropModal}
+          onOpenChange={setShowFolderDropModal}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Upload Folder</DialogTitle>
+              <DialogDescription>
+                Drag and drop your folder into the zone below.
+              </DialogDescription>
+            </DialogHeader>
+            <div
+              className={cn(
+                'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed transition-colors duration-150 h-48 cursor-default',
+                folderModalDragActive
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted-foreground/25 hover:border-muted-foreground/50',
+              )}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFolderModalDragActive(true);
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFolderModalDragActive(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFolderModalDragActive(false);
+              }}
+              onDrop={handleFolderModalDrop}
+            >
+              <Folder
+                className={cn(
+                  'h-10 w-10 transition-colors',
+                  folderModalDragActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground/50',
+                )}
+              />
+              <p className="text-sm font-medium text-muted-foreground">
+                {folderModalDragActive
+                  ? 'Release to upload'
+                  : 'Drop your folder here'}
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                Folders and all subfolders are supported
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog
           open={deleteConfirm.open}
@@ -1715,6 +1880,61 @@ export default function FilesPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Rename Dialog */}
+      <Dialog
+        open={renameDialog.open}
+        onOpenChange={(open) => setRenameDialog((d) => ({ ...d, open }))}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename</DialogTitle>
+            <DialogDescription>
+              Enter a new name for this item.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (
+                e.key === 'Enter' &&
+                renameValue.trim() &&
+                renameDialog.fileId &&
+                renameValue.trim() !== renameDialog.currentName
+              )
+                void submitRename();
+            }}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setRenameDialog({ open: false, fileId: null, currentName: '' })
+              }
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void submitRename()}
+              disabled={
+                !renameValue.trim() || renameValue === renameDialog.currentName
+              }
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* File Preview */}
+      {previewFile && (
+        <FilePreviewDialog
+          file={previewFile}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
 
       <ToastContainer />
     </>

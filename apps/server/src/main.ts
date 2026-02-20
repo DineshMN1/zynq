@@ -16,20 +16,9 @@ async function bootstrap() {
   // Cookie parser
   app.use(cookieParser());
 
-  // CORS
-  const corsOrigins = (configService.get<string>('CORS_ORIGIN') || '')
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
-
+  // CORS — allow all origins (self-hosted; no domain restrictions)
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || corsOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS blocked for origin: ${origin}`));
-      }
-    },
+    origin: true,
     credentials: true,
   });
 

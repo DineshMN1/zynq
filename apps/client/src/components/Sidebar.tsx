@@ -34,11 +34,14 @@ import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import type { User, StorageOverview } from '@/lib/api';
-import { storageApi, authApi } from '@/lib/api';
+import { storageApi, authApi, brandingApi } from '@/lib/api';
 import { formatBytes, getInitials } from '@/lib/auth';
 import { STORAGE_REFRESH_EVENT } from '@/lib/storage-events';
 import { useTheme } from './ThemeProvider';
 import { useIsMobile } from '@/hooks/use-mobile';
+
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
+const GITHUB_REPO = 'Pepperjack-svg/zynq';
 
 interface SidebarProps {
   user: User | null;
@@ -52,14 +55,38 @@ export function Sidebar({ user }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [storageInfo, setStorageInfo] = useState<StorageOverview | null>(null);
   const [loadingStorage, setLoadingStorage] = useState(true);
+  const [appLogo, setAppLogo] = useState<string | null>(null);
+  const [appName, setAppName] = useState<string | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
 
   useEffect(() => {
     if (user) {
       loadStorageInfo();
+      brandingApi
+        .get()
+        .then((data) => {
+          setAppLogo(data.app_logo);
+          setAppName(data.app_name);
+        })
+        .catch(() => {});
     }
   }, [user]);
+
+  useEffect(() => {
+    fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
+      .then((r) => r.json())
+      .then((data: { tag_name?: string }) => {
+        const tag = data.tag_name?.replace(/^v/, '');
+        if (tag && tag !== APP_VERSION) {
+          setUpdateAvailable(true);
+          setLatestVersion(tag);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const onStorageRefresh = () => {
@@ -204,17 +231,35 @@ export function Sidebar({ user }: SidebarProps) {
       >
         {isMobile || !collapsed ? (
           <Link href="/dashboard/files" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
+            <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center overflow-hidden shrink-0">
+              {appLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={appLogo}
+                  alt="Logo"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
+              )}
             </div>
             <span className="font-semibold text-sidebar-foreground">
-              ZynqCloud
+              {appName || 'ZynqCloud'}
             </span>
           </Link>
         ) : (
           <Link href="/dashboard/files">
-            <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
+            <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center overflow-hidden">
+              {appLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={appLogo}
+                  alt="Logo"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
+              )}
             </div>
           </Link>
         )}
@@ -248,6 +293,51 @@ export function Sidebar({ user }: SidebarProps) {
           </div>
         )}
       </nav>
+
+      {/* Version Tag */}
+      <div
+        className={cn(
+          'px-3 py-2 border-t border-sidebar-border',
+          !isMobile && collapsed && 'px-2',
+        )}
+      >
+        {isMobile || !collapsed ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-sidebar-foreground/40 font-mono select-none">
+              v{APP_VERSION}
+            </span>
+            {updateAvailable && latestVersion && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 cursor-default" />
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  Update available: v{latestVersion}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex justify-center">
+                {updateAvailable ? (
+                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500 cursor-default" />
+                ) : (
+                  <span className="text-[10px] text-sidebar-foreground/30 font-mono select-none cursor-default">
+                    v
+                  </span>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {updateAvailable && latestVersion
+                ? `Update available: v${latestVersion} (current: v${APP_VERSION})`
+                : `v${APP_VERSION}`}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
 
       {/* Storage Indicator */}
       <div
@@ -463,11 +553,20 @@ export function Sidebar({ user }: SidebarProps) {
             </SheetContent>
           </Sheet>
           <Link href="/dashboard/files" className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <HardDrive className="h-3.5 w-3.5 text-sidebar-primary-foreground" />
+            <div className="h-7 w-7 rounded-lg bg-sidebar-primary flex items-center justify-center overflow-hidden">
+              {appLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={appLogo}
+                  alt="Logo"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <HardDrive className="h-3.5 w-3.5 text-sidebar-primary-foreground" />
+              )}
             </div>
             <span className="font-semibold text-sidebar-foreground text-sm">
-              ZynqCloud
+              {appName || 'ZynqCloud'}
             </span>
           </Link>
         </div>
