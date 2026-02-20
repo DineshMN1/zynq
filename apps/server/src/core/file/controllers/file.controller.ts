@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -152,6 +153,15 @@ export class FileController {
   @Get(':id')
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
     return this.fileService.findById(id, user.id);
+  }
+
+  @Patch(':id')
+  rename(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: { name: string },
+  ) {
+    return this.fileService.rename(id, user.id, body.name);
   }
 
   @Put(':id/upload')

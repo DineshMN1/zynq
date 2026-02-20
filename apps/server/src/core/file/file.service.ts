@@ -334,6 +334,16 @@ export class FileService {
     return file;
   }
 
+  /** Renames a file or folder. */
+  async rename(id: string, userId: string, name: string): Promise<File> {
+    if (!name || !name.trim()) {
+      throw new BadRequestException('Name cannot be empty');
+    }
+    const file = await this.findById(id, userId);
+    file.name = name.trim();
+    return this.filesRepository.save(file);
+  }
+
   /** Moves file to trash (soft delete). File can be restored later. */
   async softDelete(id: string, userId: string): Promise<void> {
     const file = await this.findById(id, userId);
