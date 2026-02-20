@@ -1,0 +1,70 @@
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+    container_name: zynqcloud-postgres-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zynqcloud
+      POSTGRES_PASSWORD: supersecret_db_pass
+      POSTGRES_DB: zynqcloud
+    volumes:
+      - postgres_localbuild_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U zynqcloud -d zynqcloud']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - zynqcloud-localbuild-network
+
+  zynqcloud:
+    build: .
+    container_name: zynqcloud-local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://zynqcloud:supersecret_db_pass@postgres:5432/zynqcloud
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: zynqcloud
+      DATABASE_PASSWORD: supersecret_db_pass
+      DATABASE_NAME: zynqcloud
+      JWT_SECRET: ${JWT_SECRET:-zynqcloud_dev_secret_change_in_production_32chars}
+      FILE_STORAGE_PATH: /data/files
+      FILE_ENCRYPTION_MASTER_KEY: ${FILE_ENCRYPTION_MASTER_KEY:-YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=}
+      EMAIL_ENABLED: 'true'
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_SECURE: 'false'
+      SMTP_USER: your-email@gmail.com
+      SMTP_PASS: your-app-password
+      SMTP_FROM: 'ZynqCloud <no-reply@yourdomain.com>'
+      CORS_ORIGIN: http://localhost:3000
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - '3000:80'
+    volumes:
+      - zynq_localbuild_files:/data/files
+    networks:
+      - zynqcloud-localbuild-network
+
+volumes:
+  postgres_localbuild_data:
+    driver: local
+  zynq_localbuild_files:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ZYNQ_DATA_PATH:-./data/files}
+
+networks:
+  zynqcloud-localbuild-network:
+    driver: bridge

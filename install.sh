@@ -33,6 +33,7 @@ SMTP_ENABLED="${EMAIL_ENABLED:-false}"
 TEMPLATE_ONLY="false"
 NON_INTERACTIVE="${ZYNQ_NON_INTERACTIVE:-false}"
 USE_HTTPS="${USE_HTTPS:-auto}"
+AUTO_START="${AUTO_START:-ask}"
 
 SMTP_HOST="${SMTP_HOST:-smtp.example.com}"
 SMTP_PORT="${SMTP_PORT:-587}"
@@ -69,11 +70,13 @@ Options:
   --smtp-pass <pass>
   --smtp-from <from>
   --use-https <auto|true|false>
+  --start                Start containers after generating config
+  --init-only            Generate files/config only, do not start containers
   --edit-env             Open generated .env in editor before start
   --no-edit-env          Do not open .env editor
   --template-only        Generate files only, do not start containers
   --interactive          Enable prompts for setup values
-  --non-interactive      Never prompt; use defaults/flags/env (default)
+  --non-interactive      Never prompt; use defaults/flags/env
   --help                 Show this help
 USAGE
 }
@@ -218,13 +221,17 @@ is_tty() {
   [ -t 0 ]
 }
 
+is_non_interactive_mode() {
+  [ "$NON_INTERACTIVE" = "true" ] || ! is_tty
+}
+
 prompt() {
   local var_name="$1"
   local label="$2"
   local default="$3"
   local input
 
-  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+  if is_non_interactive_mode; then
     printf -v "$var_name" '%s' "$default"
     return
   fi
@@ -244,7 +251,7 @@ prompt_secret() {
   local default="$3"
   local input
 
-  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+  if is_non_interactive_mode; then
     printf -v "$var_name" '%s' "$default"
     return
   fi
@@ -269,7 +276,7 @@ prompt_yesno() {
   local default="$3"
   local input
 
-  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+  if is_non_interactive_mode; then
     printf -v "$var_name" '%s' "$default"
     return
   fi
@@ -327,7 +334,7 @@ is_valid_jwt_secret() {
 }
 
 prompt_jwt_secret() {
-  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+  if is_non_interactive_mode; then
     if ! is_valid_jwt_secret "$JWT_SECRET"; then
       JWT_SECRET="$(generate_base64_32)"
       warn "Generated JWT_SECRET (missing/weak input)"
@@ -365,7 +372,7 @@ prompt_jwt_secret() {
 }
 
 prompt_file_encryption_key() {
-  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+  if is_non_interactive_mode; then
     if ! is_valid_base64_32 "$FILE_ENCRYPTION_MASTER_KEY"; then
       FILE_ENCRYPTION_MASTER_KEY="$(generate_base64_32)"
       warn "Generated FILE_ENCRYPTION_MASTER_KEY (missing/invalid input)"
@@ -603,6 +610,8 @@ parse_args() {
       --smtp-pass) require_value "$@"; SMTP_PASS="$2"; shift 2 ;;
       --smtp-from) require_value "$@"; SMTP_FROM="$2"; shift 2 ;;
       --use-https) require_value "$@"; USE_HTTPS="$2"; shift 2 ;;
+      --start) AUTO_START="true"; shift ;;
+      --init-only) TEMPLATE_ONLY="true"; AUTO_START="false"; shift ;;
       --edit-env) EDIT_ENV="true"; shift ;;
       --no-edit-env) EDIT_ENV="false"; shift ;;
       --template-only) TEMPLATE_ONLY="true"; shift ;;
@@ -710,16 +719,20 @@ write_env() {
     cookie_domain="localhost"
   fi
 
-  if [ -z "$DATABASE_PASSWORD" ]; then
-    DATABASE_PASSWORD="$(generate_password)"
-  fi
-  if ! is_valid_jwt_secret "$JWT_SECRET"; then
-    JWT_SECRET="$(generate_base64_32)"
-    warn "Generated JWT_SECRET (missing/weak input)"
-  fi
-  if ! is_valid_base64_32 "$FILE_ENCRYPTION_MASTER_KEY"; then
-    FILE_ENCRYPTION_MASTER_KEY="$(generate_base64_32)"
-    warn "Generated FILE_ENCRYPTION_MASTER_KEY (missing/invalid input)"
+  if is_non_interactive_mode && [ "$AUTO_START" = "true" ]; then
+    :
+  else
+    if [ -z "$DATABASE_PASSWORD" ]; then
+      DATABASE_PASSWORD="$(generate_password)"
+    fi
+    if ! is_valid_jwt_secret "$JWT_SECRET"; then
+      JWT_SECRET="$(generate_base64_32)"
+      warn "Generated JWT_SECRET (missing/weak input)"
+    fi
+    if ! is_valid_base64_32 "$FILE_ENCRYPTION_MASTER_KEY"; then
+      FILE_ENCRYPTION_MASTER_KEY="$(generate_base64_32)"
+      warn "Generated FILE_ENCRYPTION_MASTER_KEY (missing/invalid input)"
+    fi
   fi
 
   if [ "$SMTP_ENABLED" != "true" ]; then
@@ -729,6 +742,39 @@ write_env() {
     SMTP_USER=""
     SMTP_PASS=""
     SMTP_FROM="zynqcloud <no-reply@${DOMAIN}>"
+  fi
+
+  if is_non_interactive_mode; then
+    local missing=()
+    if [ -z "$DATABASE_PASSWORD" ]; then
+      missing+=("DATABASE_PASSWORD")
+    fi
+    if ! is_valid_jwt_secret "$JWT_SECRET"; then
+      missing+=("JWT_SECRET (min 32 chars)")
+    fi
+    if ! is_valid_base64_32 "$FILE_ENCRYPTION_MASTER_KEY"; then
+      missing+=("FILE_ENCRYPTION_MASTER_KEY (base64 32 bytes)")
+    fi
+    if [ "$SMTP_ENABLED" = "true" ]; then
+      [ -z "$SMTP_HOST" ] && missing+=("SMTP_HOST")
+      [ -z "$SMTP_PORT" ] && missing+=("SMTP_PORT")
+      [ -z "$SMTP_USER" ] && missing+=("SMTP_USER")
+      [ -z "$SMTP_PASS" ] && missing+=("SMTP_PASS")
+      [ -z "$SMTP_FROM" ] && missing+=("SMTP_FROM")
+    fi
+
+    if [ "${#missing[@]}" -gt 0 ]; then
+      if [ ! -f "$INSTALL_DIR/.env" ] && [ -f "$INSTALL_DIR/.env.example" ]; then
+        cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+      fi
+      echo -e "${RED}Missing/invalid required production settings:${NC}"
+      for key in "${missing[@]}"; do
+        echo "  - $key"
+      done
+      echo ""
+      echo "Edit $INSTALL_DIR/.env and re-run with --start."
+      exit 1
+    fi
   fi
 
   mkdir -p "$DATA_PATH"
@@ -811,6 +857,8 @@ edit_env_if_requested() {
 
 start_stack() {
   cd "$INSTALL_DIR"
+  ensure_docker
+  ensure_docker_compose
   need_cmd curl
 
   log "Pulling images"
@@ -852,6 +900,24 @@ start_stack() {
   echo "  cd $INSTALL_DIR && docker compose --env-file .env up -d"
 }
 
+should_start_containers() {
+  if [ "$TEMPLATE_ONLY" = "true" ] || [ "$AUTO_START" = "false" ]; then
+    return 1
+  fi
+
+  if [ "$AUTO_START" = "true" ]; then
+    return 0
+  fi
+
+  if is_non_interactive_mode; then
+    return 1
+  fi
+
+  local answer
+  prompt_yesno answer "Start containers now?" "true"
+  [ "$answer" = "true" ]
+}
+
 print_summary() {
   local install_url="http://localhost:${APP_PORT}"
   if [ "$DOMAIN" != "localhost" ]; then
@@ -885,9 +951,6 @@ main() {
   parse_args "$@"
   validate_inputs
 
-  ensure_docker
-  ensure_docker_compose
-
   if [ "$NON_INTERACTIVE" != "true" ] && is_tty; then
     configure_interactive
   fi
@@ -907,7 +970,13 @@ main() {
     exit 0
   fi
 
-  start_stack
+  if should_start_containers; then
+    start_stack
+  else
+    warn "Containers not started."
+    echo "Next step:"
+    echo "  cd $INSTALL_DIR && docker compose --env-file .env up -d"
+  fi
   print_summary
 }
 

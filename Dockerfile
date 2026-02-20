@@ -15,6 +15,8 @@ RUN npm run build
 # ── Stage 2: Build Frontend ─────────────────────────────────
 FROM node:20-alpine AS frontend-builder
 WORKDIR /build
+ARG APP_VERSION=dev
+ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
 COPY apps/client/package*.json ./
 RUN npm install --legacy-peer-deps
 COPY apps/client/ .

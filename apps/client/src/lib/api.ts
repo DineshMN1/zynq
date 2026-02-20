@@ -546,19 +546,6 @@ export const settingsApi = {
     }),
 };
 
-/** Branding API: app logo and name (admin only for updates) */
-export const brandingApi = {
-  get: () =>
-    fetchApi<{ app_logo: string | null; app_name: string | null }>(
-      '/settings/branding',
-    ),
-  update: (data: { app_logo?: string | null; app_name?: string }) =>
-    fetchApi<{ success: boolean }>('/settings/branding', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-};
-
 /** SMTP API: email configuration (admin only) */
 export const smtpApi = {
   getSettings: () =>
