@@ -23,6 +23,8 @@ interface FileGridProps {
   onDelete: (id: string) => void;
   onShareUser: (id: string) => void;
   onSharePublic: (id: string) => void;
+  onRename?: (id: string) => void;
+  onPreview?: (file: FileMetadata) => void;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onCardClick?: (id: string, e: React.MouseEvent) => void;
@@ -37,6 +39,8 @@ export function FileGrid({
   onDelete,
   onShareUser,
   onSharePublic,
+  onRename,
+  onPreview,
   selectedIds,
   onToggleSelect,
   onCardClick,
@@ -172,6 +176,8 @@ export function FileGrid({
                       onDelete={onDelete}
                       onShareUser={onShareUser}
                       onSharePublic={onSharePublic}
+                      onRename={onRename}
+                      onPreview={onPreview}
                       isSelected={selectedIds?.has(file.id)}
                       onToggleSelect={onToggleSelect}
                       onCardClick={onCardClick}
@@ -202,6 +208,8 @@ export function FileGrid({
                       onDelete={onDelete}
                       onShareUser={onShareUser}
                       onSharePublic={onSharePublic}
+                      onRename={onRename}
+                      onPreview={onPreview}
                       isSelected={selectedIds?.has(file.id)}
                       onToggleSelect={onToggleSelect}
                       onCardClick={onCardClick}
@@ -248,6 +256,8 @@ export function FileGrid({
                     onDelete={onDelete}
                     onShareUser={onShareUser}
                     onSharePublic={onSharePublic}
+                    onRename={onRename}
+                    onPreview={onPreview}
                     isSelected={selectedIds?.has(file.id)}
                     onToggleSelect={onToggleSelect}
                     onCardClick={onCardClick}
@@ -263,6 +273,8 @@ export function FileGrid({
                     onDelete={onDelete}
                     onShareUser={onShareUser}
                     onSharePublic={onSharePublic}
+                    onRename={onRename}
+                    onPreview={onPreview}
                     isSelected={selectedIds?.has(file.id)}
                     onToggleSelect={onToggleSelect}
                     onCardClick={onCardClick}

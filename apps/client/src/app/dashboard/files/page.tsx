@@ -58,6 +58,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
 import { FileGrid } from '@/features/file/components/file-grid';
+import { FilePreviewDialog } from '@/features/file/components/file-preview-dialog';
 import { FileBreadcrumb } from '@/features/file/components/file-breadcrumb';
 import { CreateFolderDialog } from '@/features/file/components/create-folder-dialog';
 import { PublicLinkDialog } from '@/features/share/components/public-link-dialog';
@@ -137,7 +138,6 @@ export default function FilesPage() {
   }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState('');
@@ -191,6 +191,17 @@ export default function FilesPage() {
   // Drag & drop state
   const [isDragActive, setIsDragActive] = useState(false);
   const dragCounter = useRef(0);
+
+  // Rename state
+  const [renameDialog, setRenameDialog] = useState<{
+    open: boolean;
+    fileId: string | null;
+    currentName: string;
+  }>({ open: false, fileId: null, currentName: '' });
+  const [renameValue, setRenameValue] = useState('');
+
+  // Preview state
+  const [previewFile, setPreviewFile] = useState<FileMetadata | null>(null);
 
   const currentFolderId = pathStack[pathStack.length - 1]?.id;
   const skipHistoryPush = useRef(false);
@@ -440,7 +451,6 @@ export default function FilesPage() {
   };
 
   const handleUploadFileClick = () => fileInputRef.current?.click();
-  const handleUploadFolderClick = () => folderInputRef.current?.click();
 
   const uploadFileWithProgress = (
     url: string,
@@ -783,28 +793,6 @@ export default function FilesPage() {
     }
   };
 
-  const handleFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList || fileList.length === 0) return;
-
-    const allFiles = Array.from(fileList);
-
-    // Extract folder name from the first file's relative path
-    const firstPath = allFiles[0]?.webkitRelativePath || '';
-    const rootFolderName = firstPath.split('/')[0] || 'Unknown Folder';
-
-    const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
-
-    setPendingFolderUpload({
-      files: allFiles,
-      folderName: rootFolderName,
-      totalSize,
-      fileCount: allFiles.length,
-    });
-    setShowFolderUploadDialog(true);
-    e.target.value = '';
-  };
-
   const handleFolderUploadProceed = async () => {
     setShowFolderUploadDialog(false);
     if (!pendingFolderUpload) return;
@@ -949,6 +937,31 @@ export default function FilesPage() {
   const handlePublicShare = (fileId: string) => {
     const file = files.find((f) => f.id === fileId);
     if (file) setShareConfirm({ open: true, file });
+  };
+
+  const handleRenameOpen = (id: string) => {
+    const file = files.find((f) => f.id === id);
+    if (!file) return;
+    setRenameValue(file.name);
+    setRenameDialog({ open: true, fileId: id, currentName: file.name });
+  };
+
+  const submitRename = async () => {
+    if (!renameDialog.fileId || !renameValue.trim()) return;
+    try {
+      const updated = await fileApi.rename(
+        renameDialog.fileId,
+        renameValue.trim(),
+      );
+      setFiles((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+      setRenameDialog({ open: false, fileId: null, currentName: '' });
+    } catch {
+      toast({ title: 'Rename failed', variant: 'destructive' });
+    }
+  };
+
+  const handlePreview = (file: FileMetadata) => {
+    setPreviewFile(file);
   };
 
   const handleShareType = (fileId: string) => {
@@ -1299,7 +1312,13 @@ export default function FilesPage() {
                     Upload Files
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={handleUploadFolderClick}
+                    onClick={() =>
+                      toast({
+                        title: 'Drag & drop to upload folders',
+                        description:
+                          'Drop a folder anywhere on this page to upload it.',
+                      })
+                    }
                     className="gap-2"
                   >
                     <Folder className="h-4 w-4" />
@@ -1314,16 +1333,6 @@ export default function FilesPage() {
                 onChange={handleFileChange}
                 className="hidden"
                 multiple
-              />
-              <input
-                type="file"
-                ref={folderInputRef}
-                onChange={handleFolderChange}
-                className="hidden"
-                {...({
-                  webkitdirectory: '',
-                  directory: '',
-                } as React.InputHTMLAttributes<HTMLInputElement>)}
               />
             </div>
           </div>
@@ -1425,6 +1434,8 @@ export default function FilesPage() {
           onDelete={handleDelete}
           onShareUser={handleShareType}
           onSharePublic={handlePublicShare}
+          onRename={handleRenameOpen}
+          onPreview={handlePreview}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onCardClick={handleCardClick}
@@ -1715,6 +1726,55 @@ export default function FilesPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Rename Dialog */}
+      <Dialog
+        open={renameDialog.open}
+        onOpenChange={(open) => setRenameDialog((d) => ({ ...d, open }))}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename</DialogTitle>
+            <DialogDescription>
+              Enter a new name for this item.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void submitRename();
+            }}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setRenameDialog({ open: false, fileId: null, currentName: '' })
+              }
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void submitRename()}
+              disabled={
+                !renameValue.trim() || renameValue === renameDialog.currentName
+              }
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* File Preview */}
+      {previewFile && (
+        <FilePreviewDialog
+          file={previewFile}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
 
       <ToastContainer />
     </>

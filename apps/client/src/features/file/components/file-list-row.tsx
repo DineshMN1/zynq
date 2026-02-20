@@ -17,6 +17,8 @@ import {
   UserPlus,
   Globe,
   Lock,
+  Pencil,
+  Eye,
 } from 'lucide-react';
 import { type FileMetadata, fileApi } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
@@ -33,6 +35,8 @@ interface FileListRowProps {
   onDelete: (id: string) => void;
   onShareUser: (id: string) => void;
   onSharePublic: (id: string) => void;
+  onRename?: (id: string) => void;
+  onPreview?: (file: FileMetadata) => void;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onCardClick?: (id: string, e: React.MouseEvent) => void;
@@ -62,6 +66,8 @@ export function FileListRow({
   onDelete,
   onShareUser,
   onSharePublic,
+  onRename,
+  onPreview,
   isSelected,
   onToggleSelect,
   onCardClick,
@@ -197,13 +203,30 @@ export function FileListRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <>
-              <DropdownMenuItem onClick={handleDownload} className="gap-2">
-                <Download className="h-4 w-4" />
-                {file.is_folder ? 'Download folder (zip)' : 'Download'}
+            {!file.is_folder && onPreview && (
+              <DropdownMenuItem
+                onClick={() => onPreview(file)}
+                className="gap-2"
+              >
+                <Eye className="h-4 w-4" />
+                Preview
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
+            )}
+            <DropdownMenuItem onClick={handleDownload} className="gap-2">
+              <Download className="h-4 w-4" />
+              {file.is_folder ? 'Download folder (zip)' : 'Download'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+
+            {onRename && (
+              <DropdownMenuItem
+                onClick={() => onRename(file.id)}
+                className="gap-2"
+              >
+                <Pencil className="h-4 w-4" />
+                Rename
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuItem
               onClick={() => onShareUser(file.id)}

@@ -4,9 +4,15 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Loader2, Cloud, Download, File } from 'lucide-react';
+import { Loader2, Cloud, Download } from 'lucide-react';
 import { formatBytes } from '@/lib/auth';
 import { publicApi } from '@/lib/api';
+import {
+  getFileIcon,
+  getIconColor,
+  getIconBgColor,
+} from '@/features/file/utils/file-icons';
+import { cn } from '@/lib/utils';
 
 interface SharedFile {
   id: string;
@@ -68,7 +74,34 @@ export default function PublicSharePage() {
         </div>
 
         <div className="flex flex-col items-center space-y-2">
-          <File className="h-10 w-10 text-muted-foreground" />
+          {file &&
+            (() => {
+              const IconComponent = getFileIcon(
+                file.name,
+                file.mimeType,
+                file.isFolder,
+              );
+              const iconColor = getIconColor(
+                file.name,
+                file.mimeType,
+                file.isFolder,
+              );
+              const iconBgColor = getIconBgColor(
+                file.name,
+                file.mimeType,
+                file.isFolder,
+              );
+              return (
+                <div
+                  className={cn(
+                    'h-14 w-14 rounded-xl flex items-center justify-center',
+                    iconBgColor,
+                  )}
+                >
+                  <IconComponent className={cn('h-7 w-7', iconColor)} />
+                </div>
+              );
+            })()}
           <p className="text-lg font-medium break-all max-w-full">
             {file?.name}
           </p>

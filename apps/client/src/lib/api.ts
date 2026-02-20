@@ -424,6 +424,12 @@ export const fileApi = {
       body: JSON.stringify({ ids }),
     }),
 
+  rename: (id: string, name: string) =>
+    fetchApi<FileMetadata>(`/files/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    }),
+
   emptyTrash: () =>
     fetchApi<void>('/files/trash/empty', {
       method: 'DELETE',
@@ -535,6 +541,19 @@ export const settingsApi = {
 
   update: (data: { theme?: 'dark' | 'light'; telemetry?: boolean }) =>
     fetchApi<Record<string, unknown>>('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+/** Branding API: app logo and name (admin only for updates) */
+export const brandingApi = {
+  get: () =>
+    fetchApi<{ app_logo: string | null; app_name: string | null }>(
+      '/settings/branding',
+    ),
+  update: (data: { app_logo?: string | null; app_name?: string }) =>
+    fetchApi<{ success: boolean }>('/settings/branding', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
