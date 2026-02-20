@@ -31,7 +31,7 @@ if [ "${ZYNQ_DATA_PATH+x}" = "x" ]; then
 fi
 SMTP_ENABLED="${EMAIL_ENABLED:-false}"
 TEMPLATE_ONLY="false"
-NON_INTERACTIVE="false"
+NON_INTERACTIVE="${ZYNQ_NON_INTERACTIVE:-false}"
 USE_HTTPS="${USE_HTTPS:-auto}"
 
 SMTP_HOST="${SMTP_HOST:-smtp.example.com}"
@@ -95,6 +95,119 @@ need_cmd() {
     echo -e "${RED}Missing required command: $1${NC}"
     exit 1
   }
+}
+
+# Detect OS type: linux, mac, windows
+detect_os() {
+  case "$(uname -s 2>/dev/null)" in
+    Linux*)  echo "linux" ;;
+    Darwin*) echo "mac" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+    *)       echo "unknown" ;;
+  esac
+}
+
+ensure_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local os
+  os=$(detect_os)
+  echo -e "${YELLOW}Docker is not installed.${NC}"
+
+  if [ "$NON_INTERACTIVE" = "true" ] || ! is_tty; then
+    echo -e "${RED}Please install Docker and re-run this script.${NC}"
+    case "$os" in
+      linux)   echo "  curl -fsSL https://get.docker.com | sh" ;;
+      mac)     echo "  brew install --cask docker  OR  https://docs.docker.com/desktop/install/mac-install/" ;;
+      windows) echo "  https://docs.docker.com/desktop/install/windows-install/" ;;
+    esac
+    exit 1
+  fi
+
+  echo -en "${CYAN}?${NC} Install Docker automatically? (y/N): "
+  local ans
+  read -r ans
+  case "$ans" in
+    [yY]|[yY][eE][sS])
+      case "$os" in
+        linux)
+          echo -e "${INFO} Installing Docker via get.docker.com..."
+          curl -fsSL https://get.docker.com | sh
+          if ! command -v docker >/dev/null 2>&1; then
+            echo -e "${RED}Docker install failed. Please install manually.${NC}"
+            exit 1
+          fi
+          # Add current user to docker group (non-root)
+          if [ "$(id -u)" -ne 0 ] && getent group docker >/dev/null 2>&1; then
+            sudo usermod -aG docker "$USER" 2>/dev/null || true
+            echo -e "${WARN} You may need to log out and back in for Docker group membership to take effect."
+            echo -e "${INFO} For this session, commands will run with: sudo docker"
+          fi
+          ;;
+        mac)
+          if command -v brew >/dev/null 2>&1; then
+            echo -e "${INFO} Installing Docker Desktop via Homebrew..."
+            brew install --cask docker
+          else
+            echo -e "${RED}Homebrew not found. Install Docker Desktop from:${NC}"
+            echo "  https://docs.docker.com/desktop/install/mac-install/"
+            exit 1
+          fi
+          ;;
+        windows)
+          if command -v choco >/dev/null 2>&1; then
+            echo -e "${INFO} Installing Docker Desktop via Chocolatey..."
+            choco install docker-desktop -y
+          elif command -v winget >/dev/null 2>&1; then
+            echo -e "${INFO} Installing Docker Desktop via winget..."
+            winget install Docker.DockerDesktop
+          else
+            echo -e "${RED}Please install Docker Desktop manually from:${NC}"
+            echo "  https://docs.docker.com/desktop/install/windows-install/"
+            exit 1
+          fi
+          ;;
+        *)
+          echo -e "${RED}Unknown OS. Please install Docker manually: https://docs.docker.com/get-docker/${NC}"
+          exit 1
+          ;;
+      esac
+      echo -e "${CHECK} Docker installed."
+      ;;
+    *)
+      echo -e "${RED}Docker is required. Please install it and re-run.${NC}"
+      exit 1
+      ;;
+  esac
+}
+
+ensure_docker_compose() {
+  if docker compose version >/dev/null 2>&1; then
+    return 0
+  fi
+  # Fallback: try installing compose plugin on Linux
+  local os
+  os=$(detect_os)
+  echo -e "${YELLOW}Docker Compose plugin not found.${NC}"
+  if [ "$os" = "linux" ]; then
+    echo -e "${INFO} Attempting to install Docker Compose plugin..."
+    if command -v apt-get >/dev/null 2>&1; then
+      sudo apt-get install -y docker-compose-plugin 2>/dev/null || true
+    elif command -v yum >/dev/null 2>&1; then
+      sudo yum install -y docker-compose-plugin 2>/dev/null || true
+    elif command -v dnf >/dev/null 2>&1; then
+      sudo dnf install -y docker-compose-plugin 2>/dev/null || true
+    fi
+    if docker compose version >/dev/null 2>&1; then
+      echo -e "${CHECK} Docker Compose plugin installed."
+      return 0
+    fi
+  fi
+  echo -e "${RED}Docker Compose plugin is required. Install Docker Desktop or the compose plugin.${NC}"
+  echo "  https://docs.docker.com/compose/install/"
+  exit 1
 }
 
 print_banner() {
@@ -772,11 +885,8 @@ main() {
   parse_args "$@"
   validate_inputs
 
-  need_cmd docker
-  if ! docker compose version >/dev/null 2>&1; then
-    echo -e "${RED}Docker Compose plugin is required (docker compose ...)${NC}"
-    exit 1
-  fi
+  ensure_docker
+  ensure_docker_compose
 
   if [ "$NON_INTERACTIVE" != "true" ] && is_tty; then
     configure_interactive

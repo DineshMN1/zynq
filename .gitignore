@@ -109,7 +109,7 @@ temp/
 # ===============================
 .mainworkflow.md
 .users.md
-.txt
+*.txt
 test.md
 README1.md
 Zynq-Demo.mp4
