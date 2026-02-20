@@ -31,7 +31,16 @@ If you stop using zynqCloud, your files and database remain fully on your server
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DineshMN1/zynq/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/install.sh -o install.sh
+bash install.sh
+```
+
+For non-interactive servers/automation:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/install.sh | bash -s -- --init-only --non-interactive
+# edit generated .env, then:
+bash install.sh --start --non-interactive
 ```
 
 ### Before Running `install.sh`
@@ -70,13 +79,13 @@ If password/secret fields are left empty, secure values are auto-generated.
 Or manual:
 
 ```bash
-git clone https://github.com/DineshMN1/zynq.git
+git clone https://github.com/dineshmn1/zynq.git
 cd zynq
 cp .env.example .env
 docker compose up -d
 ```
 
-Open `http://localhost:3000` → Create your admin account → Done.
+Open `http://localhost:3000` after containers are started → Create your admin account → Done.
 
 ---
 
@@ -128,6 +137,41 @@ Copy `.env.example` to `.env` and configure:
 - Backup and restore runbook: `docs/backup-restore.md`
 - Backup script: `scripts/backup.sh`
 - Restore script: `scripts/restore.sh`
+
+### Manual Upgrade / Downgrade (No pnpm, Keep Volumes)
+
+Run these directly on your server.
+
+Upgrade to latest:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/scripts/docker-image-manager.sh | bash -s -- upgrade
+```
+
+Upgrade (or switch) to a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/scripts/docker-image-manager.sh | bash -s -- v1.2.3
+```
+
+Downgrade to a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/scripts/docker-image-manager.sh | bash -s -- downgrade v1.2.2
+```
+
+Use a full custom image reference:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/scripts/docker-image-manager.sh | bash -s -- set ghcr.io/example/zynqcloud:v1.2.3
+```
+
+Notes:
+
+- Script updates `ZYNQCLOUD_IMAGE` in `.env`, then runs `docker compose pull` + `docker compose up -d`.
+- Data volumes are preserved.
+- If your install is not in `$HOME/zynqcloud`, run with: `STACK_DIR=/your/install/path ...`
+- Do not run `docker compose down -v` unless you intentionally want to remove volumes.
 
 ## Ports
 

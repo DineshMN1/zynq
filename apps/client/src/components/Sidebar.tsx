@@ -15,7 +15,6 @@ import {
   Sun,
   PanelLeftClose,
   PanelLeft,
-  HardDrive,
   Activity,
   Menu,
 } from 'lucide-react';
@@ -34,14 +33,14 @@ import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import type { User, StorageOverview } from '@/lib/api';
-import { storageApi, authApi, brandingApi } from '@/lib/api';
+import { storageApi, authApi } from '@/lib/api';
 import { formatBytes, getInitials } from '@/lib/auth';
 import { STORAGE_REFRESH_EVENT } from '@/lib/storage-events';
 import { useTheme } from './ThemeProvider';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
-const GITHUB_REPO = 'Pepperjack-svg/zynq';
+const GITHUB_REPO = 'DineshMn1/zynq';
 
 interface SidebarProps {
   user: User | null;
@@ -55,8 +54,6 @@ export function Sidebar({ user }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [storageInfo, setStorageInfo] = useState<StorageOverview | null>(null);
   const [loadingStorage, setLoadingStorage] = useState(true);
-  const [appLogo, setAppLogo] = useState<string | null>(null);
-  const [appName, setAppName] = useState<string | null>(null);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const isMobile = useIsMobile();
@@ -65,13 +62,6 @@ export function Sidebar({ user }: SidebarProps) {
   useEffect(() => {
     if (user) {
       loadStorageInfo();
-      brandingApi
-        .get()
-        .then((data) => {
-          setAppLogo(data.app_logo);
-          setAppName(data.app_name);
-        })
-        .catch(() => {});
     }
   }, [user]);
 
@@ -138,6 +128,7 @@ export function Sidebar({ user }: SidebarProps) {
 
   // Settings section links (for all users)
   const settingsLinks = [
+    { href: '/dashboard/settings', label: 'Preferences', icon: Settings },
     { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
   ];
 
@@ -231,35 +222,27 @@ export function Sidebar({ user }: SidebarProps) {
       >
         {isMobile || !collapsed ? (
           <Link href="/dashboard/files" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center overflow-hidden shrink-0">
-              {appLogo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={appLogo}
-                  alt="Logo"
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
-              )}
+            <div className="h-8 w-8 rounded-lg bg-white border border-sidebar-border flex items-center justify-center overflow-hidden shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/favicon.ico"
+                alt="App icon"
+                className="h-full w-full object-contain p-1"
+              />
             </div>
             <span className="font-semibold text-sidebar-foreground">
-              {appName || 'ZynqCloud'}
+              ZynqCloud
             </span>
           </Link>
         ) : (
           <Link href="/dashboard/files">
-            <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center overflow-hidden">
-              {appLogo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={appLogo}
-                  alt="Logo"
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <HardDrive className="h-4 w-4 text-sidebar-primary-foreground" />
-              )}
+            <div className="h-8 w-8 rounded-lg bg-white border border-sidebar-border flex items-center justify-center overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/favicon.ico"
+                alt="App icon"
+                className="h-full w-full object-contain p-1"
+              />
             </div>
           </Link>
         )}
@@ -553,20 +536,16 @@ export function Sidebar({ user }: SidebarProps) {
             </SheetContent>
           </Sheet>
           <Link href="/dashboard/files" className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-sidebar-primary flex items-center justify-center overflow-hidden">
-              {appLogo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={appLogo}
-                  alt="Logo"
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <HardDrive className="h-3.5 w-3.5 text-sidebar-primary-foreground" />
-              )}
+            <div className="h-7 w-7 rounded-lg bg-white border border-sidebar-border flex items-center justify-center overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/favicon.ico"
+                alt="App icon"
+                className="h-full w-full object-contain p-1"
+              />
             </div>
             <span className="font-semibold text-sidebar-foreground text-sm">
-              {appName || 'ZynqCloud'}
+              ZynqCloud
             </span>
           </Link>
         </div>
