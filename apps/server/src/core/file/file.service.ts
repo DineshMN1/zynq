@@ -319,6 +319,30 @@ export class FileService {
 
     const [items, total] = await query.getManyAndCount();
 
+    // Compute total size for each folder in one aggregate query
+    const folderIds = items.filter((f) => f.is_folder).map((f) => f.id);
+    if (folderIds.length > 0) {
+      const folderSizes: { folderId: string; totalSize: string }[] =
+        await this.filesRepository
+          .createQueryBuilder('child')
+          .select('child.parent_id', 'folderId')
+          .addSelect('COALESCE(SUM(child.size), 0)', 'totalSize')
+          .where('child.parent_id IN (:...ids)', { ids: folderIds })
+          .andWhere('child.is_folder = false')
+          .andWhere('child.deleted_at IS NULL')
+          .groupBy('child.parent_id')
+          .getRawMany();
+
+      const sizeMap = new Map(
+        folderSizes.map((r) => [r.folderId, Number(r.totalSize)]),
+      );
+      for (const item of items) {
+        if (item.is_folder) {
+          item.size = sizeMap.get(item.id) ?? 0;
+        }
+      }
+    }
+
     return { items, total };
   }
 
