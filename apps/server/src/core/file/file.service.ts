@@ -363,6 +363,11 @@ export class FileService {
     if (!name || !name.trim()) {
       throw new BadRequestException('Name cannot be empty');
     }
+    if (BLOCKED_EXTENSIONS_REGEX.test(name.trim())) {
+      throw new BadRequestException(
+        'File type not allowed for security reasons',
+      );
+    }
     const file = await this.findById(id, userId);
     file.name = name.trim();
     return this.filesRepository.save(file);
