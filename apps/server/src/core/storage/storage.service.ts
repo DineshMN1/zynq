@@ -84,7 +84,9 @@ export class StorageService {
         'X-Owner-ID': userId,
         'X-File-ID': fileId,
       },
-      body: encryptedData,
+      // Buffer is a Uint8Array subclass — valid BodyInit at runtime.
+      // lib.dom types don't include Buffer, so we widen here.
+      body: encryptedData as unknown as Uint8Array,
     });
 
     await this.assertOk(res, 'Storage service rejected upload');

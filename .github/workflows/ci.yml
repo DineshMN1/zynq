@@ -43,6 +43,7 @@ jobs:
             docker:
               - 'Dockerfile'
               - 'docker-compose.yml'
+              - 'docker/**'
               - '.dockerignore'
               - 'apps/server/**'
               - 'apps/client/**'
@@ -113,20 +114,48 @@ jobs:
         run: pnpm --filter @zynqcloud/client build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+          NEXT_TELEMETRY_DISABLED: '1'
+
+  backend-e2e:
+    name: Backend E2E Tests
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name == 'push' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: E2E Tests
+        run: pnpm --filter @zynqcloud/server test:e2e
 
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [changes, backend-lint-test, frontend-lint-test]
-    if: ${{ always() && (needs.changes.outputs.docker == 'true' || github.event_name == 'push') }}
+    needs: [changes, backend-lint-test, backend-e2e, frontend-lint-test]
+    # Only run when docker-relevant files changed.
+    # Gate on upstream jobs: 'skipped' means no changes were detected (still OK).
+    if: >
+      (needs.changes.outputs.docker == 'true' || github.event_name == 'push') &&
+      (needs.backend-lint-test.result == 'success' || needs.backend-lint-test.result == 'skipped') &&
+      (needs.backend-e2e.result == 'success' || needs.backend-e2e.result == 'skipped') &&
+      (needs.frontend-lint-test.result == 'success' || needs.frontend-lint-test.result == 'skipped')
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Build production image
-        run: |
-          for attempt in 1 2 3; do
-            echo "Build attempt $attempt/3"
-            docker build -t zynqcloud:ci . && break
-            [ $attempt -lt 3 ] && sleep 20 || exit 1
-          done
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: docker build -t zynqcloud:ci .

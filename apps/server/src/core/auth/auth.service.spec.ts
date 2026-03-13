@@ -49,9 +49,12 @@ describe('AuthService', () => {
           provide: UserService,
           useValue: {
             findByEmail: jest.fn(),
+            findById: jest.fn(),
+            findByIdWithPassword: jest.fn(),
             create: jest.fn(),
             count: jest.fn(),
             validatePassword: jest.fn(),
+            updatePasswordHash: jest.fn(),
           },
         },
         {
@@ -368,8 +371,9 @@ describe('AuthService', () => {
 
   describe('changePassword', () => {
     beforeEach(() => {
-      userService.findById = jest.fn().mockResolvedValue(mockUser as any);
-      userService.findByEmail = jest.fn().mockResolvedValue(mockUser as any);
+      userService.findByIdWithPassword = jest
+        .fn()
+        .mockResolvedValue(mockUser as any);
       userService.updatePasswordHash = jest.fn().mockResolvedValue(undefined);
     });
 
@@ -393,7 +397,7 @@ describe('AuthService', () => {
     });
 
     it('throws UnauthorizedException when user not found', async () => {
-      userService.findById = jest.fn().mockResolvedValue(null);
+      userService.findByIdWithPassword = jest.fn().mockResolvedValue(null);
 
       await expect(
         service.changePassword('nonexistent', 'OldPass1!', 'NewPass1!'),
