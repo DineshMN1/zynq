@@ -1,28 +1,67 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { NotFoundException } from '@nestjs/common';
 import { StorageService } from './storage.service';
 import { EncryptionService } from '../encryption/encryption.service';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import * as os from 'os';
+import { Readable } from 'stream';
+
+// ── fetch mock ────────────────────────────────────────────────────────────────
+
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
+
+function okResponse(body?: Buffer | object): Response {
+  const isBuffer = Buffer.isBuffer(body);
+  return {
+    ok: true,
+    status: 200,
+    arrayBuffer: () =>
+      Promise.resolve(
+        isBuffer
+          ? body.buffer.slice(
+              body.byteOffset,
+              body.byteOffset + body.byteLength,
+            )
+          : new ArrayBuffer(0),
+      ),
+    json: () => Promise.resolve(isBuffer ? {} : (body ?? {})),
+    text: () => Promise.resolve(''),
+  } as unknown as Response;
+}
+
+function errorResponse(status: number, body = 'error'): Response {
+  return {
+    ok: false,
+    status,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    json: () => Promise.resolve({}),
+    text: () => Promise.resolve(body),
+  } as unknown as Response;
+}
+
+// ── fixtures ──────────────────────────────────────────────────────────────────
+
+const mockEncryption = {
+  dek: Buffer.alloc(32, 'dek'),
+  iv: Buffer.alloc(12, 'iv'),
+  encryptedDek: Buffer.alloc(48, 'encDek'),
+  dekIv: Buffer.alloc(12, 'dekIv'),
+  algorithm: 'AES-256-GCM',
+};
+
+const ENCRYPTED_CONTENT = Buffer.concat([
+  Buffer.from('encrypted'),
+  Buffer.alloc(16, 'tag'),
+]);
+
+// ── tests ─────────────────────────────────────────────────────────────────────
 
 describe('StorageService', () => {
   let service: StorageService;
   let encryptionService: jest.Mocked<EncryptionService>;
-  let testDir: string;
-
-  const mockEncryption = {
-    dek: Buffer.alloc(32, 'dek'),
-    iv: Buffer.alloc(12, 'iv'),
-    encryptedDek: Buffer.alloc(48, 'encDek'),
-    dekIv: Buffer.alloc(12, 'dekIv'),
-    algorithm: 'AES-256-GCM',
-  };
 
   beforeEach(async () => {
-    // Create a temporary directory for testing
-    testDir = path.join(os.tmpdir(), `storage-test-${Date.now()}`);
-    await fs.mkdir(testDir, { recursive: true });
+    mockFetch.mockReset();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -31,7 +70,8 @@ describe('StorageService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string) => {
-              if (key === 'FILE_STORAGE_PATH') return testDir;
+              if (key === 'STORAGE_SERVICE_URL') return 'http://storage:5000';
+              if (key === 'STORAGE_SERVICE_TOKEN') return 'test-token';
               return null;
             }),
           },
@@ -40,12 +80,12 @@ describe('StorageService', () => {
           provide: EncryptionService,
           useValue: {
             createFileEncryption: jest.fn().mockReturnValue(mockEncryption),
-            encryptBuffer: jest.fn((data) =>
-              Buffer.concat([data, Buffer.from('encrypted')]),
-            ),
-            decryptBuffer: jest.fn((data) => data.subarray(0, -9)), // Remove 'encrypted' suffix
+            encryptBuffer: jest.fn().mockReturnValue(ENCRYPTED_CONTENT),
+            decryptBuffer: jest.fn().mockReturnValue(Buffer.from('decrypted')),
             decryptDek: jest.fn().mockReturnValue(mockEncryption.dek),
-            createEncryptStream: jest.fn(),
+            createEncryptStream: jest
+              .fn()
+              .mockReturnValue(new Readable({ read() {} })),
           },
         },
       ],
@@ -53,238 +93,230 @@ describe('StorageService', () => {
 
     service = module.get<StorageService>(StorageService);
     encryptionService = module.get(EncryptionService);
-
-    // Initialize the service (creates base directory)
-    await service.onModuleInit();
-  });
-
-  afterEach(async () => {
-    // Clean up test directory
-    try {
-      await fs.rm(testDir, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
+  // ── uploadFile ──────────────────────────────────────────────────────────────
+
   describe('uploadFile', () => {
-    it('should upload and encrypt a file', async () => {
-      const userId = 'user-123';
-      const fileId = 'file-456';
-      const data = Buffer.from('test file content');
+    it('encrypts data and POSTs to Go service', async () => {
+      mockFetch.mockResolvedValue(okResponse());
 
-      const result = await service.uploadFile(userId, fileId, data);
-
-      expect(result.storagePath).toBe(`${userId}/${fileId}.enc`);
-      expect(result.algorithm).toBe('AES-256-GCM');
-      expect(result.iv).toEqual(mockEncryption.iv);
-      expect(encryptionService.createFileEncryption).toHaveBeenCalled();
-      expect(encryptionService.encryptBuffer).toHaveBeenCalledWith(
-        data,
-        mockEncryption.dek,
-        mockEncryption.iv,
+      const result = await service.uploadFile(
+        'user-1',
+        'file-1',
+        Buffer.from('hello'),
       );
 
-      // Verify file was written
-      const filePath = path.join(testDir, userId, `${fileId}.enc`);
-      const fileExists = await fs
-        .access(filePath)
-        .then(() => true)
-        .catch(() => false);
-      expect(fileExists).toBe(true);
+      expect(encryptionService.createFileEncryption).toHaveBeenCalled();
+      expect(encryptionService.encryptBuffer).toHaveBeenCalled();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://storage:5000/v1/files',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'X-Service-Token': 'test-token',
+            'X-Owner-ID': 'user-1',
+            'X-File-ID': 'file-1',
+          }),
+        }),
+      );
+
+      expect(result.storagePath).toBe('user-1/file-1.enc');
+      expect(result.algorithm).toBe('AES-256-GCM');
+      expect(result.iv).toEqual(mockEncryption.iv);
     });
 
-    it('should create user directory if it does not exist', async () => {
-      const userId = 'new-user';
-      const fileId = 'file-789';
-      const data = Buffer.from('test');
+    it('throws on non-2xx response from Go service', async () => {
+      mockFetch.mockResolvedValue(errorResponse(500, 'disk full'));
 
-      await service.uploadFile(userId, fileId, data);
-
-      const userDir = path.join(testDir, userId);
-      const dirExists = await fs
-        .access(userDir)
-        .then(() => true)
-        .catch(() => false);
-      expect(dirExists).toBe(true);
+      await expect(
+        service.uploadFile('user-1', 'file-1', Buffer.from('data')),
+      ).rejects.toThrow('Storage service error 500');
     });
   });
 
+  // ── downloadFile ────────────────────────────────────────────────────────────
+
   describe('downloadFile', () => {
-    it('should download and decrypt a file', async () => {
-      const userId = 'user-123';
-      const fileId = 'file-456';
-      const originalData = Buffer.from('test file content');
+    it('GETs encrypted bytes from Go and decrypts them', async () => {
+      mockFetch.mockResolvedValue(okResponse(ENCRYPTED_CONTENT));
 
-      // First upload a file
-      const uploadResult = await service.uploadFile(
-        userId,
-        fileId,
-        originalData,
-      );
-
-      // Then download it
-      const downloaded = await service.downloadFile(
-        userId,
-        fileId,
-        uploadResult.encryptedDek,
-        uploadResult.iv,
-      );
-
-      expect(encryptionService.decryptDek).toHaveBeenCalled();
-      expect(encryptionService.decryptBuffer).toHaveBeenCalled();
-      expect(downloaded).toBeDefined();
-    });
-
-    it('should throw NotFoundException if file does not exist', async () => {
-      const userId = 'user-123';
-      const fileId = 'nonexistent';
-      const encryptedDek = Buffer.concat([
+      const combinedDek = Buffer.concat([
         mockEncryption.dekIv,
         mockEncryption.encryptedDek,
       ]);
+      const result = await service.downloadFile(
+        'user-1',
+        'file-1',
+        combinedDek,
+        mockEncryption.iv,
+      );
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://storage:5000/v1/files/user-1/file-1',
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'X-Service-Token': 'test-token' }),
+        }),
+      );
+      expect(encryptionService.decryptDek).toHaveBeenCalled();
+      expect(encryptionService.decryptBuffer).toHaveBeenCalled();
+      expect(result).toEqual(Buffer.from('decrypted'));
+    });
+
+    it('throws NotFoundException on 404', async () => {
+      mockFetch.mockResolvedValue(errorResponse(404));
 
       await expect(
-        service.downloadFile(userId, fileId, encryptedDek, mockEncryption.iv),
-      ).rejects.toThrow('File not found on storage');
+        service.downloadFile(
+          'user-1',
+          'missing',
+          Buffer.alloc(60),
+          Buffer.alloc(12),
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws generic error on 500', async () => {
+      mockFetch.mockResolvedValue(errorResponse(500, 'storage error'));
+
+      await expect(
+        service.downloadFile(
+          'user-1',
+          'file-1',
+          Buffer.alloc(60),
+          Buffer.alloc(12),
+        ),
+      ).rejects.toThrow('Storage service error 500');
     });
   });
+
+  // ── deleteFile ──────────────────────────────────────────────────────────────
 
   describe('deleteFile', () => {
-    it('should delete a file', async () => {
-      const userId = 'user-123';
-      const fileId = 'file-to-delete';
-      const data = Buffer.from('test');
+    it('sends DELETE to Go service', async () => {
+      mockFetch.mockResolvedValue(okResponse());
 
-      await service.uploadFile(userId, fileId, data);
+      await service.deleteFile('user-1', 'file-1');
 
-      const filePath = path.join(testDir, userId, `${fileId}.enc`);
-      let fileExists = await fs
-        .access(filePath)
-        .then(() => true)
-        .catch(() => false);
-      expect(fileExists).toBe(true);
-
-      await service.deleteFile(userId, fileId);
-
-      fileExists = await fs
-        .access(filePath)
-        .then(() => true)
-        .catch(() => false);
-      expect(fileExists).toBe(false);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://storage:5000/v1/files/user-1/file-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
     });
 
-    it('should not throw if file does not exist', async () => {
+    it('does not throw on 404 (already gone)', async () => {
+      mockFetch.mockResolvedValue(errorResponse(404));
+
       await expect(
-        service.deleteFile('user-123', 'nonexistent'),
+        service.deleteFile('user-1', 'file-1'),
       ).resolves.not.toThrow();
     });
+
+    it('throws on 500', async () => {
+      mockFetch.mockResolvedValue(errorResponse(500));
+
+      await expect(service.deleteFile('user-1', 'file-1')).rejects.toThrow(
+        'Storage delete failed 500',
+      );
+    });
   });
+
+  // ── moveToTrash ─────────────────────────────────────────────────────────────
 
   describe('moveToTrash', () => {
-    it('should move file to trash directory', async () => {
-      const userId = 'user-123';
-      const fileId = 'file-to-trash';
-      const data = Buffer.from('test');
+    it('POSTs to /trash endpoint', async () => {
+      mockFetch.mockResolvedValue({ ok: true, status: 204 } as Response);
 
-      await service.uploadFile(userId, fileId, data);
+      await service.moveToTrash('user-1', 'file-1');
 
-      await service.moveToTrash(userId, fileId);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://storage:5000/v1/files/user-1/file-1/trash',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
 
-      const originalPath = path.join(testDir, userId, `${fileId}.enc`);
-      const trashPath = path.join(testDir, userId, '.trash', `${fileId}.enc`);
+    it('throws on Go error', async () => {
+      mockFetch.mockResolvedValue(errorResponse(500));
 
-      const originalExists = await fs
-        .access(originalPath)
-        .then(() => true)
-        .catch(() => false);
-      const trashExists = await fs
-        .access(trashPath)
-        .then(() => true)
-        .catch(() => false);
-
-      expect(originalExists).toBe(false);
-      expect(trashExists).toBe(true);
+      await expect(service.moveToTrash('user-1', 'file-1')).rejects.toThrow(
+        'Storage moveToTrash failed 500',
+      );
     });
   });
+
+  // ── restoreFromTrash ────────────────────────────────────────────────────────
 
   describe('restoreFromTrash', () => {
-    it('should restore file from trash directory', async () => {
-      const userId = 'user-123';
-      const fileId = 'file-to-restore';
-      const data = Buffer.from('test');
+    it('POSTs to /restore endpoint', async () => {
+      mockFetch.mockResolvedValue({ ok: true, status: 204 } as Response);
 
-      await service.uploadFile(userId, fileId, data);
-      await service.moveToTrash(userId, fileId);
-      await service.restoreFromTrash(userId, fileId);
+      await service.restoreFromTrash('user-1', 'file-1');
 
-      const originalPath = path.join(testDir, userId, `${fileId}.enc`);
-      const trashPath = path.join(testDir, userId, '.trash', `${fileId}.enc`);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://storage:5000/v1/files/user-1/file-1/restore',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
 
-      const originalExists = await fs
-        .access(originalPath)
-        .then(() => true)
-        .catch(() => false);
-      const trashExists = await fs
-        .access(trashPath)
-        .then(() => true)
-        .catch(() => false);
+    it('throws NotFoundException when file not in trash', async () => {
+      mockFetch.mockResolvedValue(errorResponse(404));
 
-      expect(originalExists).toBe(true);
-      expect(trashExists).toBe(false);
+      await expect(
+        service.restoreFromTrash('user-1', 'file-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws on 500', async () => {
+      mockFetch.mockResolvedValue(errorResponse(500));
+
+      await expect(
+        service.restoreFromTrash('user-1', 'file-1'),
+      ).rejects.toThrow('Storage restoreFromTrash failed 500');
     });
   });
 
-  describe('fileExists', () => {
-    it('should return true if file exists', async () => {
-      const userId = 'user-123';
-      const fileId = 'existing-file';
-      const data = Buffer.from('test');
-
-      await service.uploadFile(userId, fileId, data);
-
-      const exists = await service.fileExists(userId, fileId);
-      expect(exists).toBe(true);
-    });
-
-    it('should return false if file does not exist', async () => {
-      const exists = await service.fileExists('user-123', 'nonexistent');
-      expect(exists).toBe(false);
-    });
-  });
+  // ── getStorageStats ─────────────────────────────────────────────────────────
 
   describe('getStorageStats', () => {
-    it('should return storage statistics', async () => {
+    it('returns stats from Go service', async () => {
+      mockFetch.mockResolvedValue(
+        okResponse({ total_bytes: 1000, used_bytes: 400, free_bytes: 600 }),
+      );
+
       const stats = await service.getStorageStats();
 
-      expect(stats).toHaveProperty('totalBytes');
-      expect(stats).toHaveProperty('usedBytes');
-      expect(stats).toHaveProperty('freeBytes');
-      expect(typeof stats.totalBytes).toBe('number');
-      expect(typeof stats.usedBytes).toBe('number');
-      expect(typeof stats.freeBytes).toBe('number');
-    });
-  });
-
-  describe('getUserStorageSize', () => {
-    it('should return total size of user directory', async () => {
-      const userId = 'user-with-files';
-
-      // Upload some files
-      await service.uploadFile(userId, 'file1', Buffer.from('content1'));
-      await service.uploadFile(userId, 'file2', Buffer.from('content2 longer'));
-
-      const size = await service.getUserStorageSize(userId);
-      expect(size).toBeGreaterThan(0);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://storage:5000/v1/stats',
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'X-Service-Token': 'test-token' }),
+        }),
+      );
+      expect(stats).toEqual({
+        totalBytes: 1000,
+        usedBytes: 400,
+        freeBytes: 600,
+      });
     });
 
-    it('should return 0 for non-existent user', async () => {
-      const size = await service.getUserStorageSize('nonexistent-user');
-      expect(size).toBe(0);
+    it('returns zeros when Go service is unreachable', async () => {
+      mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+
+      const stats = await service.getStorageStats();
+
+      expect(stats).toEqual({ totalBytes: 0, usedBytes: 0, freeBytes: 0 });
+    });
+
+    it('returns zeros on non-2xx response', async () => {
+      mockFetch.mockResolvedValue(errorResponse(503));
+
+      const stats = await service.getStorageStats();
+
+      expect(stats).toEqual({ totalBytes: 0, usedBytes: 0, freeBytes: 0 });
     });
   });
 });

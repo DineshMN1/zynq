@@ -107,9 +107,6 @@ export class StorageController {
     const usedBytes = Number(user.storage_used ?? 0);
     const quotaBytes = Number(user.storage_limit ?? 0);
     const isUnlimited = quotaBytes === 0;
-    const actualUsedBytes =
-      await this.storageService.getUserStorageSize(userId);
-
     return {
       userId: user.id,
       name: user.name,
@@ -124,7 +121,6 @@ export class StorageController {
             : 0
           : Math.round((usedBytes / quotaBytes) * 100),
       isUnlimited,
-      actualUsedBytes,
       freeBytes: isUnlimited ? 0 : Math.max(0, quotaBytes - usedBytes),
     };
   }

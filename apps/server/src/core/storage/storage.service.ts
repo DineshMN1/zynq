@@ -1,17 +1,8 @@
-import { Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EncryptionService } from '../encryption/encryption.service';
-import {
-  promises as fs,
-  statfsSync,
-  createReadStream,
-  createWriteStream,
-} from 'fs';
-import { join } from 'path';
-import { Readable, pipeline as pipelineCallback } from 'stream';
-import { promisify } from 'util';
-
-const pipeline = promisify(pipelineCallback);
+import { createReadStream } from 'fs';
+import { Readable } from 'stream';
 
 export interface UploadResult {
   storagePath: string;
@@ -28,89 +19,79 @@ export interface StorageStats {
 }
 
 /**
- * Handles encrypted file storage on local filesystem.
- * Files are encrypted with AES-256-GCM using per-file DEKs wrapped by master key.
- * Supports upload/download, trash management, and storage statistics.
+ * Handles encrypted file storage via the Go storage service.
+ * All encryption/decryption is performed in NestJS before/after HTTP calls —
+ * the Go service only ever receives and returns opaque encrypted bytes.
+ *
+ * Env vars required:
+ *   STORAGE_SERVICE_URL  — base URL of the Go service, e.g. http://storage-service:5000
+ *   SERVICE_TOKEN        — shared secret for X-Service-Token authentication
  */
 @Injectable()
-export class StorageService implements OnModuleInit {
-  private basePath: string;
+export class StorageService {
+  private readonly storageUrl: string;
+  private readonly serviceToken: string;
 
   constructor(
     private configService: ConfigService,
     private encryptionService: EncryptionService,
   ) {
-    this.basePath =
-      this.configService.get('FILE_STORAGE_PATH') || '/data/files';
+    this.storageUrl = (
+      this.configService.get<string>('STORAGE_SERVICE_URL') ||
+      'http://localhost:5000'
+    ).replace(/\/+$/, '');
+
+    this.serviceToken =
+      this.configService.get<string>('STORAGE_SERVICE_TOKEN') ?? '';
   }
 
-  async onModuleInit() {
-    // Ensure base storage directory exists
-    await fs.mkdir(this.basePath, { recursive: true });
+  // ── Private helpers ─────────────────────────────────────────────────────────
+
+  private authHeaders(): Record<string, string> {
+    return this.serviceToken ? { 'X-Service-Token': this.serviceToken } : {};
   }
 
   /**
-   * Get the user's storage directory path
+   * Throws NotFoundException on 404, generic Error on other non-2xx responses.
    */
-  private getUserDir(userId: string): string {
-    return join(this.basePath, userId);
+  private async assertOk(res: Response, notFoundMsg: string): Promise<void> {
+    if (res.ok) return;
+    if (res.status === 404) throw new NotFoundException(notFoundMsg);
+    const body = await res.text().catch(() => '');
+    throw new Error(`Storage service error ${res.status}: ${body}`);
   }
 
-  /**
-   * Get the user's trash directory path
-   */
-  private getUserTrashDir(userId: string): string {
-    return join(this.basePath, userId, '.trash');
-  }
+  // ── Upload ──────────────────────────────────────────────────────────────────
 
   /**
-   * Get the full file path for a file
-   */
-  private getFilePath(userId: string, fileId: string): string {
-    return join(this.getUserDir(userId), `${fileId}.enc`);
-  }
-
-  /**
-   * Get the full file path for a trashed file
-   */
-  private getTrashFilePath(userId: string, fileId: string): string {
-    return join(this.getUserTrashDir(userId), `${fileId}.enc`);
-  }
-
-  /**
-   * Ensure user directories exist
-   */
-  async ensureUserDirectories(userId: string): Promise<void> {
-    await fs.mkdir(this.getUserDir(userId), { recursive: true });
-    await fs.mkdir(this.getUserTrashDir(userId), { recursive: true });
-  }
-
-  /**
-   * Upload and encrypt a file from a buffer
+   * Encrypts data in memory and streams the result to the Go storage service.
+   * Use for files already in a Buffer (small files / test paths).
    */
   async uploadFile(
     userId: string,
     fileId: string,
     data: Buffer,
   ): Promise<UploadResult> {
-    await this.ensureUserDirectories(userId);
-
     const { dek, iv, encryptedDek, dekIv, algorithm } =
       this.encryptionService.createFileEncryption();
 
-    // Encrypt the file data
     const encryptedData = this.encryptionService.encryptBuffer(data, dek, iv);
 
-    // Write encrypted file to disk
-    const filePath = this.getFilePath(userId, fileId);
-    await fs.writeFile(filePath, encryptedData);
+    const res = await fetch(`${this.storageUrl}/v1/files`, {
+      method: 'POST',
+      headers: {
+        ...this.authHeaders(),
+        'X-Owner-ID': userId,
+        'X-File-ID': fileId,
+      },
+      body: encryptedData,
+    });
 
-    // Store the DEK IV with the encrypted DEK for later decryption
-    const combinedEncryptedDek = Buffer.concat([dekIv, encryptedDek]);
+    await this.assertOk(res, 'Storage service rejected upload');
 
     return {
       storagePath: `${userId}/${fileId}.enc`,
-      encryptedDek: combinedEncryptedDek,
+      encryptedDek: Buffer.concat([dekIv, encryptedDek]),
       iv,
       algorithm,
       encryptedSize: encryptedData.length,
@@ -118,59 +99,57 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
-   * Upload and encrypt a file by streaming from a path on disk.
-   * Unlike uploadFile(), this never loads the entire file into memory,
-   * so it handles multi-gigabyte files without OOM issues.
+   * Encrypts a file by streaming from a path on disk directly to Go.
+   * Never loads the full file into memory — safe for multi-gigabyte files.
    */
   async uploadFileStream(
     userId: string,
     fileId: string,
     sourcePath: string,
   ): Promise<UploadResult> {
-    await this.ensureUserDirectories(userId);
-
     const { dek, iv, encryptedDek, dekIv, algorithm } =
       this.encryptionService.createFileEncryption();
 
-    const filePath = this.getFilePath(userId, fileId);
-    const tmpPath = `${filePath}.tmp`;
-
-    const encryptStream = this.encryptionService.createEncryptStream(dek, iv);
     const readStream = createReadStream(sourcePath);
-    const writeStream = createWriteStream(tmpPath);
+    const encryptStream = this.encryptionService.createEncryptStream(dek, iv);
+    const encryptedNodeStream = readStream.pipe(encryptStream);
 
-    try {
-      await pipeline(readStream, encryptStream, writeStream);
-    } catch (err) {
-      // Destroy streams to avoid fd leaks, then remove the incomplete temp file.
-      readStream.destroy();
-      encryptStream.destroy();
-      writeStream.destroy();
-      await fs.unlink(tmpPath).catch(() => {});
-      throw err;
-    }
+    // Convert Node.js Readable → Web ReadableStream for fetch body.
+    const webStream = Readable.toWeb(
+      encryptedNodeStream,
+    ) as ReadableStream<Uint8Array>;
 
-    const stat = await fs.stat(tmpPath);
-    try {
-      await fs.rename(tmpPath, filePath);
-    } catch (err) {
-      await fs.unlink(tmpPath).catch(() => {});
-      throw err;
-    }
+    const res = await fetch(`${this.storageUrl}/v1/files`, {
+      method: 'POST',
+      headers: {
+        ...this.authHeaders(),
+        'X-Owner-ID': userId,
+        'X-File-ID': fileId,
+      },
+      body: webStream,
+      // Required by Node's undici fetch for streaming request bodies.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ duplex: 'half' } as any),
+    });
 
-    const combinedEncryptedDek = Buffer.concat([dekIv, encryptedDek]);
+    await this.assertOk(res, 'Storage service rejected stream upload');
 
+    // We don't know the encrypted size without buffering — use -1 as sentinel.
+    // Callers of uploadFileStream do not use encryptedSize.
     return {
       storagePath: `${userId}/${fileId}.enc`,
-      encryptedDek: combinedEncryptedDek,
+      encryptedDek: Buffer.concat([dekIv, encryptedDek]),
       iv,
       algorithm,
-      encryptedSize: stat.size,
+      encryptedSize: -1,
     };
   }
 
+  // ── Download ────────────────────────────────────────────────────────────────
+
   /**
-   * Download and decrypt a file, returning a buffer
+   * Downloads encrypted bytes from Go and decrypts them.
+   * Checks the .trash location automatically on 404 (mirrors old behaviour).
    */
   async downloadFile(
     userId: string,
@@ -178,44 +157,14 @@ export class StorageService implements OnModuleInit {
     encryptedDek: Buffer,
     iv: Buffer,
   ): Promise<Buffer> {
-    const filePath = this.getFilePath(userId, fileId);
-
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
-      // Try trash location
-      const trashPath = this.getTrashFilePath(userId, fileId);
-      try {
-        await fs.access(trashPath);
-        return this.downloadFromPath(trashPath, encryptedDek, iv);
-      } catch {
-        throw new NotFoundException('File not found on storage');
-      }
-    }
-
-    return this.downloadFromPath(filePath, encryptedDek, iv);
-  }
-
-  private async downloadFromPath(
-    filePath: string,
-    encryptedDek: Buffer,
-    iv: Buffer,
-  ): Promise<Buffer> {
-    // Extract DEK IV from the combined encrypted DEK
-    const dekIv = encryptedDek.subarray(0, 12);
-    const actualEncryptedDek = encryptedDek.subarray(12);
-
-    // Decrypt the DEK
-    const dek = this.encryptionService.decryptDek(actualEncryptedDek, dekIv);
-
-    // Read and decrypt the file
-    const encryptedData = await fs.readFile(filePath);
-    return this.encryptionService.decryptBuffer(encryptedData, dek, iv);
+    const encryptedData = await this.fetchEncryptedFile(userId, fileId);
+    return this.decryptFileBuffer(encryptedData, encryptedDek, iv);
   }
 
   /**
-   * Download and decrypt a file as a stream
+   * Downloads and decrypts a file, returning a Readable stream.
+   * AES-256-GCM requires the auth tag at the end, so the full ciphertext is
+   * buffered before decryption — streaming decryption is not possible with GCM.
    */
   async downloadFileStream(
     userId: string,
@@ -223,149 +172,102 @@ export class StorageService implements OnModuleInit {
     encryptedDek: Buffer,
     iv: Buffer,
   ): Promise<Readable> {
-    // For now, we'll read the entire file and decrypt it
-    // A more memory-efficient streaming approach would require
-    // a custom chunked encryption format
     const decrypted = await this.downloadFile(userId, fileId, encryptedDek, iv);
     return Readable.from(decrypted);
   }
 
-  /**
-   * Delete a file permanently
-   */
+  private async fetchEncryptedFile(
+    userId: string,
+    fileId: string,
+  ): Promise<Buffer> {
+    const res = await fetch(`${this.storageUrl}/v1/files/${userId}/${fileId}`, {
+      headers: this.authHeaders(),
+    });
+
+    if (res.ok) {
+      return Buffer.from(await res.arrayBuffer());
+    }
+    if (res.status === 404) {
+      throw new NotFoundException('File not found on storage');
+    }
+    const body = await res.text().catch(() => '');
+    throw new Error(`Storage service error ${res.status}: ${body}`);
+  }
+
+  private decryptFileBuffer(
+    encryptedData: Buffer,
+    encryptedDek: Buffer,
+    iv: Buffer,
+  ): Buffer {
+    const dekIv = encryptedDek.subarray(0, 12);
+    const actualEncryptedDek = encryptedDek.subarray(12);
+    const dek = this.encryptionService.decryptDek(actualEncryptedDek, dekIv);
+    return this.encryptionService.decryptBuffer(encryptedData, dek, iv);
+  }
+
+  // ── Delete / trash ──────────────────────────────────────────────────────────
+
+  /** Permanently deletes a file from the Go storage service. */
   async deleteFile(userId: string, fileId: string): Promise<void> {
-    const filePath = this.getFilePath(userId, fileId);
-    const trashPath = this.getTrashFilePath(userId, fileId);
-
-    try {
-      await fs.unlink(filePath);
-    } catch {
-      // Try trash location
-      try {
-        await fs.unlink(trashPath);
-      } catch {
-        // File doesn't exist, that's ok
-      }
+    const res = await fetch(`${this.storageUrl}/v1/files/${userId}/${fileId}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(),
+    });
+    // 404 is fine — file already gone.
+    if (!res.ok && res.status !== 404) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Storage delete failed ${res.status}: ${body}`);
     }
   }
 
-  /**
-   * Move a file to trash
-   */
+  /** Moves a file to the owner's .trash directory in the Go storage service. */
   async moveToTrash(userId: string, fileId: string): Promise<void> {
-    await this.ensureUserDirectories(userId);
-    const filePath = this.getFilePath(userId, fileId);
-    const trashPath = this.getTrashFilePath(userId, fileId);
-
-    try {
-      await fs.rename(filePath, trashPath);
-    } catch {
-      // File might already be in trash or not exist
+    const res = await fetch(
+      `${this.storageUrl}/v1/files/${userId}/${fileId}/trash`,
+      { method: 'POST', headers: this.authHeaders() },
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Storage moveToTrash failed ${res.status}: ${body}`);
     }
   }
 
-  /**
-   * Restore a file from trash
-   */
+  /** Restores a file from the .trash directory in the Go storage service. */
   async restoreFromTrash(userId: string, fileId: string): Promise<void> {
-    await this.ensureUserDirectories(userId);
-    const filePath = this.getFilePath(userId, fileId);
-    const trashPath = this.getTrashFilePath(userId, fileId);
-
-    await fs.rename(trashPath, filePath);
-  }
-
-  /**
-   * Check if a file exists
-   */
-  async fileExists(userId: string, fileId: string): Promise<boolean> {
-    const filePath = this.getFilePath(userId, fileId);
-    try {
-      await fs.access(filePath);
-      return true;
-    } catch {
-      return false;
+    const res = await fetch(
+      `${this.storageUrl}/v1/files/${userId}/${fileId}/restore`,
+      { method: 'POST', headers: this.authHeaders() },
+    );
+    if (res.status === 404) {
+      throw new NotFoundException('File not found in trash');
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Storage restoreFromTrash failed ${res.status}: ${body}`);
     }
   }
 
-  /**
-   * Get storage statistics for the entire system
-   */
+  // ── Stats ───────────────────────────────────────────────────────────────────
+
+  /** Returns disk-space statistics from the Go storage service. */
   async getStorageStats(): Promise<StorageStats> {
     try {
-      // Use Node.js built-in statfsSync for cross-platform disk stats
-      const stats = statfsSync(this.basePath);
-
-      // Node.js 22+ exposes frsize (fragment size) which is always correct.
-      // On older versions, some filesystems (macOS APFS, Docker virtiofs) report
-      // bsize as I/O transfer size (1MB) while blocks are counted in 4KB fragments.
-      // Detect this by checking if bsize * blocks exceeds a sane limit (>100TB).
-      const frsize = (stats as any).frsize as number | undefined;
-      let blockSize = frsize || stats.bsize;
-      if (!frsize && blockSize > 4096) {
-        const naiveTotal = Number(BigInt(stats.blocks) * BigInt(blockSize));
-        if (naiveTotal > 100 * 1024 ** 4) {
-          // bsize is likely I/O size, not fragment size — fall back to 4096
-          blockSize = 4096;
-        }
-      }
-
-      // Convert to BigInt for accurate calculation with large disks
-      // then back to number for the response
-      const totalBytes = Number(BigInt(stats.blocks) * BigInt(blockSize));
-      const freeBytes = Number(BigInt(stats.bavail) * BigInt(blockSize));
-      const usedBytes = totalBytes - freeBytes;
-
+      const res = await fetch(`${this.storageUrl}/v1/stats`, {
+        headers: this.authHeaders(),
+      });
+      if (!res.ok) return { totalBytes: 0, usedBytes: 0, freeBytes: 0 };
+      const data = (await res.json()) as {
+        total_bytes: number;
+        used_bytes: number;
+        free_bytes: number;
+      };
       return {
-        totalBytes,
-        usedBytes,
-        freeBytes,
+        totalBytes: data.total_bytes ?? 0,
+        usedBytes: data.used_bytes ?? 0,
+        freeBytes: data.free_bytes ?? 0,
       };
     } catch {
-      // If statfs fails, return zeros
-      return {
-        totalBytes: 0,
-        usedBytes: 0,
-        freeBytes: 0,
-      };
+      return { totalBytes: 0, usedBytes: 0, freeBytes: 0 };
     }
-  }
-
-  /**
-   * Get the size of a user's storage directory
-   */
-  async getUserStorageSize(userId: string): Promise<number> {
-    const userDir = this.getUserDir(userId);
-    try {
-      return await this.getDirectorySize(userDir);
-    } catch {
-      return 0;
-    }
-  }
-
-  /**
-   * Calculate the total size of a directory recursively
-   */
-  private async getDirectorySize(dirPath: string): Promise<number> {
-    let totalSize = 0;
-
-    try {
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = join(dirPath, entry.name);
-
-        if (entry.isDirectory()) {
-          totalSize += await this.getDirectorySize(fullPath);
-        } else if (entry.isFile()) {
-          const stats = await fs.stat(fullPath);
-          totalSize += stats.size;
-        }
-      }
-    } catch {
-      // Directory doesn't exist or can't be read
-    }
-
-    return totalSize;
   }
 }

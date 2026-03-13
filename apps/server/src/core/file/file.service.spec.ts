@@ -224,6 +224,105 @@ describe('FileService', () => {
       expect(result.storage_path).toBe(existing.storage_path);
       expect(userService.updateStorageUsed).not.toHaveBeenCalled();
     });
+
+    it('linked file inherits encrypted_dek and encryption_iv from existing file', async () => {
+      const existing = {
+        ...mockFile,
+        id: 'file-old',
+        file_hash: 'a'.repeat(64),
+        encrypted_dek: Buffer.alloc(60, 1),
+        encryption_iv: Buffer.alloc(12, 2),
+        encryption_algo: 'AES-256-GCM',
+      } as File;
+      const linked = { ...existing, id: 'file-new' } as File;
+
+      userService.findById.mockResolvedValue(mockUser as any);
+      filesRepository.findOne.mockResolvedValueOnce(existing);
+      filesRepository.create.mockReturnValue(linked);
+      filesRepository.save.mockResolvedValue(linked);
+
+      const result = await service.create('user-123', {
+        name: 'copy.pdf',
+        size: 1024,
+        mimeType: 'application/pdf',
+        fileHash: 'a'.repeat(64),
+        skipDuplicateCheck: true,
+      });
+
+      expect(filesRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          encrypted_dek: existing.encrypted_dek,
+          encryption_iv: existing.encryption_iv,
+          encryption_algo: existing.encryption_algo,
+          storage_path: existing.storage_path,
+        }),
+      );
+      expect(result.id).toBe('file-new');
+    });
+
+    it('falls through to normal upload when no existing encrypted file found for skipDuplicateCheck', async () => {
+      userService.findById.mockResolvedValue(mockUser as any);
+      // findOne returns null — no existing encrypted file to link
+      filesRepository.findOne.mockResolvedValueOnce(null);
+      filesRepository.create.mockReturnValue(mockFile as File);
+      filesRepository.save.mockResolvedValue(mockFile as File);
+
+      const result = await service.create('user-123', {
+        name: 'copy.pdf',
+        size: 1024,
+        mimeType: 'application/pdf',
+        fileHash: 'a'.repeat(64),
+        skipDuplicateCheck: true,
+      });
+
+      // Normal upload path — returns an uploadUrl
+      expect(result.uploadUrl).toBeDefined();
+      expect(userService.updateStorageUsed).toHaveBeenCalledWith(
+        'user-123',
+        1024,
+      );
+    });
+
+    it('throws ConflictException with duplicate list when hash matches and skipDuplicateCheck is false', async () => {
+      const duplicate = { ...mockFile, id: 'file-dup' } as File;
+
+      userService.findById.mockResolvedValue(mockUser as any);
+      filesRepository.find.mockResolvedValueOnce([duplicate]);
+
+      await expect(
+        service.create('user-123', {
+          name: 'dup.pdf',
+          size: 1024,
+          mimeType: 'application/pdf',
+          fileHash: 'a'.repeat(64),
+          skipDuplicateCheck: false,
+        }),
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('Duplicate'),
+        response: expect.objectContaining({
+          duplicates: expect.arrayContaining([
+            expect.objectContaining({ id: 'file-dup' }),
+          ]),
+        }),
+      });
+    });
+
+    it('skips duplicate check for non-document file types even with fileHash', async () => {
+      userService.findById.mockResolvedValue(mockUser as any);
+      filesRepository.create.mockReturnValue(mockFile as File);
+      filesRepository.save.mockResolvedValue(mockFile as File);
+
+      await service.create('user-123', {
+        name: 'video.mp4', // not in DEDUP_EXTENSIONS
+        size: 1024,
+        mimeType: 'video/mp4',
+        fileHash: 'a'.repeat(64),
+        skipDuplicateCheck: false,
+      });
+
+      // find() for duplicate check should never be called for video files
+      expect(filesRepository.find).not.toHaveBeenCalled();
+    });
   });
 
   describe('uploadFileContent', () => {

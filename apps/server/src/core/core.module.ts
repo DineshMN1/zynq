@@ -8,6 +8,7 @@ import { StorageModule } from './storage/storage.module';
 import { SettingModule } from './setting/setting.module';
 import { EncryptionModule } from './encryption/encryption.module';
 import { SystemModule } from './system/system.module';
+import { RolesGuard } from '../common/guards/roles.guard';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SystemModule } from './system/system.module';
     SettingModule,
     SystemModule,
   ],
+  providers: [RolesGuard],
   exports: [
     EncryptionModule,
     AuthModule,
@@ -31,6 +33,7 @@ import { SystemModule } from './system/system.module';
     StorageModule,
     SettingModule,
     SystemModule,
+    RolesGuard,
   ],
 })
 export class CoreModule {}

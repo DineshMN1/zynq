@@ -368,19 +368,6 @@ export class FileService {
     }
 
     query
-      .loadRelationCountAndMap('file.shareCount', 'file.shares')
-      .loadRelationCountAndMap(
-        'file.publicShareCount',
-        'file.shares',
-        'publicShares',
-        (qb) => qb.andWhere('publicShares.is_public = true'),
-      )
-      .loadRelationCountAndMap(
-        'file.privateShareCount',
-        'file.shares',
-        'privateShares',
-        (qb) => qb.andWhere('privateShares.is_public = false'),
-      )
       .skip((page - 1) * limit)
       .take(limit)
       .orderBy('file.is_folder', 'DESC')
@@ -388,8 +375,41 @@ export class FileService {
 
     const [items, total] = await query.getManyAndCount();
 
-    // Compute total size for each folder in one aggregate query
+    if (items.length === 0) return { items, total };
+
+    const fileIds = items.map((f) => f.id);
+
+    // Single aggregated query for all share counts across the page —
+    // replaces 3 separate loadRelationCountAndMap round-trips.
+    const shareCounts: {
+      fileId: string;
+      total: string;
+      public: string;
+      private: string;
+    }[] = await this.sharesRepository
+      .createQueryBuilder('s')
+      .select('s.file_id', 'fileId')
+      .addSelect('COUNT(*)', 'total')
+      .addSelect(`COUNT(*) FILTER (WHERE s.is_public = true)`, 'public')
+      .addSelect(`COUNT(*) FILTER (WHERE s.is_public = false)`, 'private')
+      .where('s.file_id IN (:...ids)', { ids: fileIds })
+      .groupBy('s.file_id')
+      .getRawMany();
+
+    const shareMap = new Map(
+      shareCounts.map((r) => [
+        r.fileId,
+        {
+          shareCount: Number(r.total),
+          publicShareCount: Number(r.public),
+          privateShareCount: Number(r.private),
+        },
+      ]),
+    );
+
+    // Folder sizes — one aggregate query (unchanged).
     const folderIds = items.filter((f) => f.is_folder).map((f) => f.id);
+    const sizeMap = new Map<string, number>();
     if (folderIds.length > 0) {
       const folderSizes: { folderId: string; totalSize: string }[] =
         await this.filesRepository
@@ -402,13 +422,22 @@ export class FileService {
           .groupBy('child.parent_id')
           .getRawMany();
 
-      const sizeMap = new Map(
-        folderSizes.map((r) => [r.folderId, Number(r.totalSize)]),
-      );
-      for (const item of items) {
-        if (item.is_folder) {
-          item.size = sizeMap.get(item.id) ?? 0;
-        }
+      for (const r of folderSizes) {
+        sizeMap.set(r.folderId, Number(r.totalSize));
+      }
+    }
+
+    for (const item of items) {
+      const counts = shareMap.get(item.id) ?? {
+        shareCount: 0,
+        publicShareCount: 0,
+        privateShareCount: 0,
+      };
+      item.shareCount = counts.shareCount;
+      item.publicShareCount = counts.publicShareCount;
+      item.privateShareCount = counts.privateShareCount;
+      if (item.is_folder) {
+        item.size = sizeMap.get(item.id) ?? 0;
       }
     }
 
@@ -479,9 +508,15 @@ export class FileService {
     }
 
     const now = new Date();
+
+    // Single UPDATE for all metadata rows.
+    await this.filesRepository.update(
+      { id: In(files.map((f) => f.id)) },
+      { deleted_at: now },
+    );
+
+    // Move physical files that have no other active metadata references.
     for (const file of files) {
-      file.deleted_at = now;
-      await this.filesRepository.save(file);
       if (!file.is_folder && file.storage_path) {
         const hasActiveRefs = await this.hasActiveStorageReferences(
           file.storage_path,
@@ -653,29 +688,38 @@ export class FileService {
     return share.file;
   }
 
+  /**
+   * Returns all file entries under a folder, iterating breadth-first.
+   * Avoids unbounded call-stack growth for deeply nested folder trees.
+   */
   async getFolderEntries(
     ownerId: string,
     folderId: string,
     basePath: string,
   ): Promise<Array<{ file: File; path: string }>> {
-    const children = await this.filesRepository.find({
-      where: {
-        owner_id: ownerId,
-        parent_id: folderId,
-        deleted_at: IsNull(),
-      },
-    });
-
     const entries: Array<{ file: File; path: string }> = [];
+    const queue: Array<{ id: string; path: string }> = [
+      { id: folderId, path: basePath },
+    ];
 
-    for (const child of children) {
-      const childPath = `${basePath}/${child.name}`;
-      if (child.is_folder) {
-        entries.push(
-          ...(await this.getFolderEntries(ownerId, child.id, childPath)),
-        );
-      } else {
-        entries.push({ file: child, path: childPath });
+    while (queue.length > 0) {
+      const { id: currentId, path: currentPath } = queue.shift()!;
+
+      const children = await this.filesRepository.find({
+        where: {
+          owner_id: ownerId,
+          parent_id: currentId,
+          deleted_at: IsNull(),
+        },
+      });
+
+      for (const child of children) {
+        const childPath = `${currentPath}/${child.name}`;
+        if (child.is_folder) {
+          queue.push({ id: child.id, path: childPath });
+        } else {
+          entries.push({ file: child, path: childPath });
+        }
       }
     }
 
@@ -687,19 +731,28 @@ export class FileService {
       throw new NotFoundException('File content not found');
     }
 
+    const { ownerId, fileId } = this.resolveStorageTarget(file);
     return this.storageService.downloadFile(
-      this.resolveStorageTarget(file).ownerId,
-      this.resolveStorageTarget(file).fileId,
+      ownerId,
+      fileId,
       file.encrypted_dek,
       file.encryption_iv,
     );
   }
 
-  async getSharedWithMe(userId: string): Promise<Share[]> {
-    return this.sharesRepository.find({
+  async getSharedWithMe(
+    userId: string,
+    page = 1,
+    limit = 50,
+  ): Promise<{ items: Share[]; total: number }> {
+    const [items, total] = await this.sharesRepository.findAndCount({
       where: { grantee_user_id: userId },
       relations: ['file', 'file.owner'],
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { created_at: 'DESC' },
     });
+    return { items, total };
   }
 
   async getTrashedFiles(
@@ -832,11 +885,19 @@ export class FileService {
     });
   }
 
-  async getPrivateSharesByUser(userId: string): Promise<Share[]> {
-    return this.sharesRepository.find({
+  async getPrivateSharesByUser(
+    userId: string,
+    page = 1,
+    limit = 50,
+  ): Promise<{ items: Share[]; total: number }> {
+    const [items, total] = await this.sharesRepository.findAndCount({
       where: { created_by: userId, is_public: false },
       relations: ['file', 'grantee_user'],
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { created_at: 'DESC' },
     });
+    return { items, total };
   }
 
   async updatePublicShareSettings(
@@ -896,11 +957,11 @@ export class FileService {
       where: { owner_id: userId, deleted_at: Not(IsNull()) },
     });
 
+    if (trashedFiles.length === 0) return;
+
     let totalSizeFreed = 0;
 
     for (const file of trashedFiles) {
-      let shouldDecreaseStorage = false;
-
       if (!file.is_folder && file.storage_path) {
         const hasAnyRefs = await this.hasAnyStorageReferences(
           file.storage_path,
@@ -909,21 +970,21 @@ export class FileService {
         if (!hasAnyRefs) {
           const target = this.resolveStorageTarget(file);
           await this.storageService.deleteFile(target.ownerId, target.fileId);
-          shouldDecreaseStorage = true;
+          const fileSize = Number(file.size);
+          if (fileSize > 0) totalSizeFreed += fileSize;
         }
       } else if (!file.is_folder) {
-        shouldDecreaseStorage = true;
-      }
-
-      if (shouldDecreaseStorage) {
         const fileSize = Number(file.size);
         if (fileSize > 0) totalSizeFreed += fileSize;
       }
-
-      await this.filesRepository.delete(file.id);
     }
 
-    // Update storage usage in one call for efficiency
+    // Single DELETE for all metadata rows.
+    await this.filesRepository.delete({
+      owner_id: userId,
+      deleted_at: Not(IsNull()),
+    });
+
     if (totalSizeFreed > 0) {
       await this.userService.updateStorageUsed(userId, -totalSizeFreed);
     }
