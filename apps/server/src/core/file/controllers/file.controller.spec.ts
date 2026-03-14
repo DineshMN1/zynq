@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { promises as fs } from 'fs';
 import { FileController } from './file.controller';
 import { FileService } from '../file.service';
 import { UserRole } from '../../user/entities/user.entity';
@@ -57,6 +56,7 @@ describe('FileController', () => {
             findById: jest.fn(),
             uploadFileContent: jest.fn(),
             uploadFileContentStream: jest.fn(),
+            uploadFileContentFromStream: jest.fn(),
             downloadFile: jest.fn(),
             softDelete: jest.fn(),
             restore: jest.fn(),
@@ -260,49 +260,19 @@ describe('FileController', () => {
   });
 
   describe('uploadFileContent', () => {
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
-
-    it('should delegate to fileService.uploadFileContentStream', async () => {
-      const mockMulterFile = {
-        path: '/tmp/uploaded-file',
-      } as Express.Multer.File;
-      const unlinkSpy = jest.spyOn(fs, 'unlink').mockResolvedValue(undefined);
-      fileService.uploadFileContentStream.mockResolvedValue(mockFile as any);
-
-      await controller.uploadFileContent(
-        mockUser as any,
-        'file-123',
-        mockMulterFile,
+    it('should delegate to fileService.uploadFileContentFromStream', async () => {
+      const mockReq = { pipe: jest.fn() } as any;
+      fileService.uploadFileContentFromStream.mockResolvedValue(
+        mockFile as any,
       );
 
-      expect(fileService.uploadFileContentStream).toHaveBeenCalledWith(
+      await controller.uploadFileContent(mockUser as any, 'file-123', mockReq);
+
+      expect(fileService.uploadFileContentFromStream).toHaveBeenCalledWith(
         'file-123',
         'user-123',
-        '/tmp/uploaded-file',
+        mockReq,
       );
-      expect(unlinkSpy).toHaveBeenCalledWith('/tmp/uploaded-file');
-    });
-
-    it('should return error if no file provided', async () => {
-      const result = await controller.uploadFileContent(
-        mockUser as any,
-        'file-123',
-        undefined,
-      );
-
-      expect(result).toEqual({ error: 'No file provided' });
-    });
-
-    it('should return error if uploaded file path is missing', async () => {
-      const result = await controller.uploadFileContent(
-        mockUser as any,
-        'file-123',
-        {} as Express.Multer.File,
-      );
-
-      expect(result).toEqual({ error: 'Uploaded file path not found' });
     });
   });
 

@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -137,10 +135,8 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// ── Normal (non-dedup) write path ─────────────────────────────────────────
 	//
-	// TeeReader: every byte read from r.Body is also written into hasher.
-	// The backend streams from tee directly to disk — zero full-file buffering.
-	hasher := sha256.New()
-	n, err := h.store.Write(storagePath, io.TeeReader(r.Body, hasher))
+	// Stream r.Body directly to disk — no hashing, no buffering.
+	n, err := h.store.Write(storagePath, r.Body)
 	if err != nil {
 		h.metrics.UploadsFailed.Add(1)
 		h.logger.Error("upload: write failed", "path", storagePath, "err", err)
@@ -149,13 +145,12 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.metrics.BytesWritten.Add(n)
-	hash := hex.EncodeToString(hasher.Sum(nil))
-	h.logger.Info("upload complete", "path", storagePath, "bytes", n, "sha256", hash)
+	h.logger.Info("upload complete", "path", storagePath, "bytes", n, "sha256", "skipped")
 
 	writeJSON(w, http.StatusCreated, UploadResponse{
 		StoragePath: storagePath,
 		Size:        n,
-		SHA256:      hash,
+		SHA256:      "skipped",
 	})
 }
 

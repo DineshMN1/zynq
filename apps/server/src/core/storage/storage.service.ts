@@ -131,6 +131,52 @@ export class StorageService {
   }
 
   /**
+   * Encrypts a raw incoming stream and pipes it directly to Go storage.
+   * No temp-file writes in NestJS — bytes flow: client → encrypt → Go.
+   */
+  async uploadRawStream(
+    userId: string,
+    fileId: string,
+    rawStream: Readable,
+  ): Promise<UploadResult> {
+    const { dek, iv, encryptedDek, dekIv, algorithm } =
+      this.encryptionService.createFileEncryption();
+
+    const encryptStream = this.encryptionService.createEncryptStream(dek, iv);
+    const encryptedNodeStream = rawStream.pipe(encryptStream);
+
+    const webStream = Readable.toWeb(
+      encryptedNodeStream,
+    ) as ReadableStream<Uint8Array>;
+
+    const res = await this.fetchWithTimeout(
+      `${this.storageUrl}/v1/files`,
+      {
+        method: 'POST',
+        headers: {
+          ...this.authHeaders(),
+          'X-Owner-ID': userId,
+          'X-File-ID': fileId,
+        },
+        body: webStream,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...({ duplex: 'half' } as any),
+      },
+      3_600_000, // 1 hour for large file streaming uploads
+    );
+
+    await this.assertOk(res, 'Storage service rejected raw stream upload');
+
+    return {
+      storagePath: `${userId}/${fileId}.enc`,
+      encryptedDek: Buffer.concat([dekIv, encryptedDek]),
+      iv,
+      algorithm,
+      encryptedSize: -1,
+    };
+  }
+
+  /**
    * Encrypts a file by streaming from a path on disk directly to Go.
    * Never loads the full file into memory — safe for multi-gigabyte files.
    */

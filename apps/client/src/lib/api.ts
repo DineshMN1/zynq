@@ -393,12 +393,10 @@ export const fileApi = {
     }),
 
   upload: async (fileId: string, file: File): Promise<FileMetadata> => {
-    const formData = new FormData();
-    formData.append('file', file);
-
     const response = await fetch(`${getApiBaseUrl()}/files/${fileId}/upload`, {
       method: 'PUT',
-      body: formData,
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
       credentials: 'include',
     });
 

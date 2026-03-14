@@ -13,15 +13,9 @@ import {
   HttpStatus,
   Req,
   Res,
-  UseFilters,
-  UseInterceptors,
-  UploadedFile,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
-import { promises as fs } from 'fs';
-import { tmpdir } from 'os';
 import { FileService } from '../file.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -33,12 +27,6 @@ import { UpdatePublicShareDto } from '../../share/dto/update-public-share.dto';
 import { File as FileEntity } from '../entities/file.entity';
 import * as archiver from 'archiver';
 import { getRequestOrigin } from '../../../common/utils/request-origin.util';
-import { MulterExceptionFilter } from '../../../common/filters/multer-exception.filter';
-import { diskStorage } from 'multer';
-
-// No hard size limit at the Multer layer — nginx enforces it via
-// client_max_body_size on the upload locations (currently unlimited).
-// Multer uses disk storage (tmpdir), so RAM is not a concern for large files.
 
 /**
  * File management endpoints: CRUD, upload, download, share, trash.
@@ -221,38 +209,14 @@ export class FileController {
 
   @Put(':id/upload')
   @SkipThrottle()
-  @UseFilters(MulterExceptionFilter)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: tmpdir(),
-      }),
-      limits: { files: 1 },
-    }),
-  )
   async uploadFileContent(
     @CurrentUser() user: User,
     @Param('id') id: string,
-    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
   ) {
-    if (!file) {
-      return { error: 'No file provided' };
-    }
-    if (!file.path) {
-      return { error: 'Uploaded file path not found' };
-    }
-
-    // Stream the file through AES-256-GCM encryption directly from the temp
-    // file on disk — no full-file buffer in Node.js heap, safe for large files.
-    try {
-      return await this.fileService.uploadFileContentStream(
-        id,
-        user.id,
-        file.path,
-      );
-    } finally {
-      await fs.unlink(file.path).catch(() => undefined);
-    }
+    // Pipe the raw request stream through AES-256-GCM encryption directly to
+    // Go storage — no Multer disk-buffer, no temp file, no end-of-upload delay.
+    return this.fileService.uploadFileContentFromStream(id, user.id, req);
   }
 
   @Get(':id/download')
