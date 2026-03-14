@@ -96,7 +96,7 @@ describe('AuthController (e2e)', () => {
       expect(res.body.email).toBe(TEST_USER.email);
       expect(res.headers['set-cookie']).toBeDefined();
       expect(
-        (res.headers['set-cookie'] as string[]).some((c) =>
+        (res.headers['set-cookie'] as unknown as string[]).some((c) =>
           c.startsWith('jid='),
         ),
       ).toBe(true);
@@ -169,7 +169,7 @@ describe('AuthController (e2e)', () => {
       expect(res.body).not.toHaveProperty('password_hash');
       expect(res.body.email).toBe(TEST_USER.email);
       expect(
-        (res.headers['set-cookie'] as string[]).some((c) =>
+        (res.headers['set-cookie'] as unknown as string[]).some((c) =>
           c.startsWith('jid='),
         ),
       ).toBe(true);

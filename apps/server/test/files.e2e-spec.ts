@@ -22,7 +22,7 @@ import {
 
 const FILE_ID = 'file-e2e-1';
 const SHARE_ID = 'share-e2e-1';
-const VALID_UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+const VALID_UUID = 'a1b2c3d4-e5f6-4890-abcd-ef1234567890';
 
 describe('FileController (e2e)', () => {
   let testApp: TestApp;
@@ -352,7 +352,7 @@ describe('FileController (e2e)', () => {
 
   describe('DELETE /api/v1/files/bulk', () => {
     it('soft-deletes multiple files and returns 200', async () => {
-      const ids = [VALID_UUID, 'b2c3d4e5-f6a7-8901-bcde-f12345678901'];
+      const ids = [VALID_UUID, 'b2c3d4e5-f6a7-4901-abcd-f12345678901'];
 
       const res = await api()
         .delete('/api/v1/files/bulk')
@@ -620,7 +620,7 @@ describe('FileController (e2e)', () => {
         FILE_ID,
         TEST_USER.id,
         expect.objectContaining({ permission: 'read' }),
-        undefined,
+        expect.any(String),
       );
     });
 

@@ -28,14 +28,25 @@ func (h *Handler) Stats(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	avail, total := ls.DiskStats()
-	used := int64(0)
-	if total > uint64(avail) {
-		used = int64(total) - int64(avail)
+
+	// uint64 → int64 casts overflow above math.MaxInt64 (≈9.2 EB).
+	// Clamp to avoid returning negative numbers on absurdly large volumes.
+	const maxInt64 = uint64(1<<63 - 1)
+	clamp := func(v uint64) int64 {
+		if v > maxInt64 {
+			return int64(maxInt64)
+		}
+		return int64(v)
+	}
+
+	usedU := uint64(0)
+	if total > avail {
+		usedU = total - avail
 	}
 
 	writeJSON(w, http.StatusOK, storageStatsResponse{
-		TotalBytes: int64(total),
-		FreeBytes:  int64(avail),
-		UsedBytes:  used,
+		TotalBytes: clamp(total),
+		FreeBytes:  clamp(avail),
+		UsedBytes:  clamp(usedU),
 	})
 }

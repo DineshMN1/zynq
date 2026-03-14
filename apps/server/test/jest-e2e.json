@@ -1,33 +1,14 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
-  "testEnvironment": "node",
   "testRegex": "\\.e2e-spec\\.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": [
-      "ts-jest",
-      {
-        "tsconfig": {
-          "module": "commonjs",
-          "declaration": true,
-          "removeComments": true,
-          "emitDecoratorMetadata": true,
-          "experimentalDecorators": true,
-          "allowSyntheticDefaultImports": true,
-          "target": "ES2021",
-          "sourceMap": true,
-          "baseUrl": "../",
-          "skipLibCheck": true,
-          "strictNullChecks": false,
-          "noImplicitAny": false,
-          "paths": {
-            "@/*": ["src/*"]
-          }
-        }
-      }
-    ]
+    "^.+\\.(t|j)s$": "ts-jest"
   },
-  "moduleNameMapper": {
-    "^@/(.*)$": "<rootDir>/../src/$1"
+  "testEnvironment": "node",
+  "globals": {
+    "ts-jest": {
+      "tsconfig": "./tsconfig.e2e.json"
+    }
   }
 }

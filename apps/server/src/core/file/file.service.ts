@@ -959,6 +959,9 @@ export class FileService {
 
     if (trashedFiles.length === 0) return;
 
+    // Collect IDs from the snapshot so the final delete is scoped exactly to
+    // what we processed — prevents deleting rows trashed after this point.
+    const snapshotIds = trashedFiles.map((f) => f.id);
     let totalSizeFreed = 0;
 
     for (const file of trashedFiles) {
@@ -979,11 +982,8 @@ export class FileService {
       }
     }
 
-    // Single DELETE for all metadata rows.
-    await this.filesRepository.delete({
-      owner_id: userId,
-      deleted_at: Not(IsNull()),
-    });
+    // Delete only the metadata rows from the snapshot.
+    await this.filesRepository.delete(snapshotIds);
 
     if (totalSizeFreed > 0) {
       await this.userService.updateStorageUsed(userId, -totalSizeFreed);

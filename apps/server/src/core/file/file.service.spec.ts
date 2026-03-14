@@ -53,6 +53,15 @@ describe('FileService', () => {
     getManyAndCount: jest.fn(),
   };
 
+  // Separate builder for sharesRepository raw aggregate queries (findAll).
+  const mockSharesQueryBuilder = {
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue([]),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -77,6 +86,7 @@ describe('FileService', () => {
             save: jest.fn(),
             find: jest.fn(),
             findOne: jest.fn(),
+            createQueryBuilder: jest.fn(() => mockSharesQueryBuilder),
           },
         },
         {
@@ -598,7 +608,11 @@ describe('FileService', () => {
 
       expect(storageService.deleteFile).toHaveBeenCalledTimes(2);
       expect(userService.updateStorageUsed).toHaveBeenCalledTimes(1);
-      expect(filesRepository.delete).toHaveBeenCalledTimes(2);
+      expect(filesRepository.delete).toHaveBeenCalledTimes(1);
+      expect(filesRepository.delete).toHaveBeenCalledWith([
+        'file-123',
+        'file-456',
+      ]);
     });
   });
 });

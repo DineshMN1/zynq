@@ -111,7 +111,12 @@ export class UserService {
    * Use this instead of update() to avoid the `as any` cast at call sites.
    */
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
-    await this.usersRepository.update(id, { password_hash: passwordHash });
+    const result = await this.usersRepository.update(id, {
+      password_hash: passwordHash,
+    });
+    if (!result.affected) {
+      throw new Error(`updatePasswordHash: user ${id} not found`);
+    }
   }
 
   /** Permanently deletes a user and their data. */

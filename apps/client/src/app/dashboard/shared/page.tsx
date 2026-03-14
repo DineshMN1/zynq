@@ -71,9 +71,9 @@ export default function SharedPage() {
         fileApi.getPublicShares(),
         fileApi.getPrivateShares(),
       ]);
-      setSharedWithMe(withMeData);
+      setSharedWithMe(withMeData.items);
       setPublicShares(publicData);
-      setSharedByMe(byMeData);
+      setSharedByMe(byMeData.items);
     } catch (error) {
       console.error('Failed to load shared files:', error);
     } finally {

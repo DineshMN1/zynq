@@ -52,6 +52,32 @@ export class StorageService {
   }
 
   /**
+   * fetch() wrapper that aborts after `timeoutMs` milliseconds.
+   * Converts AbortError into a plain Error with a descriptive message so callers
+   * don't need to distinguish abort from network errors.
+   */
+  private async fetchWithTimeout(
+    url: string,
+    init: RequestInit,
+    timeoutMs: number,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error(
+          `Storage service request timed out after ${timeoutMs}ms: ${url}`,
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * Throws NotFoundException on 404, generic Error on other non-2xx responses.
    */
   private async assertOk(res: Response, notFoundMsg: string): Promise<void> {
@@ -77,17 +103,21 @@ export class StorageService {
 
     const encryptedData = this.encryptionService.encryptBuffer(data, dek, iv);
 
-    const res = await fetch(`${this.storageUrl}/v1/files`, {
-      method: 'POST',
-      headers: {
-        ...this.authHeaders(),
-        'X-Owner-ID': userId,
-        'X-File-ID': fileId,
+    const res = await this.fetchWithTimeout(
+      `${this.storageUrl}/v1/files`,
+      {
+        method: 'POST',
+        headers: {
+          ...this.authHeaders(),
+          'X-Owner-ID': userId,
+          'X-File-ID': fileId,
+        },
+        // Buffer is a Uint8Array subclass — valid BodyInit at runtime.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        body: encryptedData as any,
       },
-      // Buffer is a Uint8Array subclass — valid BodyInit at runtime.
-      // lib.dom types don't include Buffer, so we widen here.
-      body: encryptedData as unknown as Uint8Array,
-    });
+      60_000,
+    );
 
     await this.assertOk(res, 'Storage service rejected upload');
 
@@ -121,18 +151,22 @@ export class StorageService {
       encryptedNodeStream,
     ) as ReadableStream<Uint8Array>;
 
-    const res = await fetch(`${this.storageUrl}/v1/files`, {
-      method: 'POST',
-      headers: {
-        ...this.authHeaders(),
-        'X-Owner-ID': userId,
-        'X-File-ID': fileId,
+    const res = await this.fetchWithTimeout(
+      `${this.storageUrl}/v1/files`,
+      {
+        method: 'POST',
+        headers: {
+          ...this.authHeaders(),
+          'X-Owner-ID': userId,
+          'X-File-ID': fileId,
+        },
+        body: webStream,
+        // Required by Node's undici fetch for streaming request bodies.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...({ duplex: 'half' } as any),
       },
-      body: webStream,
-      // Required by Node's undici fetch for streaming request bodies.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...({ duplex: 'half' } as any),
-    });
+      300_000, // 5 min for large file streaming uploads
+    );
 
     await this.assertOk(res, 'Storage service rejected stream upload');
 
@@ -182,9 +216,11 @@ export class StorageService {
     userId: string,
     fileId: string,
   ): Promise<Buffer> {
-    const res = await fetch(`${this.storageUrl}/v1/files/${userId}/${fileId}`, {
-      headers: this.authHeaders(),
-    });
+    const res = await this.fetchWithTimeout(
+      `${this.storageUrl}/v1/files/${userId}/${fileId}`,
+      { headers: this.authHeaders() },
+      120_000,
+    );
 
     if (res.ok) {
       return Buffer.from(await res.arrayBuffer());
@@ -211,10 +247,11 @@ export class StorageService {
 
   /** Permanently deletes a file from the Go storage service. */
   async deleteFile(userId: string, fileId: string): Promise<void> {
-    const res = await fetch(`${this.storageUrl}/v1/files/${userId}/${fileId}`, {
-      method: 'DELETE',
-      headers: this.authHeaders(),
-    });
+    const res = await this.fetchWithTimeout(
+      `${this.storageUrl}/v1/files/${userId}/${fileId}`,
+      { method: 'DELETE', headers: this.authHeaders() },
+      30_000,
+    );
     // 404 is fine — file already gone.
     if (!res.ok && res.status !== 404) {
       const body = await res.text().catch(() => '');
@@ -224,9 +261,10 @@ export class StorageService {
 
   /** Moves a file to the owner's .trash directory in the Go storage service. */
   async moveToTrash(userId: string, fileId: string): Promise<void> {
-    const res = await fetch(
+    const res = await this.fetchWithTimeout(
       `${this.storageUrl}/v1/files/${userId}/${fileId}/trash`,
       { method: 'POST', headers: this.authHeaders() },
+      30_000,
     );
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -236,9 +274,10 @@ export class StorageService {
 
   /** Restores a file from the .trash directory in the Go storage service. */
   async restoreFromTrash(userId: string, fileId: string): Promise<void> {
-    const res = await fetch(
+    const res = await this.fetchWithTimeout(
       `${this.storageUrl}/v1/files/${userId}/${fileId}/restore`,
       { method: 'POST', headers: this.authHeaders() },
+      30_000,
     );
     if (res.status === 404) {
       throw new NotFoundException('File not found in trash');
@@ -254,9 +293,11 @@ export class StorageService {
   /** Returns disk-space statistics from the Go storage service. */
   async getStorageStats(): Promise<StorageStats> {
     try {
-      const res = await fetch(`${this.storageUrl}/v1/stats`, {
-        headers: this.authHeaders(),
-      });
+      const res = await this.fetchWithTimeout(
+        `${this.storageUrl}/v1/stats`,
+        { headers: this.authHeaders() },
+        10_000,
+      );
       if (!res.ok) return { totalBytes: 0, usedBytes: 0, freeBytes: 0 };
       const data = (await res.json()) as {
         total_bytes: number;

@@ -30,9 +30,11 @@ func (h *Handler) MoveToTrash(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.Rename(src, dst); err != nil {
-		// File already gone — treat as success so callers are idempotent.
-		exists, _ := h.store.Exists(src)
-		if !exists {
+		// Idempotent: success if src is gone (already trashed) OR dst already
+		// exists (a previous call succeeded but the client retried).
+		srcGone, _ := h.store.Exists(src)
+		dstExists, _ := h.store.Exists(dst)
+		if !srcGone || dstExists {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -70,6 +72,20 @@ func (h *Handler) RestoreFromTrash(w http.ResponseWriter, r *http.Request) {
 	}
 	if !exists {
 		writeError(w, http.StatusNotFound, "file not found in trash")
+		return
+	}
+
+	// Reject restore if a live copy already exists at the destination to avoid
+	// silently overwriting an active file.
+	dstExists, err := h.store.Exists(dst)
+	if err != nil {
+		h.logger.Error("restore: exists check failed", "dst", dst, "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to check destination")
+		return
+	}
+	if dstExists {
+		h.logger.Error("restore: destination already exists", "src", src, "dst", dst)
+		writeError(w, http.StatusConflict, "a file with the same id already exists in the active directory")
 		return
 	}
 
