@@ -1,5 +1,5 @@
 # ── Stage 1: build ───────────────────────────────────────────────────────────
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25.8-alpine AS builder
 
 # TARGETARCH/TARGETOS are set automatically by `docker buildx build --platform`.
 ARG TARGETOS=linux
