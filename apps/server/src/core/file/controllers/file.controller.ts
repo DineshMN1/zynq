@@ -118,8 +118,20 @@ export class FileController {
   }
 
   @Get('shared')
-  getShared(@CurrentUser() user: User) {
-    return this.fileService.getSharedWithMe(user.id);
+  async getShared(
+    @CurrentUser() user: User,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const { items, total } = await this.fileService.getSharedWithMe(
+      user.id,
+      parseInt(page) || 1,
+      parseInt(limit) || 50,
+    );
+    return {
+      items,
+      meta: { total, page: parseInt(page) || 1, limit: parseInt(limit) || 50 },
+    };
   }
 
   @Get('public-shares')
@@ -128,8 +140,20 @@ export class FileController {
   }
 
   @Get('private-shares')
-  getPrivateShares(@CurrentUser() user: User) {
-    return this.fileService.getPrivateSharesByUser(user.id);
+  async getPrivateShares(
+    @CurrentUser() user: User,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const { items, total } = await this.fileService.getPrivateSharesByUser(
+      user.id,
+      parseInt(page) || 1,
+      parseInt(limit) || 50,
+    );
+    return {
+      items,
+      meta: { total, page: parseInt(page) || 1, limit: parseInt(limit) || 50 },
+    };
   }
 
   @Delete('shares/:shareId')
@@ -280,6 +304,12 @@ export class FileController {
     folder: FileEntity,
     ownerId: string,
   ) {
+    const entries = await this.fileService.getFolderEntries(
+      ownerId,
+      folder.id,
+      folder.name,
+    );
+
     const archive = archiver('zip', { zlib: { level: 9 } });
     archive.on('error', () => {
       if (!res.headersSent) {
@@ -296,12 +326,8 @@ export class FileController {
 
     archive.pipe(res);
 
-    const entries = await this.fileService.getFolderEntries(
-      ownerId,
-      folder.id,
-      folder.name,
-    );
-
+    // Decrypt and append one file at a time — only one plaintext buffer
+    // lives in memory at once regardless of folder size.
     for (const entry of entries) {
       const data = await this.fileService.getDecryptedFileContent(entry.file);
       archive.append(data, { name: entry.path });

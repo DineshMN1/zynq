@@ -37,9 +37,7 @@ services:
       - zynqcloud-network
 
   storage-service:
-    build:
-      context: ./services/go-storage
-      dockerfile: Dockerfile
+    image: ${ZYNQ_STORAGE_IMAGE:-dineshmn1/zynq-storage:latest}
     container_name: zynqcloud-storage
     restart: unless-stopped
     environment:

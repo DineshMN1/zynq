@@ -93,6 +93,14 @@ func New(cfg *config.Config, backend store.Backend, logger *slog.Logger) http.Ha
 	mux.Handle("DELETE /v1/uploads/{sessionId}",
 		auth(http.HandlerFunc(h.AbortUpload)))
 
+	// ── Trash / restore ──────────────────────────────────────────────────────
+	// POST /v1/files/{owner}/{fileId}/trash    → move to .trash/
+	// POST /v1/files/{owner}/{fileId}/restore  → move back from .trash/
+	mux.Handle("POST /v1/files/{owner}/{fileId}/trash",
+		auth(http.HandlerFunc(h.MoveToTrash)))
+	mux.Handle("POST /v1/files/{owner}/{fileId}/restore",
+		auth(http.HandlerFunc(h.RestoreFromTrash)))
+
 	// ── Observability ─────────────────────────────────────────────────────────
 	//
 	// GET /health        — liveness probe: fast 200 while the process is alive.
@@ -113,6 +121,8 @@ func New(cfg *config.Config, backend store.Backend, logger *slog.Logger) http.Ha
 		auth(http.HandlerFunc(h.Readiness)))
 	mux.Handle("GET /metrics",
 		auth(h.metrics.metricsHandler(limiter.Active)))
+	mux.Handle("GET /v1/stats",
+		auth(http.HandlerFunc(h.Stats)))
 
 	// Wrap the entire mux with request logging so every route — including
 	// auth failures and 503s from the limiter — gets an access log entry.

@@ -451,9 +451,17 @@ export const fileApi = {
       body: JSON.stringify(data),
     }),
 
-  getShared: () => fetchApi<Share[]>('/files/shared'),
+  getShared: (page = 1, limit = 50) =>
+    fetchApi<{
+      items: Share[];
+      meta: { total: number; page: number; limit: number };
+    }>(`/files/shared?page=${page}&limit=${limit}`),
   getPublicShares: () => fetchApi<Share[]>('/files/public-shares'),
-  getPrivateShares: () => fetchApi<Share[]>('/files/private-shares'),
+  getPrivateShares: (page = 1, limit = 50) =>
+    fetchApi<{
+      items: Share[];
+      meta: { total: number; page: number; limit: number };
+    }>(`/files/private-shares?page=${page}&limit=${limit}`),
   revokeShare: (shareId: string) =>
     fetchApi<{ success: boolean }>(`/files/shares/${shareId}`, {
       method: 'DELETE',

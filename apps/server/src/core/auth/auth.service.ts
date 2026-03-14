@@ -230,13 +230,12 @@ export class AuthService {
       throw new UnauthorizedException('Reset token has expired');
     }
 
-    // Hash new password
+    // Hash new password and update
     const passwordHash = await bcrypt.hash(newPassword, 12);
-
-    // Update user password
-    await this.userService.update(resetRecord.user_id, {
-      password_hash: passwordHash,
-    } as any);
+    await this.userService.updatePasswordHash(
+      resetRecord.user_id,
+      passwordHash,
+    );
 
     // Mark token as used
     resetRecord.used_at = new Date();
@@ -270,19 +269,13 @@ export class AuthService {
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
-    const user = await this.userService.findById(userId);
+    const user = await this.userService.findByIdWithPassword(userId);
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
 
-    // Get user with password hash
-    const userWithPassword = await this.userService.findByEmail(user.email);
-    if (!userWithPassword) {
-      throw new UnauthorizedException('User not found');
-    }
-
     const isPasswordValid = await this.userService.validatePassword(
-      userWithPassword,
+      user,
       currentPassword,
     );
 
@@ -291,8 +284,6 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await this.userService.update(userId, {
-      password_hash: passwordHash,
-    } as any);
+    await this.userService.updatePasswordHash(userId, passwordHash);
   }
 }

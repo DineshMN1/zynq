@@ -48,6 +48,17 @@ export class UserService {
   }
 
   /**
+   * Finds user by ID including password_hash. Use only for password verification.
+   */
+  async findByIdWithPassword(id: string): Promise<User | null> {
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password_hash')
+      .where('user.id = :id', { id })
+      .getOne();
+  }
+
+  /**
    * Finds user by email, including password_hash for authentication.
    * @param email - User's email address
    * @returns User entity with password_hash or null
@@ -93,6 +104,19 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
     return user;
+  }
+
+  /**
+   * Replaces the stored bcrypt hash for a user.
+   * Use this instead of update() to avoid the `as any` cast at call sites.
+   */
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    const result = await this.usersRepository.update(id, {
+      password_hash: passwordHash,
+    });
+    if (!result.affected) {
+      throw new Error(`updatePasswordHash: user ${id} not found`);
+    }
   }
 
   /** Permanently deletes a user and their data. */

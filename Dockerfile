@@ -21,6 +21,7 @@ COPY apps/client/package*.json ./
 RUN npm install --legacy-peer-deps
 COPY apps/client/ .
 ENV NEXT_PUBLIC_API_URL=/api/v1
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # ── Stage 3: Production Image ──────────────────────────────

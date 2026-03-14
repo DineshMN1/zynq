@@ -147,13 +147,24 @@ describe('FileController', () => {
   });
 
   describe('getShared', () => {
-    it('should delegate to fileService.getSharedWithMe', () => {
+    it('should return paginated { items, meta } from fileService.getSharedWithMe', async () => {
       const sharedFiles = [mockFile];
-      fileService.getSharedWithMe.mockResolvedValue(sharedFiles as any);
+      fileService.getSharedWithMe.mockResolvedValue({
+        items: sharedFiles,
+        total: 1,
+      } as any);
 
-      controller.getShared(mockUser as any);
+      const result = await controller.getShared(mockUser as any);
 
-      expect(fileService.getSharedWithMe).toHaveBeenCalledWith('user-123');
+      expect(fileService.getSharedWithMe).toHaveBeenCalledWith(
+        'user-123',
+        1,
+        50,
+      );
+      expect(result).toEqual({
+        items: sharedFiles,
+        meta: { total: 1, page: 1, limit: 50 },
+      });
     });
   });
 
@@ -170,18 +181,24 @@ describe('FileController', () => {
   });
 
   describe('getPrivateShares', () => {
-    it('should delegate to fileService.getPrivateSharesByUser', async () => {
+    it('should return paginated { items, meta } from fileService.getPrivateSharesByUser', async () => {
       const privateShares = [{ id: 'share-1' }];
-      fileService.getPrivateSharesByUser.mockResolvedValue(
-        privateShares as any,
-      );
+      fileService.getPrivateSharesByUser.mockResolvedValue({
+        items: privateShares,
+        total: 1,
+      } as any);
 
       const result = await controller.getPrivateShares(mockUser as any);
 
       expect(fileService.getPrivateSharesByUser).toHaveBeenCalledWith(
         'user-123',
+        1,
+        50,
       );
-      expect(result).toEqual(privateShares);
+      expect(result).toEqual({
+        items: privateShares,
+        meta: { total: 1, page: 1, limit: 50 },
+      });
     });
   });
 
