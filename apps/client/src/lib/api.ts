@@ -9,7 +9,7 @@ function trimTrailingSlash(value: string): string {
 }
 
 export function getApiBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const configured = import.meta.env.VITE_API_URL?.trim();
   const defaultBase = 'http://localhost:4000/api/v1';
 
   if (typeof window === 'undefined') {

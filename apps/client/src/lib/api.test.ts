@@ -53,7 +53,7 @@ describe('API Client', () => {
       expect(options.headers['Authorization']).toBeUndefined();
     });
 
-    it('prepends base URL from NEXT_PUBLIC_API_URL', async () => {
+    it('prepends base URL from VITE_API_URL', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,

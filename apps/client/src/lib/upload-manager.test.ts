@@ -77,8 +77,8 @@ describe('UploadManager', () => {
     vi.clearAllMocks();
     lastCreatedWorker = null;
 
-    // Setup Worker mock
-    globalThis.Worker = vi.fn().mockImplementation(() => {
+    // Setup Worker mock (must use function keyword for Vitest v4 constructor calls)
+    globalThis.Worker = vi.fn().mockImplementation(function () {
       lastCreatedWorker = new MockWorker();
       return lastCreatedWorker;
     }) as unknown as typeof Worker;
@@ -427,15 +427,17 @@ describe('UploadManager', () => {
       mockUploadAddEventListener = vi.fn();
       mockAddEventListener = vi.fn();
 
-      globalThis.XMLHttpRequest = vi.fn().mockImplementation(() => ({
-        open: mockOpen,
-        send: mockSend,
-        setRequestHeader: mockSetRequestHeader,
-        upload: { addEventListener: mockUploadAddEventListener },
-        addEventListener: mockAddEventListener,
-        readyState: 4,
-        status: 200,
-      })) as unknown as typeof XMLHttpRequest;
+      globalThis.XMLHttpRequest = vi.fn().mockImplementation(function () {
+        return {
+          open: mockOpen,
+          send: mockSend,
+          setRequestHeader: mockSetRequestHeader,
+          upload: { addEventListener: mockUploadAddEventListener },
+          addEventListener: mockAddEventListener,
+          readyState: 4,
+          status: 200,
+        };
+      }) as unknown as typeof XMLHttpRequest;
     });
 
     afterEach(() => {

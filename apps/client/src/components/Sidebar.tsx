@@ -1,7 +1,4 @@
-'use client';
-
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Files,
   Share2,
@@ -45,7 +42,7 @@ import { STORAGE_REFRESH_EVENT } from '@/lib/storage-events';
 import { useTheme } from './ThemeProvider';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0';
 
 interface SidebarProps {
   user: User | null;
@@ -54,8 +51,8 @@ interface SidebarProps {
 type UpdateStep = 'idle' | 'pulling' | 'restarting' | 'done' | 'error';
 
 export function Sidebar({ user }: SidebarProps) {
-  const pathname = usePathname();
-  const router = useRouter();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -113,7 +110,7 @@ export function Sidebar({ user }: SidebarProps) {
     } catch {
       /* ignore */
     } finally {
-      router.push('/login');
+      navigate('/login');
     }
   };
 
@@ -200,7 +197,7 @@ export function Sidebar({ user }: SidebarProps) {
 
     const inner = (
       <Link
-        href={href}
+        to={href}
         className={cn(
           'flex items-center gap-3 px-3 rounded-lg transition-colors',
           showLabel ? 'py-2.5' : 'py-2 justify-center',
@@ -253,9 +250,8 @@ export function Sidebar({ user }: SidebarProps) {
         )}
       >
         {collapsed ? (
-          <Link href="/dashboard/files">
+          <Link to="/dashboard/files">
             <div className="h-7 w-7 rounded-md bg-white border border-sidebar-border flex items-center justify-center overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/favicon.ico"
                 alt="logo"
@@ -265,11 +261,10 @@ export function Sidebar({ user }: SidebarProps) {
           </Link>
         ) : (
           <Link
-            href="/dashboard/files"
+            to="/dashboard/files"
             className="flex items-center gap-2.5 min-w-0"
           >
             <div className="h-7 w-7 rounded-md bg-white border border-sidebar-border flex items-center justify-center overflow-hidden shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/favicon.ico"
                 alt="logo"
@@ -393,13 +388,13 @@ export function Sidebar({ user }: SidebarProps) {
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/dashboard/profile" className="cursor-pointer">
+              <Link to="/dashboard/profile" className="cursor-pointer">
                 <UserIcon className="mr-2 h-4 w-4" />
                 Profile
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/dashboard/settings" className="cursor-pointer">
+              <Link to="/dashboard/settings" className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
                 Preferences
               </Link>
@@ -654,9 +649,8 @@ export function Sidebar({ user }: SidebarProps) {
               {sidebarContent}
             </SheetContent>
           </Sheet>
-          <Link href="/dashboard/files" className="flex items-center gap-2">
+          <Link to="/dashboard/files" className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-md bg-white border border-sidebar-border flex items-center justify-center overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/favicon.ico"
                 alt="logo"

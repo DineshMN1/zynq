@@ -1,6 +1,4 @@
-'use client';
-
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -22,12 +20,6 @@ function getInitialTheme(): Theme {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
-
-  useEffect(() => {
-    // Sync with whatever the inline script already applied
-    const isDark = document.documentElement.classList.contains('dark');
-    setThemeState(isDark ? 'dark' : 'light');
-  }, []);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);

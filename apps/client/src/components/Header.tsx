@@ -1,5 +1,3 @@
-'use client';
-
 import { useState } from 'react';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Button } from './ui/button';
@@ -16,14 +14,14 @@ import { authApi, type User } from '@/lib/api';
 import { getInitials } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
   user: User | null;
 }
 
 export function Header({ user }: HeaderProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { logout } = useAuth();
@@ -60,7 +58,10 @@ export function Header({ user }: HeaderProps) {
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-3 h-auto py-2">
+              <Button
+                variant="ghost"
+                className="flex items-center gap-3 h-auto py-2"
+              >
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-medium">{user.name}</p>
                   <p className="text-xs text-muted-foreground">{user.email}</p>
@@ -77,11 +78,13 @@ export function Header({ user }: HeaderProps) {
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium">{user.name}</p>
                   <p className="text-xs text-muted-foreground">{user.email}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {user.role}
+                  </p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
+              <DropdownMenuItem onClick={() => navigate('/dashboard/profile')}>
                 <UserIcon className="mr-2 h-4 w-4" />
                 Profile
               </DropdownMenuItem>

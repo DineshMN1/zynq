@@ -1,5 +1,3 @@
-'use client';
-
 import { useEffect, useState } from 'react';
 import {
   Dialog,
@@ -170,7 +168,6 @@ export function PublicSharePreviewDialog({
               </Button>
             </div>
           ) : previewType === 'image' && blobUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={blobUrl}
               alt={file.name}

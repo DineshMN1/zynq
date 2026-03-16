@@ -3,9 +3,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Accept version as build arg, default to dev
 ARG APP_VERSION=dev
-ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
+ENV VITE_APP_VERSION=$APP_VERSION
 
 COPY package.json package-lock.json* ./
 RUN npm install --legacy-peer-deps
@@ -14,24 +13,13 @@ COPY . .
 RUN npm run build
 
 
-# --- Runtime stage ---
-FROM node:20-alpine
-WORKDIR /app
+# --- Runtime stage: serve with nginx ---
+FROM nginx:alpine
 
-# Accept version as build arg, default to dev
-ARG APP_VERSION=dev
-ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Create non-root user
-RUN addgroup -S app && adduser -S app -G app
+# SPA fallback: all routes serve index.html
+RUN printf 'server {\n  listen 80;\n  root /usr/share/nginx/html;\n  location / {\n    try_files $uri $uri/ /index.html;\n  }\n}\n' > /etc/nginx/conf.d/default.conf
 
-COPY --from=builder /app/.next/standalone ./.next/standalone
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-
-# Switch to non-root user
-RUN chown -R app:app /app
-USER app
-
-EXPOSE 3000
-CMD ["node", ".next/standalone/server.js"]
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

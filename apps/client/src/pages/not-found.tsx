@@ -1,0 +1,25 @@
+import { Link } from 'react-router-dom';
+import { Cloud } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+export default function NotFoundPage() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center text-center p-6 bg-gradient-to-br from-background to-primary/5">
+      <div className="flex flex-col items-center mb-6">
+        <Cloud className="h-12 w-12 text-primary mb-2" />
+        <span className="text-2xl font-bold">ZynqCloud</span>
+      </div>
+
+      <h1 className="text-3xl font-bold mb-2">404 : Page Not Found</h1>
+
+      <p className="text-muted-foreground mb-6 max-w-md">
+        The page you&apos;re looking for doesn&apos;t exist, was moved, or is no
+        longer available.
+      </p>
+
+      <Button asChild size="lg">
+        <Link to="/">Go Home</Link>
+      </Button>
+    </div>
+  );
+}
