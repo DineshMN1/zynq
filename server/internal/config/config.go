@@ -37,6 +37,7 @@ type Config struct {
 	MaxAssemblyWorkers      int
 	SessionTTLHours         int
 	MinFreeBytes            int64
+	StaticDir               string // directory to serve the React SPA from (empty = disabled)
 	NodeEnv                 string
 }
 
@@ -91,6 +92,7 @@ func Load() *Config {
 		MaxAssemblyWorkers:      getEnvInt("MAX_ASSEMBLY_WORKERS", 32),
 		SessionTTLHours:         getEnvInt("SESSION_TTL_HOURS", 24),
 		MinFreeBytes:            getEnvInt64("MIN_FREE_BYTES", 536870912),
+		StaticDir:               getEnv("STATIC_DIR", ""),
 		NodeEnv:                 getEnv("NODE_ENV", "development"),
 	}
 }

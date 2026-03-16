@@ -109,6 +109,10 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	updates := map[string]interface{}{}
 	if req.Role != nil {
 		updates["role"] = *req.Role
+		// Promoting to admin/owner grants unlimited storage unless caller explicitly sets a limit
+		if (*req.Role == "admin" || *req.Role == "owner") && req.StorageLimit == nil {
+			updates["storage_limit"] = int64(0)
+		}
 	}
 	if req.StorageLimit != nil {
 		updates["storage_limit"] = *req.StorageLimit

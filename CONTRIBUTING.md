@@ -15,12 +15,12 @@ pnpm install
 docker compose -f docker-compose.dev.yml up -d
 
 # Backend
-cd apps/server
+cd server
 cp .env.example .env
 pnpm run start:dev
 
 # Frontend (new terminal)
-cd apps/client
+cd web
 pnpm run dev
 ```
 
@@ -30,12 +30,12 @@ Run these checks locally:
 
 ```bash
 # Backend
-cd apps/server
+cd server
 pnpm run lint
 pnpm run test
 
 # Frontend
-cd apps/client
+cd web
 pnpm run lint
 pnpm run build
 ```

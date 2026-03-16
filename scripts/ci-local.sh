@@ -65,15 +65,15 @@ run "backend: build" pnpm --filter @zynqcloud/server build
 
 # ── 3. Frontend lint, test, build ─────────────────────────────────────────────
 
-run "frontend: lint"  pnpm --filter @zynqcloud/client lint
-run "frontend: test"  pnpm --filter @zynqcloud/client test
+run "frontend: lint"  pnpm --filter @zynqcloud/web lint
+run "frontend: test"  pnpm --filter @zynqcloud/web test
 
 VITE_API_URL=http://localhost:4000/api/v1 \
-  run "frontend: build" pnpm --filter @zynqcloud/client build
+  run "frontend: build" pnpm --filter @zynqcloud/web build
 
 # ── 4. Go API: vet, test, govulncheck ────────────────────────────────────────
 
-GO_DIR="$REPO_ROOT/apps/server"
+GO_DIR="$REPO_ROOT/server"
 
 if command -v go >/dev/null 2>&1; then
   run "go: vet"  bash -c "cd '$GO_DIR' && go vet ./..."

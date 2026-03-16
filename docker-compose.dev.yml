@@ -27,14 +27,14 @@ services:
   backend:
     image: golang:1.25-alpine
     container_name: zynqcloud-backend-dev
-    working_dir: /workspace/apps/server
+    working_dir: /workspace/server
     command: sh -c "go run ./cmd/api"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      NODE_ENV: development
       PORT: 4000
+      # STATIC_DIR intentionally not set — Vite dev server handles the frontend
       DATABASE_URL: postgresql://${DATABASE_USER:-zynqcloud}:${DATABASE_PASSWORD:-supersecret_db_pass}@postgres:5432/${DATABASE_NAME:-zynqcloud}
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
@@ -70,7 +70,7 @@ services:
     image: node:20-alpine
     container_name: zynqcloud-frontend-dev
     working_dir: /workspace
-    command: sh -c "corepack enable && pnpm config set store-dir /workspace/.pnpm-store && pnpm install --frozen-lockfile && pnpm --filter @zynqcloud/client dev"
+    command: sh -c "corepack enable && pnpm config set store-dir /workspace/.pnpm-store && pnpm install --frozen-lockfile && pnpm --filter @zynqcloud/web dev"
     depends_on:
       - backend
     environment:

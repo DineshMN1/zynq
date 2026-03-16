@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -217,11 +218,27 @@ func main() {
 		})
 	})
 
+	// Serve React SPA from /app/client/build if the directory exists.
+	// All non-API routes fall back to index.html so client-side routing works.
+	staticDir := cfg.StaticDir
+	if staticDir != "" {
+		fs := http.FileServer(http.Dir(staticDir))
+		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
+			path := filepath.Join(staticDir, req.URL.Path)
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				http.ServeFile(w, req, filepath.Join(staticDir, "index.html"))
+				return
+			}
+			fs.ServeHTTP(w, req)
+		})
+		slog.Info("serving static files", "dir", staticDir)
+	}
+
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      r,
 		ReadTimeout:  60 * time.Second,
-		WriteTimeout: 300 * time.Second,
+		WriteTimeout: 3600 * time.Second, // large file downloads can take time
 		IdleTimeout:  120 * time.Second,
 	}
 

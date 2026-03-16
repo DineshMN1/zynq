@@ -6,12 +6,12 @@
   "license": "MIT",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "type-check": "turbo run type-check",
-    "clean": "turbo run clean && rm -rf node_modules",
+    "build": "pnpm --filter @zynqcloud/web build",
+    "dev": "pnpm --filter @zynqcloud/web dev",
+    "lint": "pnpm --filter @zynqcloud/web lint && pnpm --filter @zynqcloud/server lint",
+    "test": "pnpm --filter @zynqcloud/web test",
+    "type-check": "pnpm --filter @zynqcloud/web type-check",
+    "clean": "pnpm --filter @zynqcloud/web clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "docker:dev": "docker compose -f docker-compose.dev.yml up -d",
     "docker:local": "docker compose -f docker-compose.local.yml up -d --build",
@@ -20,25 +20,10 @@
     "docker:image:set": "bash scripts/docker-image-manager.sh set",
     "docker:upgrade": "bash scripts/docker-image-manager.sh upgrade",
     "docker:downgrade": "bash scripts/docker-image-manager.sh downgrade",
-    "docker:down": "docker compose down && docker compose -f docker-compose.dev.yml down",
-    "prepare": "husky"
+    "docker:down": "docker compose down && docker compose -f docker-compose.dev.yml down"
   },
   "devDependencies": {
-    "husky": "^9.0.0",
-    "lint-staged": "^16.2.7",
-    "prettier": "^3.2.4",
-    "turbo": "^2.3.0"
-  },
-  "lint-staged": {
-    "*.{ts,tsx}": [
-      "prettier --write"
-    ],
-    "*.{js,jsx,mjs,cjs}": [
-      "prettier --write"
-    ],
-    "*.{json,md,yml,yaml}": [
-      "prettier --write"
-    ]
+    "prettier": "^3.2.4"
   },
   "pnpm": {
     "overrides": {
