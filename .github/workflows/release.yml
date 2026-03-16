@@ -71,13 +71,13 @@ jobs:
             ## Fresh Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/Pepperjack-svg/zynq/main/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/DineshMn1/zynq/main/install.sh | bash
             ```
 
             ## Update Existing Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/Pepperjack-svg/zynq/main/update.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/DineshMn1/zynq/main/update.sh | bash
             ```
 
             See [CHANGELOG.md](CHANGELOG.md) for details.
