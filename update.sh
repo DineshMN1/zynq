@@ -99,7 +99,7 @@ fi
 
 # ── Step 3: restart app ───────────────────────────────────────────────────────
 log "Restarting zynqcloud with new image"
-$COMPOSE up -d zynqcloud storage-service
+$COMPOSE up -d zynqcloud
 ok "Services updated"
 
 # ── Step 4: health check ──────────────────────────────────────────────────────

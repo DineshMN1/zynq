@@ -68,13 +68,12 @@ run "backend: build" pnpm --filter @zynqcloud/server build
 run "frontend: lint"  pnpm --filter @zynqcloud/client lint
 run "frontend: test"  pnpm --filter @zynqcloud/client test
 
-NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1 \
-NEXT_TELEMETRY_DISABLED=1 \
+VITE_API_URL=http://localhost:4000/api/v1 \
   run "frontend: build" pnpm --filter @zynqcloud/client build
 
-# ── 4. Go storage: vet, test, govulncheck ────────────────────────────────────
+# ── 4. Go API: vet, test, govulncheck ────────────────────────────────────────
 
-GO_DIR="$REPO_ROOT/services/go-storage"
+GO_DIR="$REPO_ROOT/apps/server"
 
 if command -v go >/dev/null 2>&1; then
   run "go: vet"  bash -c "cd '$GO_DIR' && go vet ./..."
@@ -102,7 +101,6 @@ fi
 
 if [ "$DOCKER_BUILD" = "true" ]; then
   if command -v docker >/dev/null 2>&1; then
-    NEXT_TELEMETRY_DISABLED=1 \
       run "docker: build app image" docker build -t zynqcloud:ci .
     run "docker: build storage image" \
       docker build -t zynq-storage:ci "$GO_DIR"
