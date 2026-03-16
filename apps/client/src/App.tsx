@@ -1,24 +1,24 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 
-import IndexPage from './app/page';
-import LoginPage from './app/(auth)/login/page';
-import RegisterPage from './app/(auth)/register/page';
-import ForgotPasswordPage from './app/(auth)/forgot-password/page';
-import ResetPasswordPage from './app/(auth)/reset-password/page';
-import SetupPage from './app/(auth)/setup/page';
-import PublicSharePage from './app/share/[token]/page';
-import DashboardLayout from './app/dashboard/layout';
-import DashboardFilesPage from './app/dashboard/files/page';
-import DashboardProfilePage from './app/dashboard/profile/page';
-import DashboardTrashPage from './app/dashboard/trash/page';
-import DashboardSharedPage from './app/dashboard/shared/page';
-import DashboardShareTokenPage from './app/dashboard/share/[token]/page';
-import DashboardSettingsPage from './app/dashboard/settings/page';
-import DashboardSettingsUsersPage from './app/dashboard/settings/users/page';
-import DashboardSettingsInvitesPage from './app/dashboard/settings/invites/page';
-import DashboardSettingsNotificationsPage from './app/dashboard/settings/notifications/page';
-import DashboardSettingsMonitoringPage from './app/dashboard/settings/monitoring/page';
-import NotFoundPage from './app/not-found';
+import IndexPage from './pages/home';
+import LoginPage from './pages/auth/login';
+import RegisterPage from './pages/auth/register';
+import ForgotPasswordPage from './pages/auth/forgot-password';
+import ResetPasswordPage from './pages/auth/reset-password';
+import SetupPage from './pages/auth/setup';
+import PublicSharePage from './pages/share/public-share';
+import DashboardLayout from './pages/dashboard/layout';
+import DashboardFilesPage from './pages/dashboard/files';
+import DashboardProfilePage from './pages/dashboard/profile';
+import DashboardTrashPage from './pages/dashboard/trash';
+import DashboardSharedPage from './pages/dashboard/shared';
+import DashboardShareTokenPage from './pages/dashboard/share-detail';
+import DashboardSettingsPage from './pages/dashboard/settings/index';
+import DashboardSettingsUsersPage from './pages/dashboard/settings/users';
+import DashboardSettingsInvitesPage from './pages/dashboard/settings/invites';
+import DashboardSettingsNotificationsPage from './pages/dashboard/settings/notifications';
+import DashboardSettingsMonitoringPage from './pages/dashboard/settings/monitoring';
+import NotFoundPage from './pages/not-found';
 
 export default function App() {
   return (
