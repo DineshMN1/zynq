@@ -342,6 +342,25 @@ export default function FilesPage() {
   };
 
   /**
+   * Registers a retry callback on an upload item. The callback resets the item
+   * to 'checking' and re-runs `fn`, re-registering itself on each failure so
+   * the retry button stays available after multiple attempts.
+   */
+  const registerRetry = (progressId: string, fn: () => Promise<void>) => {
+    const retryFn = async () => {
+      updateUpload(progressId, { status: 'checking', progress: 0 });
+      registerRetry(progressId, fn); // re-register before attempt
+      try {
+        await fn();
+      } catch {
+        updateUpload(progressId, { status: 'error' });
+        registerRetry(progressId, fn); // re-register after failure
+      }
+    };
+    updateUpload(progressId, { retry: retryFn });
+  };
+
+  /**
    * Splits file entries into three buckets:
    *  - rejected:  size > 5 GB (never uploaded)
    *  - atLimit:   size === 5 GB exactly (warn before uploading)
@@ -944,6 +963,9 @@ export default function FilesPage() {
       await uploadManager.processFilesParallel(
         uploadTasks,
         async ({ file, hash, parentId, progressId }) => {
+          registerRetry(progressId, () =>
+            proceedWithUploadForId(file, hash, true, progressId, parentId),
+          );
           try {
             await proceedWithUploadForId(
               file,
@@ -1076,6 +1098,9 @@ export default function FilesPage() {
       }
 
       // No duplicate (or large file bypassed dedup), proceed with upload
+      registerRetry(progressId, () =>
+        proceedWithUploadForId(file, fileHash, false, progressId),
+      );
       await proceedWithUploadForId(file, fileHash, false, progressId);
       await loadFiles();
       emitStorageRefresh();
@@ -1110,6 +1135,9 @@ export default function FilesPage() {
     await uploadManager.processFilesParallel(
       tasks,
       async ({ file, hash, parentId, progressId }) => {
+        registerRetry(progressId, () =>
+          proceedWithUploadForId(file, hash, true, progressId, parentId),
+        );
         try {
           await proceedWithUploadForId(file, hash, true, progressId, parentId);
           uploaded++;

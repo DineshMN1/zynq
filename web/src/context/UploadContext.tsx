@@ -16,12 +16,14 @@ export interface UploadProgress {
   speedBps?: number;
   status:
     | 'queued'
+    | 'checking'
     | 'uploading'
+    | 'paused'
     | 'completed'
     | 'error'
-    | 'checking'
     | 'duplicate';
   cancel?: () => void;
+  retry?: () => void;
 }
 
 interface UploadContextType {
@@ -33,6 +35,8 @@ interface UploadContextType {
   ) => void;
   removeUpload: (id: string) => void;
   cancelUpload: (id: string) => void;
+  pauseUpload: (id: string) => void;
+  resumeUpload: (id: string) => void;
   cancelAll: () => void;
   dismissCompleted: () => void;
 }
@@ -43,6 +47,8 @@ const UploadContext = createContext<UploadContextType>({
   updateUpload: () => {},
   removeUpload: () => {},
   cancelUpload: () => {},
+  pauseUpload: () => {},
+  resumeUpload: () => {},
   cancelAll: () => {},
   dismissCompleted: () => {},
 });
@@ -82,13 +88,36 @@ export const UploadProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
+  const pauseUpload = useCallback((id: string) => {
+    setUploadQueue((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        // Abort the in-flight XHR (no-op if already queued/checking)
+        item.cancel?.();
+        return { ...item, status: 'paused' as const, cancel: undefined };
+      }),
+    );
+  }, []);
+
+  const resumeUpload = useCallback((id: string) => {
+    setUploadQueue((prev) => {
+      const item = prev.find((u) => u.id === id);
+      if (item?.retry) {
+        // Fire and forget — retry callback updates status internally
+        item.retry();
+      }
+      return prev;
+    });
+  }, []);
+
   const cancelAll = useCallback(() => {
     setUploadQueue((prev) => {
       prev.forEach((item) => {
         if (
           item.status === 'uploading' ||
           item.status === 'queued' ||
-          item.status === 'checking'
+          item.status === 'checking' ||
+          item.status === 'paused'
         ) {
           item.cancel?.();
         }
@@ -116,6 +145,8 @@ export const UploadProvider = ({ children }: { children: ReactNode }) => {
         updateUpload,
         removeUpload,
         cancelUpload,
+        pauseUpload,
+        resumeUpload,
         cancelAll,
         dismissCompleted,
       }}
