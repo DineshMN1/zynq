@@ -1,4 +1,10 @@
-# DO NOT USE THESE DEFAULT SECRETS IN PRODUCTION — override via .env file or environment variables
+# Development: runs only PostgreSQL.
+# Go API and Vite dev server run natively on the host for instant hot reload.
+#
+# Usage:
+#   pnpm dev:db    — start postgres (run once)
+#   pnpm dev:api   — start Go API   (terminal 1)
+#   pnpm dev:web   — start Vite     (terminal 2)
 services:
   postgres:
     image: postgres:16-alpine
@@ -11,6 +17,7 @@ services:
       - '5432:5432'
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
+      - ./server/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
         [
@@ -21,79 +28,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
-    networks:
-      - zynqcloud-dev
-
-  backend:
-    image: golang:1.25-alpine
-    container_name: zynqcloud-backend-dev
-    working_dir: /workspace/apps/server
-    command: sh -c "go run ./cmd/api"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      NODE_ENV: development
-      PORT: 4000
-      DATABASE_URL: postgresql://${DATABASE_USER:-zynqcloud}:${DATABASE_PASSWORD:-supersecret_db_pass}@postgres:5432/${DATABASE_NAME:-zynqcloud}
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      DATABASE_USER: ${DATABASE_USER:-zynqcloud}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-supersecret_db_pass}
-      DATABASE_NAME: ${DATABASE_NAME:-zynqcloud}
-      JWT_SECRET: ${JWT_SECRET:-zynqcloud_dev_secret_change_in_production_32chars}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
-      FILE_STORAGE_PATH: /data/files
-      FILE_ENCRYPTION_MASTER_KEY: ${FILE_ENCRYPTION_MASTER_KEY:-YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=}
-      EMAIL_ENABLED: 'false'
-      INVITE_TOKEN_TTL_HOURS: ${INVITE_TOKEN_TTL_HOURS:-72}
-      PUBLIC_REGISTRATION: ${PUBLIC_REGISTRATION:-false}
-      CORS_ORIGIN: http://localhost:3000
-      FRONTEND_URL: http://localhost:3000
-      TRUST_PROXY: 'false'
-      RATE_LIMIT_TTL: ${RATE_LIMIT_TTL:-60000}
-      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
-      MAX_CONCURRENT_UPLOADS: ${MAX_CONCURRENT_UPLOADS:-256}
-      MAX_ASSEMBLY_WORKERS: ${MAX_ASSEMBLY_WORKERS:-32}
-      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
-      MIN_FREE_BYTES: ${MIN_FREE_BYTES:-536870912}
-    ports:
-      - '4000:4000'
-    volumes:
-      - .:/workspace
-      - zynq_dev_files:/data/files
-    networks:
-      - zynqcloud-dev
-
-  frontend:
-    image: node:20-alpine
-    container_name: zynqcloud-frontend-dev
-    working_dir: /workspace
-    command: sh -c "corepack enable && pnpm config set store-dir /workspace/.pnpm-store && pnpm install --frozen-lockfile && pnpm --filter @zynqcloud/client dev"
-    depends_on:
-      - backend
-    environment:
-      VITE_API_URL: http://localhost:4000/api/v1
-    ports:
-      - '3000:5173'
-    volumes:
-      - .:/workspace
-      - frontend_node_modules:/workspace/node_modules
-      - frontend_pnpm_store:/workspace/.pnpm-store
-    networks:
-      - zynqcloud-dev
 
 volumes:
   postgres_dev_data:
     driver: local
-  frontend_node_modules:
-    driver: local
-  frontend_pnpm_store:
-    driver: local
-  zynq_dev_files:
-    driver: local
-
-networks:
-  zynqcloud-dev:
-    driver: bridge

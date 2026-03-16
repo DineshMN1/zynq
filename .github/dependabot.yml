@@ -1,11 +1,7 @@
 version: 2
 
-# Dependabot handles two things:
-#   1. Version updates  — keeps deps up to date (configured below)
-#   2. Security updates — auto-PRs for CVEs (enable in repo Settings > Code security)
-
 updates:
-  # ── GitHub Actions ──
+  # ── GitHub Actions ──────────────────────────────────────────
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
@@ -15,54 +11,38 @@ updates:
       actions:
         patterns: ['*']
 
-  # ── npm (pnpm workspace — all packages share root lockfile) ──
+  # ── npm (web frontend) ───────────────────────────────────────
   - package-ecosystem: 'npm'
-    directory: '/'
+    directory: '/web'
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
     labels: ['dependencies']
-    # Block incompatible major bumps
-    ignore:
-      # NestJS 11 — stay on 10.x until intentional migration
-      - dependency-name: '@nestjs/*'
-        update-types: ['version-update:semver-major']
-      # Node/Docker — stay on Node 20
-      - dependency-name: 'node'
-        update-types: ['version-update:semver-major']
-      # uuid — stay on 9.x (13.x has breaking API)
-      - dependency-name: 'uuid'
-        update-types: ['version-update:semver-major']
-      # vitest — stay on 2.x (4.x needs config changes)
-      - dependency-name: 'vitest'
-        update-types: ['version-update:semver-major']
-      - dependency-name: '@vitest/*'
-        update-types: ['version-update:semver-major']
     groups:
-      # Minor + patch version bumps → single PR
       minor-and-patch:
         applies-to: version-updates
         update-types: ['minor', 'patch']
-      # Security fixes → single grouped PR
       security-all:
         applies-to: security-updates
         patterns: ['*']
 
-  # ── Docker base images (pin to Node 20) ──
-  - package-ecosystem: 'docker'
-    directory: '/apps/server'
+  # ── Go (server) ─────────────────────────────────────────────
+  - package-ecosystem: 'gomod'
+    directory: '/server'
     schedule:
-      interval: monthly
-    labels: ['dependencies', 'docker']
-    ignore:
-      - dependency-name: 'node'
-        update-types: ['version-update:semver-major']
+      interval: weekly
+    labels: ['dependencies']
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ['minor', 'patch']
+      security-all:
+        applies-to: security-updates
+        patterns: ['*']
 
+  # ── Docker base images ───────────────────────────────────────
   - package-ecosystem: 'docker'
-    directory: '/apps/client'
+    directory: '/'
     schedule:
       interval: monthly
     labels: ['dependencies', 'docker']
-    ignore:
-      - dependency-name: 'node'
-        update-types: ['version-update:semver-major']

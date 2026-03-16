@@ -1,9 +1,25 @@
 node_modules
 **/node_modules
 .git
-.next
-dist
-*.log
+.pnpm-store
+.turbo
+
+# Frontend build output (rebuilt inside Docker)
+web/dist
+
+# Go build artifacts
+server/bin
+
+# Local data
+data
+
+# Env files
 .env
 .env.*
 !.env.example
+
+# Logs
+*.log
+
+# Dev/editor artifacts
+.DS_Store

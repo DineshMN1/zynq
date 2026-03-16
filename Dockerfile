@@ -1,52 +1,47 @@
-# ── Stage 1: Build Go Backend ────────────────────────────────
+# ── Stage 1: Build Go backend ────────────────────────────────
 FROM golang:1.25-alpine AS backend-builder
 WORKDIR /build
-COPY apps/server/go.mod apps/server/go.sum ./
+COPY server/go.mod server/go.sum ./
 RUN go mod download
-COPY apps/server/ .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/api ./cmd/api
+COPY server/ .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/api ./cmd/api
 
-# ── Stage 2: Build Frontend ──────────────────────────────────
+# ── Stage 2: Build React frontend ────────────────────────────
 FROM node:20-alpine AS frontend-builder
 WORKDIR /build
 ARG APP_VERSION=dev
 ENV VITE_APP_VERSION=$APP_VERSION
 ENV VITE_API_URL=/api/v1
-COPY apps/client/package*.json ./
-RUN npm install --legacy-peer-deps
-COPY apps/client/ .
-RUN npm run build
+RUN corepack enable
+# Copy workspace config + lockfile first for layer caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY web/package.json ./web/
+RUN pnpm install --frozen-lockfile
+COPY web/ ./web/
+RUN pnpm --filter @zynqcloud/web build
 
-# ── Stage 3: Production Image ────────────────────────────────
+# ── Stage 3: Production image ─────────────────────────────────
+# Single Go binary serves both the API and the React SPA.
+# No nginx, no supervisord — one process, one port.
 FROM alpine:3.19
 
-RUN apk add --no-cache nginx supervisor curl wget ca-certificates
+RUN apk add --no-cache ca-certificates curl wget && \
+    addgroup -S app && adduser -S app -G app
 
-# Create app user
-RUN addgroup -S app && adduser -S app -G app
-
-# ── Backend setup ────────────────────────────────────────────
+# Go binary
 COPY --from=backend-builder /bin/api /app/api
+RUN chmod +x /app/api
 
-# ── Frontend setup (Vite static build) ──────────────────────
-COPY --from=frontend-builder /build/dist /app/client/build
+# React SPA (served by Go's http.FileServer)
+COPY --from=frontend-builder /build/web/dist /app/static
 
-# ── Config files ─────────────────────────────────────────────
-COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/supervisord.conf /etc/supervisord.conf
+# File storage directory
+RUN mkdir -p /data/files && chown -R app:app /app /data/files
 
-# Create required directories
-RUN mkdir -p /var/log/nginx /tmp/nginx_client_body /tmp/nginx_proxy \
-    /tmp/nginx_fastcgi /tmp/nginx_uwsgi /tmp/nginx_scgi \
-    /data/files /var/log \
-    && chmod +x /app/api \
-    && chown -R app:app /app /data/files /var/log/nginx \
-        /tmp/nginx_client_body /tmp/nginx_proxy /tmp/nginx_fastcgi \
-        /tmp/nginx_uwsgi /tmp/nginx_scgi
-
+USER app
 EXPOSE 80
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -f http://localhost/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost/api/v1/health || exit 1
 
-CMD ["supervisord", "-c", "/etc/supervisord.conf"]
+CMD ["/app/api"]

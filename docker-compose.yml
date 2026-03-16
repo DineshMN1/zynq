@@ -28,8 +28,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      NODE_ENV: production
-      PORT: 4000
+      PORT: 80
+      STATIC_DIR: /app/static
       DATABASE_URL: postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST:-postgres}:${DATABASE_PORT:-5432}/${DATABASE_NAME}
       DATABASE_HOST: ${DATABASE_HOST:-postgres}
       DATABASE_PORT: ${DATABASE_PORT:-5432}
