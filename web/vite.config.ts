@@ -20,6 +20,14 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    // Proxy /api to the Go backend in dev so the browser uses relative URLs.
+    // No CORS config needed — same origin from the browser's perspective.
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: 'dist',
