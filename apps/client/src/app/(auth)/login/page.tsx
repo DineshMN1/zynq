@@ -1,8 +1,6 @@
-'use client';
-
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { authApi, ApiError } from '@/lib/api';
 
 export default function LoginPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { login, loading: authLoading, needsSetup } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -47,7 +45,7 @@ export default function LoginPage() {
     try {
       const data = await authApi.login(formData);
       login(data);
-      router.push('/dashboard/files');
+      navigate('/dashboard/files');
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.statusCode === 401) {
@@ -145,7 +143,7 @@ export default function LoginPage() {
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
                 <Link
-                  href="/forgot-password"
+                  to="/forgot-password"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Forgot password?

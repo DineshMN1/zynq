@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -221,7 +219,6 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
               </Button>
             </div>
           ) : previewType === 'image' && blobUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={blobUrl}
               alt={file.name}

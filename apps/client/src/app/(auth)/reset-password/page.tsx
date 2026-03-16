@@ -1,8 +1,6 @@
-"use client";
-
-import { Suspense } from "react";
-import ResetPasswordForm from "./ResetPasswordForm";
-import { Loader2 } from "lucide-react";
+import { Suspense } from 'react';
+import ResetPasswordForm from './ResetPasswordForm';
+import { Loader2 } from 'lucide-react';
 
 export default function ResetPasswordPage() {
   return (

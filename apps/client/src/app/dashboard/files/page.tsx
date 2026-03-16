@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,7 +69,7 @@ import { DropZoneOverlay } from '@/features/file/components/drop-zone-overlay';
 import { uploadManager } from '@/lib/upload-manager';
 import { formatBytes } from '@/lib/auth';
 import { emitStorageRefresh } from '@/lib/storage-events';
-import { useUploadContext, type UploadProgress } from '@/context/UploadContext';
+import { useUploadContext } from '@/context/UploadContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -216,8 +214,7 @@ export default function FilesPage() {
   const [publicLinkFileName, setPublicLinkFileName] = useState<string | null>(
     null,
   );
-  const { uploadQueue, addUpload, updateUpload, removeUpload } =
-    useUploadContext();
+  const { addUpload, updateUpload, removeUpload } = useUploadContext();
   const uploadSpeedRef = useRef<
     Map<string, { lastTs: number; lastLoaded: number; smoothedBps: number }>
   >(new Map());

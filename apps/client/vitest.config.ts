@@ -12,7 +12,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/setupTests.ts'],
     include: ['src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
-    exclude: ['node_modules', 'dist', '.next'],
+    exclude: ['node_modules', 'dist'],
     css: {
       modules: {
         classNameStrategy: 'non-scoped',

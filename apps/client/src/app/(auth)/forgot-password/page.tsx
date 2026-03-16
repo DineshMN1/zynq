@@ -1,10 +1,8 @@
-"use client";
-
-import { useState } from "react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Card,
   CardContent,
@@ -12,21 +10,21 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Cloud, Loader2, ArrowLeft, Mail, CheckCircle } from "lucide-react";
-import { authApi, ApiError } from "@/lib/api";
-import { motion } from "framer-motion";
+} from '@/components/ui/card';
+import { Cloud, Loader2, ArrowLeft, Mail, CheckCircle } from 'lucide-react';
+import { authApi, ApiError } from '@/lib/api';
+import { motion } from 'framer-motion';
 
 export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
+    setError('');
 
     try {
       await authApi.forgotPassword({ email });
@@ -34,14 +32,19 @@ export default function ForgotPasswordPage() {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.statusCode === 429) {
-          setError("Too many requests. Please wait a moment and try again.");
+          setError('Too many requests. Please wait a moment and try again.');
         } else {
-          setError(err.message || "Something went wrong. Please try again.");
+          setError(err.message || 'Something went wrong. Please try again.');
         }
-      } else if (err instanceof TypeError && err.message === "Failed to fetch") {
-        setError("Unable to connect to the server. Please check your connection.");
+      } else if (
+        err instanceof TypeError &&
+        err.message === 'Failed to fetch'
+      ) {
+        setError(
+          'Unable to connect to the server. Please check your connection.',
+        );
       } else {
-        setError("Something went wrong. Please try again.");
+        setError('Something went wrong. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -57,7 +60,7 @@ export default function ForgotPasswordPage() {
         className="w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-4">
+          <Link to="/" className="inline-flex items-center gap-2 mb-4">
             <Cloud className="h-10 w-10 text-primary" />
             <span className="text-3xl font-bold">ZynqCloud</span>
           </Link>
@@ -67,7 +70,8 @@ export default function ForgotPasswordPage() {
           <CardHeader>
             <CardTitle className="text-2xl">Reset Password</CardTitle>
             <CardDescription>
-              Enter your email address and we&apos;ll send you a link to reset your password.
+              Enter your email address and we&apos;ll send you a link to reset
+              your password.
             </CardDescription>
           </CardHeader>
 
@@ -79,11 +83,12 @@ export default function ForgotPasswordPage() {
                 </div>
                 <h3 className="text-lg font-semibold mb-2">Check your email</h3>
                 <p className="text-muted-foreground text-sm">
-                  If an account with that email exists, you will receive a password reset link shortly.
+                  If an account with that email exists, you will receive a
+                  password reset link shortly.
                 </p>
               </div>
               <div className="flex justify-center pt-2">
-                <Link href="/login">
+                <Link to="/login">
                   <Button variant="outline" className="gap-2">
                     <ArrowLeft className="h-4 w-4" />
                     Back to Login
@@ -124,7 +129,7 @@ export default function ForgotPasswordPage() {
                   Send Reset Link
                 </Button>
 
-                <Link href="/login" className="w-full">
+                <Link to="/login" className="w-full">
                   <Button variant="ghost" className="w-full gap-2">
                     <ArrowLeft className="h-4 w-4" />
                     Back to Login

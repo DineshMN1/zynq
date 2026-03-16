@@ -1,5 +1,3 @@
-'use client';
-
 import {
   createContext,
   useContext,
@@ -8,7 +6,7 @@ import {
   useCallback,
   ReactNode,
 } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { authApi, type User } from '@/lib/api';
 
 interface AuthContextType {
@@ -33,13 +31,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const logout = useCallback(() => {
     setUser(null);
-    router.push('/login');
-  }, [router]);
+    navigate('/login');
+  }, [navigate]);
 
   const refreshUser = useCallback(async () => {
     try {
@@ -94,9 +92,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Redirect to /setup when needed
   useEffect(() => {
     if (needsSetup && pathname !== '/setup') {
-      router.replace('/setup');
+      navigate('/setup', { replace: true });
     }
-  }, [needsSetup, pathname, router]);
+  }, [needsSetup, pathname, navigate]);
 
   const login = (user: User) => {
     setUser(user);

@@ -1,20 +1,12 @@
-'use client';
-
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 export type Theme = 'light' | 'dark';
 
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>('dark');
-
-  useEffect(() => {
-    // Load theme from localStorage on mount
+  const [theme, setThemeState] = useState<Theme>(() => {
     const stored = localStorage.getItem('theme') as Theme | null;
-    if (stored) {
-      setThemeState(stored);
-      document.documentElement.classList.toggle('dark', stored === 'dark');
-    }
-  }, []);
+    return stored === 'light' || stored === 'dark' ? stored : 'dark';
+  });
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);

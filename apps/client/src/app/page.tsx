@@ -1,25 +1,23 @@
-'use client';
-
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export default function Home() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { user, loading, needsSetup } = useAuth();
 
   useEffect(() => {
     if (loading) return;
 
     if (needsSetup) {
-      router.replace('/setup');
+      navigate('/setup', { replace: true });
     } else if (user) {
-      router.replace('/dashboard/files');
+      navigate('/dashboard/files', { replace: true });
     } else {
-      router.replace('/login');
+      navigate('/login', { replace: true });
     }
-  }, [loading, user, needsSetup, router]);
+  }, [loading, user, needsSetup, navigate]);
 
   return (
     <div className="h-screen flex items-center justify-center bg-background">

@@ -1,27 +1,17 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import React from 'react';
 
-// Mock next/navigation
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    back: vi.fn(),
-    forward: vi.fn(),
-    refresh: vi.fn(),
-    prefetch: vi.fn(),
-  }),
-  usePathname: () => '/',
-  useSearchParams: () => new URLSearchParams(),
-}));
-
-// Mock next/image
-vi.mock('next/image', () => ({
-  default: ({ src, alt, ...rest }: { src: string; alt: string; [key: string]: unknown }) => {
-    return React.createElement('img', { src, alt, ...rest });
-  },
-}));
+// Mock react-router-dom navigation hooks
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+    useLocation: () => ({ pathname: '/' }),
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+    useParams: () => ({}),
+  };
+});
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {

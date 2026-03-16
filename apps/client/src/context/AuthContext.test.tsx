@@ -1,22 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React, { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
 
-// Mock next/navigation with controllable fns
-const mockPush = vi.fn();
-const mockReplace = vi.fn();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-    replace: mockReplace,
-    back: vi.fn(),
-    forward: vi.fn(),
-    refresh: vi.fn(),
-    prefetch: vi.fn(),
-  }),
-  usePathname: () => '/',
-}));
+// Controllable navigate mock
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useLocation: () => ({ pathname: '/' }),
+  };
+});
 
 // Mock the api module
 const mockGetSetupStatus = vi.fn();
@@ -29,12 +26,17 @@ vi.mock('@/lib/api', () => ({
 }));
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <AuthProvider>{children}</AuthProvider>;
+  return (
+    <MemoryRouter>
+      <AuthProvider>{children}</AuthProvider>
+    </MemoryRouter>
+  );
 }
 
 describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockNavigate.mockReset();
     // Default: setup not needed, no token
     mockGetSetupStatus.mockResolvedValue({ needsSetup: false });
     mockMe.mockResolvedValue({
@@ -129,7 +131,7 @@ describe('AuthContext', () => {
     });
 
     expect(result.current.user).toBeNull();
-    expect(mockPush).toHaveBeenCalledWith('/login');
+    expect(mockNavigate).toHaveBeenCalledWith('/login');
   });
 
   it('provides user data after successful auth check', async () => {
@@ -186,7 +188,7 @@ describe('AuthContext', () => {
     renderHook(() => useAuth(), { wrapper });
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith('/setup');
+      expect(mockNavigate).toHaveBeenCalledWith('/setup', { replace: true });
     });
   });
 

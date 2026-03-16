@@ -1,7 +1,5 @@
-'use client';
-
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   CardContent,
@@ -38,7 +36,7 @@ import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
 
 export default function NotificationsPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
 
@@ -68,11 +66,11 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (user && !isAdmin) {
-      router.push('/dashboard/settings');
+      navigate('/dashboard/settings');
     } else if (user) {
       loadSettings();
     }
-  }, [user, isAdmin, router]);
+  }, [user, isAdmin, navigate]);
 
   const loadSettings = async () => {
     try {

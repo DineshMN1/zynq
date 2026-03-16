@@ -1,8 +1,6 @@
-"use client";
-
-import { Button } from "@/components/ui/button";
-import { ChevronRight, Home, ArrowLeft, RefreshCw } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Button } from '@/components/ui/button';
+import { ChevronRight, Home, ArrowLeft, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface BreadcrumbItem {
   id: string | null;
@@ -46,11 +44,11 @@ export function FileBreadcrumb({
               <button
                 onClick={() => onBreadcrumbClick(i)}
                 className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors",
-                  "hover:bg-muted",
+                  'flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors',
+                  'hover:bg-muted',
                   i === pathStack.length - 1
-                    ? "text-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? 'text-foreground font-medium'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {i === 0 ? (
@@ -59,7 +57,10 @@ export function FileBreadcrumb({
                     <span className="hidden sm:inline">Home</span>
                   </>
                 ) : (
-                  <span className="truncate max-w-[120px] sm:max-w-[180px]" title={folder.name}>
+                  <span
+                    className="truncate max-w-[120px] sm:max-w-[180px]"
+                    title={folder.name}
+                  >
                     {folder.name}
                   </span>
                 )}
@@ -81,7 +82,9 @@ export function FileBreadcrumb({
           onClick={onRefresh}
           disabled={isRefreshing}
         >
-          <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+          <RefreshCw
+            className={cn('h-4 w-4', isRefreshing && 'animate-spin')}
+          />
         </Button>
       )}
     </div>

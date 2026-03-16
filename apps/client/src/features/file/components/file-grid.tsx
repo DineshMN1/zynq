@@ -1,12 +1,10 @@
-'use client';
-
 import { Button } from '@/components/ui/button';
 import { Upload, Loader2, LayoutGrid, List } from 'lucide-react';
 import { type FileMetadata } from '@/lib/api';
 import { FileCard } from './file-card';
 import { FileListRow } from './file-list-row';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 interface FileGridProps {
@@ -38,12 +36,10 @@ export function FileGrid({
   onToggleSelect,
   onCardClick,
 }: FileGridProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-
-  useEffect(() => {
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('zynq-view-mode') as ViewMode;
-    if (saved === 'grid' || saved === 'list') setViewMode(saved);
-  }, []);
+    return saved === 'grid' || saved === 'list' ? saved : 'list';
+  });
 
   const handleViewChange = (mode: ViewMode) => {
     setViewMode(mode);

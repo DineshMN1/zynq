@@ -1,7 +1,5 @@
-'use client';
-
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,7 +38,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function SetupPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { login, loading: authLoading, needsSetup, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -69,9 +67,9 @@ export default function SetupPage() {
   // If setup is already complete, send authenticated users into the app.
   useEffect(() => {
     if (needsSetup === false) {
-      router.replace(user ? '/dashboard/files' : '/login');
+      navigate(user ? '/dashboard/files' : '/login', { replace: true });
     }
-  }, [needsSetup, router, user]);
+  }, [needsSetup, navigate, user]);
 
   // If auth is still loading, show spinner
   if (authLoading) {
@@ -136,7 +134,7 @@ export default function SetupPage() {
         description: 'Your administrator account has been created.',
       });
 
-      await router.push('/dashboard/files');
+      navigate('/dashboard/files');
     } catch (err: unknown) {
       console.error('Registration failed:', err);
       const errorMessage = getErrorMessage(

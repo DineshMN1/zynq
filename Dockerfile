@@ -16,12 +16,11 @@ RUN npm run build
 FROM node:20-alpine AS frontend-builder
 WORKDIR /build
 ARG APP_VERSION=dev
-ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
+ENV VITE_APP_VERSION=$APP_VERSION
+ENV VITE_API_URL=/api/v1
 COPY apps/client/package*.json ./
 RUN npm install --legacy-peer-deps
 COPY apps/client/ .
-ENV NEXT_PUBLIC_API_URL=/api/v1
-ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # ── Stage 3: Production Image ──────────────────────────────
@@ -39,11 +38,9 @@ COPY apps/server/package*.json ./
 RUN npm install --omit=dev
 COPY --from=backend-builder /build/dist ./dist
 
-# ── Frontend setup (standalone mode) ────────────────────────
+# ── Frontend setup (Vite static build) ──────────────────────
 WORKDIR /app/client
-COPY --from=frontend-builder /build/.next/standalone ./build/
-COPY --from=frontend-builder /build/.next/static ./build/build/.next/static
-COPY --from=frontend-builder /build/public ./build/build/public
+COPY --from=frontend-builder /build/dist ./build
 
 # ── Config files ────────────────────────────────────────────
 COPY docker/nginx.conf /etc/nginx/nginx.conf

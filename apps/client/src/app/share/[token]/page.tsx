@@ -1,6 +1,4 @@
-'use client';
-
-import { useParams } from 'next/navigation';
+import { useParams } from 'react-router-dom';
 import { PublicShareView } from '@/features/share/components/public-share-view';
 
 export default function PublicSharePage() {

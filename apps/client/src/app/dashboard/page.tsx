@@ -1,14 +1,12 @@
-'use client';
-
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 
 export default function DashboardPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    router.push('/dashboard/files');
-  }, [router]);
+    navigate('/dashboard/files');
+  }, [navigate]);
 
   return null;
 }

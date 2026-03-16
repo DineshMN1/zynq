@@ -1,8 +1,5 @@
-'use client';
-
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,8 +37,8 @@ function getErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function RegisterForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -136,7 +133,7 @@ export default function RegisterForm() {
         inviteToken: inviteToken || undefined,
       });
       login(user);
-      router.push('/dashboard');
+      navigate('/dashboard');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Registration failed'));
     } finally {
@@ -182,7 +179,7 @@ export default function RegisterForm() {
             </div>
           </div>
           <Button asChild className="w-full h-10">
-            <Link href="/login">Go to Sign in</Link>
+            <Link to="/login">Go to Sign in</Link>
           </Button>
         </div>
       </div>
@@ -400,7 +397,7 @@ export default function RegisterForm() {
 
             <p className="text-sm text-center text-muted-foreground">
               Already have an account?{' '}
-              <Link href="/login" className="text-primary hover:underline">
+              <Link to="/login" className="text-primary hover:underline">
                 Sign in
               </Link>
             </p>
