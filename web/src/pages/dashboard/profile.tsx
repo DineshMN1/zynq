@@ -173,7 +173,7 @@ export default function ProfilePage() {
     setPasswordLoading(true);
     try {
       await authApi.changePassword({
-        currentPassword: passwordForm.currentPassword,
+        oldPassword: passwordForm.currentPassword,
         newPassword: passwordForm.newPassword,
       });
 

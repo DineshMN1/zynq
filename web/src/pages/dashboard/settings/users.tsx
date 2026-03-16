@@ -259,7 +259,7 @@ export default function UsersPage() {
   const loadData = useCallback(async () => {
     try {
       const [usersRes, usersStorageRes, overviewRes] = await Promise.all([
-        adminApi.listUsers({ page, limit: 50 }),
+        adminApi.getUsers({ page, limit: 50 }),
         storageApi.getAllUsersStorage(),
         storageApi.getOverview(),
       ]);

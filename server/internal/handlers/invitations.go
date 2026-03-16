@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/smtp"
 	"strings"
 	"time"
 
@@ -213,15 +212,21 @@ func (h *InvitationsHandler) Accept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	storageLimit := int64(10 * 1024 * 1024 * 1024) // 10 GiB default
+	if invitation.Role == "admin" || invitation.Role == "owner" {
+		storageLimit = 0 // unlimited
+	}
+
 	user := &models.User{
 		ID:           uuid.New(),
 		Name:         req.Name,
 		Email:        req.Email,
 		PasswordHash: string(hash),
 		Role:         invitation.Role,
+		StorageLimit: storageLimit,
 	}
 
-	if err := h.db.Create(user).Error; err != nil {
+	if err := h.db.Select("id", "name", "email", "password_hash", "role", "storage_limit").Create(user).Error; err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create user")
 		return
 	}
@@ -234,15 +239,5 @@ func (h *InvitationsHandler) Accept(w http.ResponseWriter, r *http.Request) {
 func (h *InvitationsHandler) sendInvitationEmail(to, inviteURL string) {
 	subject := "You've been invited to ZynqCloud"
 	body := fmt.Sprintf("You have been invited to join ZynqCloud.\n\nClick the link below to create your account:\n%s\n\nThis invitation expires in %d hours.", inviteURL, h.cfg.InviteTokenTTLHours)
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s", h.cfg.SMTPFrom, to, subject, body)
-
-	addr := fmt.Sprintf("%s:%d", h.cfg.SMTPHost, h.cfg.SMTPPort)
-	var auth smtp.Auth
-	if h.cfg.SMTPUser != "" {
-		auth = smtp.PlainAuth("", h.cfg.SMTPUser, h.cfg.SMTPPass, h.cfg.SMTPHost)
-	}
-
-	if err := smtp.SendMail(addr, auth, h.cfg.SMTPFrom, []string{to}, []byte(msg)); err != nil {
-		slog.Error("failed to send invitation email", "error", err, "to", to)
-	}
+	sendEmail(h.cfg, to, subject, body)
 }

@@ -349,7 +349,7 @@ export const authApi = {
       body: JSON.stringify(data),
     }),
 
-  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+  changePassword: (data: { oldPassword: string; newPassword: string }) =>
     fetchApi<{ message: string }>('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -587,9 +587,6 @@ export const adminApi = {
     if (params?.limit) query.append('limit', params.limit.toString());
     return fetchApi<PaginatedResponse<User>>(`/admin/users?${query}`);
   },
-
-  listUsers: (params: { page?: number; limit?: number }) =>
-    adminApi.getUsers(params),
 
   updateUser: (id: string, data: { role?: string; storage_limit?: number }) =>
     fetchApi<User>(`/admin/users/${id}`, {

@@ -43,14 +43,21 @@ func (h *StorageStatsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		h.db.Model(&user).UpdateColumn("storage_used", actualUsed)
 	}
 
-	var userUsedPercentage float64
-	if user.StorageLimit > 0 {
-		userUsedPercentage = float64(actualUsed) / float64(user.StorageLimit) * 100
+	// Admin/owner always have unlimited storage — fix stale DB records on the fly
+	if (user.Role == "admin" || user.Role == "owner") && user.StorageLimit != 0 {
+		h.db.Model(&user).UpdateColumn("storage_limit", 0)
+		user.StorageLimit = 0
 	}
 
-	userFree := user.StorageLimit - actualUsed
-	if userFree < 0 {
-		userFree = 0
+	isUnlimited := user.StorageLimit == 0
+	var userUsedPercentage float64
+	var userFree int64
+	if !isUnlimited {
+		userUsedPercentage = float64(actualUsed) / float64(user.StorageLimit) * 100
+		userFree = user.StorageLimit - actualUsed
+		if userFree < 0 {
+			userFree = 0
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -65,7 +72,7 @@ func (h *StorageStatsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 			"quotaBytes":     user.StorageLimit,
 			"freeBytes":      userFree,
 			"usedPercentage": userUsedPercentage,
-			"isUnlimited":    user.StorageLimit == 0,
+			"isUnlimited":    isUnlimited,
 		},
 	})
 }
@@ -75,12 +82,26 @@ func (h *StorageStatsHandler) GetAllUsersStorage(w http.ResponseWriter, r *http.
 	var users []models.User
 	h.db.Find(&users)
 
+	// Single query: sum file sizes per owner
+	type usageRow struct {
+		OwnerID string
+		Used    int64
+	}
+	var rows []usageRow
+	h.db.Model(&models.File{}).
+		Where("deleted_at IS NULL AND is_folder = false").
+		Select("owner_id, COALESCE(SUM(size), 0) AS used").
+		Group("owner_id").
+		Scan(&rows)
+
+	usageByOwner := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		usageByOwner[row.OwnerID] = row.Used
+	}
+
 	result := make([]map[string]interface{}, 0, len(users))
 	for _, u := range users {
-		var actualUsed int64
-		h.db.Model(&models.File{}).
-			Where("owner_id = ? AND deleted_at IS NULL AND is_folder = false", u.ID).
-			Select("COALESCE(SUM(size), 0)").Scan(&actualUsed)
+		actualUsed := usageByOwner[u.ID.String()]
 		if actualUsed != u.StorageUsed {
 			h.db.Model(&u).UpdateColumn("storage_used", actualUsed)
 		}
@@ -126,13 +147,20 @@ func (h *StorageStatsHandler) GetUserStorage(w http.ResponseWriter, r *http.Requ
 		h.db.Model(&user).UpdateColumn("storage_used", actualUsed)
 	}
 
-	var usedPct float64
-	if user.StorageLimit > 0 {
-		usedPct = float64(actualUsed) / float64(user.StorageLimit) * 100
+	if (user.Role == "admin" || user.Role == "owner") && user.StorageLimit != 0 {
+		h.db.Model(&user).UpdateColumn("storage_limit", 0)
+		user.StorageLimit = 0
 	}
-	freeBytes := user.StorageLimit - actualUsed
-	if freeBytes < 0 {
-		freeBytes = 0
+
+	isUnlimited := user.StorageLimit == 0
+	var usedPct float64
+	var freeBytes int64
+	if !isUnlimited {
+		usedPct = float64(actualUsed) / float64(user.StorageLimit) * 100
+		freeBytes = user.StorageLimit - actualUsed
+		if freeBytes < 0 {
+			freeBytes = 0
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -145,7 +173,7 @@ func (h *StorageStatsHandler) GetUserStorage(w http.ResponseWriter, r *http.Requ
 		"freeBytes":       freeBytes,
 		"actualUsedBytes": actualUsed,
 		"usedPercentage":  usedPct,
-		"isUnlimited":     user.StorageLimit == 0,
+		"isUnlimited":     isUnlimited,
 	})
 }
 

@@ -981,5 +981,14 @@ func (h *FilesHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	share.HasPassword = share.Password != nil
-	writeJSON(w, http.StatusCreated, share)
+
+	type shareResponse struct {
+		*models.Share
+		PublicLink string `json:"publicLink,omitempty"`
+	}
+	resp := shareResponse{Share: share}
+	if req.IsPublic && share.ShareToken != nil {
+		resp.PublicLink = h.cfg.FrontendURL + "/share/" + *share.ShareToken
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }

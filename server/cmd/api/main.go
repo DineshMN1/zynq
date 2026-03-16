@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -32,6 +33,15 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})))
 
 	slog.Info("starting ZynqCloud API", "port", cfg.Port, "env", cfg.NodeEnv)
+
+	// Fail fast on missing critical config
+	if cfg.JWTSecret == "" {
+		slog.Error("JWT_SECRET is not set — refusing to start with an empty signing key")
+		os.Exit(1)
+	}
+	if len(cfg.JWTSecret) < 32 {
+		slog.Warn("JWT_SECRET is shorter than 32 characters — consider using a longer secret")
+	}
 
 	// Connect to database
 	db, err := database.Connect(cfg)
@@ -93,8 +103,7 @@ func main() {
 	shareH := handlers.NewShareHandler(db, cfg, cryptoSvc, localBackend)
 
 	authMiddleware := mw.Auth(cfg.JWTSecret)
-	adminMiddleware := mw.RequireRole("admin")
-	adminOrOwnerMiddleware := mw.RequireRole("admin", "owner")
+	adminMiddleware := mw.RequireRole("admin", "owner")
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// Health
@@ -210,7 +219,7 @@ func main() {
 
 			// Invitations (admin/owner only)
 			r.Route("/invites", func(r chi.Router) {
-				r.Use(adminOrOwnerMiddleware)
+				r.Use(adminMiddleware)
 				r.Post("/", invitationsH.Create)
 				r.Get("/", invitationsH.List)
 				r.Post("/{id}/revoke", invitationsH.Revoke)
@@ -218,14 +227,16 @@ func main() {
 		})
 	})
 
-	// Serve React SPA from /app/client/build if the directory exists.
+	// Serve React SPA from staticDir if configured.
 	// All non-API routes fall back to index.html so client-side routing works.
 	staticDir := cfg.StaticDir
 	if staticDir != "" {
 		fs := http.FileServer(http.Dir(staticDir))
 		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
-			path := filepath.Join(staticDir, req.URL.Path)
-			if _, err := os.Stat(path); os.IsNotExist(err) {
+			// Clean the URL path anchored at "/" to prevent any ".." traversal
+			// before using it to probe the filesystem.
+			cleanPath := filepath.Join(staticDir, filepath.FromSlash(path.Clean("/"+req.URL.Path)))
+			if _, err := os.Stat(cleanPath); os.IsNotExist(err) {
 				http.ServeFile(w, req, filepath.Join(staticDir, "index.html"))
 				return
 			}

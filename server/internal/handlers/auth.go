@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/smtp"
 	"strings"
 	"time"
 
@@ -113,8 +112,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	role := "user"
 	if userCount == 0 {
-		// First user becomes admin
-		role = "admin"
+		// First user becomes the instance owner
+		role = "owner"
 	} else if !h.cfg.PublicRegistration {
 		// Require invitation token
 		if req.Token == "" {
@@ -170,7 +169,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		StorageLimit: storageLimit,
 	}
 
-	if err := h.db.Create(user).Error; err != nil {
+	if err := h.db.Select("id", "name", "email", "password_hash", "role", "storage_limit").Create(user).Error; err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create user")
 		return
 	}
@@ -438,16 +437,5 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) sendPasswordResetEmail(to, name, resetURL string) {
 	subject := "Reset your ZynqCloud password"
 	body := fmt.Sprintf("Hi %s,\n\nClick the link below to reset your password:\n%s\n\nThis link expires in %d hours.\n\nIf you did not request a password reset, please ignore this email.", name, resetURL, h.cfg.InviteTokenTTLHours)
-
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s", h.cfg.SMTPFrom, to, subject, body)
-
-	addr := fmt.Sprintf("%s:%d", h.cfg.SMTPHost, h.cfg.SMTPPort)
-	var auth smtp.Auth
-	if h.cfg.SMTPUser != "" {
-		auth = smtp.PlainAuth("", h.cfg.SMTPUser, h.cfg.SMTPPass, h.cfg.SMTPHost)
-	}
-
-	if err := smtp.SendMail(addr, auth, h.cfg.SMTPFrom, []string{to}, []byte(msg)); err != nil {
-		slog.Error("failed to send password reset email", "error", err, "to", to)
-	}
+	sendEmail(h.cfg, to, subject, body)
 }

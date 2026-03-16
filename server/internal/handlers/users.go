@@ -66,8 +66,8 @@ func (h *UsersHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Admin or self
-	if claims.Role != "admin" && callerID != userID {
+	// Admin/owner or self
+	if claims.Role != "admin" && claims.Role != "owner" && callerID != userID {
 		writeError(w, http.StatusForbidden, "Forbidden")
 		return
 	}
@@ -140,8 +140,8 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Admin or self
-	if claims.Role != "admin" && callerID != userID {
+	// Admin/owner or self
+	if claims.Role != "admin" && claims.Role != "owner" && callerID != userID {
 		writeError(w, http.StatusForbidden, "Forbidden")
 		return
 	}
@@ -163,9 +163,12 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/users/shareable
 func (h *UsersHandler) ListShareable(w http.ResponseWriter, r *http.Request) {
+	claims := mw.GetClaims(r)
+	callerID, _ := uuid.Parse(claims.Sub)
+
 	q := r.URL.Query().Get("q")
 
-	query := h.db.Model(&models.User{})
+	query := h.db.Model(&models.User{}).Where("id != ?", callerID)
 	if q != "" {
 		query = query.Where("name ILIKE ? OR email ILIKE ?", "%"+q+"%", "%"+q+"%")
 	}
