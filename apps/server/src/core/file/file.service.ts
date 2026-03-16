@@ -342,6 +342,41 @@ export class FileService {
   }
 
   /**
+   * Uploads and encrypts file content from a raw incoming HTTP stream.
+   * Eliminates the Multer temp-disk-write delay — bytes flow directly
+   * from the client through AES-256-GCM encryption into Go storage.
+   * @throws BadRequestException if file is folder or already has content
+   */
+  async uploadFileContentFromStream(
+    fileId: string,
+    userId: string,
+    rawStream: import('stream').Readable,
+  ): Promise<File> {
+    const file = await this.findById(fileId, userId);
+
+    if (file.is_folder) {
+      throw new BadRequestException('Cannot upload content to a folder');
+    }
+
+    if (file.encrypted_dek) {
+      throw new BadRequestException('File already has content uploaded');
+    }
+
+    const result = await this.storageService.uploadRawStream(
+      userId,
+      fileId,
+      rawStream,
+    );
+
+    file.storage_path = result.storagePath;
+    file.encrypted_dek = result.encryptedDek;
+    file.encryption_iv = result.iv;
+    file.encryption_algo = result.algorithm;
+
+    return this.filesRepository.save(file);
+  }
+
+  /**
    * Lists user's files with pagination, search, and folder filtering.
    * Excludes soft-deleted files. Folders sorted first.
    */

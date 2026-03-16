@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -72,31 +71,17 @@ import { DropZoneOverlay } from '@/features/file/components/drop-zone-overlay';
 import { uploadManager } from '@/lib/upload-manager';
 import { formatBytes } from '@/lib/auth';
 import { emitStorageRefresh } from '@/lib/storage-events';
+import { useUploadContext, type UploadProgress } from '@/context/UploadContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-
-interface UploadProgress {
-  id: string;
-  fileName: string;
-  progress: number;
-  loadedBytes?: number;
-  totalBytes?: number;
-  etaSeconds?: number;
-  status:
-    | 'queued'
-    | 'uploading'
-    | 'completed'
-    | 'error'
-    | 'checking'
-    | 'duplicate';
-}
 
 interface UploadFailure {
   fileName: string;
   message: string;
 }
 
-let uploadIdCounter = 0;
+// Maximum allowed upload size (5 GB)
+const MAX_FILE_BYTES = 5 * 1024 * 1024 * 1024;
 
 const KNOWN_MIME_PREFIXES = [
   'image/',
@@ -142,19 +127,6 @@ function getXhrErrorMessage(xhr: XMLHttpRequest): string {
   }
 
   return fallback;
-}
-
-function formatEta(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '—';
-  if (seconds < 60) return `${Math.ceil(seconds)}s`;
-  if (seconds < 3600) {
-    const m = Math.floor(seconds / 60);
-    const s = Math.ceil(seconds % 60);
-    return s > 0 ? `${m}m ${s}s` : `${m}m`;
-  }
-  const h = Math.floor(seconds / 3600);
-  const m = Math.ceil((seconds % 3600) / 60);
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
 function getCurrentLocalDateTime(): string {
@@ -244,7 +216,8 @@ export default function FilesPage() {
   const [publicLinkFileName, setPublicLinkFileName] = useState<string | null>(
     null,
   );
-  const [uploadQueue, setUploadQueue] = useState<UploadProgress[]>([]);
+  const { uploadQueue, addUpload, updateUpload, removeUpload } =
+    useUploadContext();
   const uploadSpeedRef = useRef<
     Map<string, { lastTs: number; lastLoaded: number; smoothedBps: number }>
   >(new Map());
@@ -255,6 +228,12 @@ export default function FilesPage() {
   const [pendingDuplicates, setPendingDuplicates] = useState<DuplicateItem[]>(
     [],
   );
+
+  // Large-file (5 GB) warning dialog
+  const [showLargeFileWarning, setShowLargeFileWarning] = useState(false);
+  const [pendingLargeFileUpload, setPendingLargeFileUpload] = useState<
+    { file: File; parentId?: string }[]
+  >([]);
 
   // Folder drop modal (in-app drag zone — avoids browser webkitdirectory popup)
   const [showFolderDropModal, setShowFolderDropModal] = useState(false);
@@ -358,29 +337,59 @@ export default function FilesPage() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // Upload queue helpers
-  const addUploadProgress = (fileName: string): string => {
-    const id = `upload-${++uploadIdCounter}`;
-    setUploadQueue((prev) => [
-      ...prev,
-      { id, fileName, progress: 0, status: 'queued' },
-    ]);
-    return id;
-  };
-
-  const updateUploadProgress = (
-    progressId: string,
-    updates: Partial<Omit<UploadProgress, 'id'>>,
-  ) => {
-    setUploadQueue((prev) =>
-      prev.map((p) => (p.id === progressId ? { ...p, ...updates } : p)),
-    );
-  };
-
+  // Upload helpers — addUpload/updateUpload/removeUpload come from UploadContext
   const removeUploadProgress = (progressId: string) => {
     uploadSpeedRef.current.delete(progressId);
     uploadStartRef.current.delete(progressId);
-    setUploadQueue((prev) => prev.filter((p) => p.id !== progressId));
+    removeUpload(progressId);
+  };
+
+  /**
+   * Splits file entries into three buckets:
+   *  - rejected:  size > 5 GB (never uploaded)
+   *  - atLimit:   size === 5 GB exactly (warn before uploading)
+   *  - ok:        size < 5 GB (upload immediately)
+   */
+  const checkFileSizeLimits = (
+    entries: { file: File; parentId?: string }[],
+  ): {
+    ok: { file: File; parentId?: string }[];
+    atLimit: { file: File; parentId?: string }[];
+    rejected: File[];
+  } => {
+    const ok: { file: File; parentId?: string }[] = [];
+    const atLimit: { file: File; parentId?: string }[] = [];
+    const rejected: File[] = [];
+    for (const entry of entries) {
+      if (entry.file.size > MAX_FILE_BYTES) {
+        rejected.push(entry.file);
+      } else if (entry.file.size === MAX_FILE_BYTES) {
+        atLimit.push(entry);
+      } else {
+        ok.push(entry);
+      }
+    }
+    return { ok, atLimit, rejected };
+  };
+
+  /** Called when the user confirms uploading the at-limit (5 GB) files. */
+  const handleLargeFileWarningProceed = async () => {
+    setShowLargeFileWarning(false);
+    const items = pendingLargeFileUpload;
+    setPendingLargeFileUpload([]);
+    if (items.length === 0) return;
+    // Pass directly to the hashing+upload phase, bypassing the size-limit check
+    // (user already confirmed these are at the 5 GB limit).
+    await uploadMultipleFilesCore(items);
+  };
+
+  const handleLargeFileWarningCancel = () => {
+    setShowLargeFileWarning(false);
+    setPendingLargeFileUpload([]);
+    toast({
+      title: 'Upload cancelled',
+      description: 'Large file upload was cancelled.',
+    });
   };
 
   const loadFiles = useCallback(async () => {
@@ -731,7 +740,7 @@ export default function FilesPage() {
   const uploadFileWithProgress = (
     url: string,
     file: File,
-    _contentType: string,
+    contentType: string,
     progressId: string,
   ): Promise<void> => {
     const apiBase = getApiBaseUrl();
@@ -780,11 +789,12 @@ export default function FilesPage() {
             etaSeconds = 3;
           }
 
-          updateUploadProgress(progressId, {
+          updateUpload(progressId, {
             progress: percent,
             loadedBytes: event.loaded,
             totalBytes: event.total,
             etaSeconds,
+            speedBps: Math.round(smoothedBps),
           });
         }
       });
@@ -792,7 +802,7 @@ export default function FilesPage() {
       xhr.addEventListener('readystatechange', () => {
         if (xhr.readyState === 4) {
           if (xhr.status >= 200 && xhr.status < 300) {
-            updateUploadProgress(progressId, {
+            updateUpload(progressId, {
               progress: 100,
               status: 'completed',
               etaSeconds: 0,
@@ -801,7 +811,7 @@ export default function FilesPage() {
             uploadStartRef.current.delete(progressId);
             resolve();
           } else {
-            updateUploadProgress(progressId, { status: 'error' });
+            updateUpload(progressId, { status: 'error' });
             uploadSpeedRef.current.delete(progressId);
             uploadStartRef.current.delete(progressId);
             reject(
@@ -816,15 +826,18 @@ export default function FilesPage() {
         }
       });
 
-      const formData = new FormData();
-      formData.append('file', file);
-
       xhr.open('PUT', fullUrl);
       xhr.withCredentials = true;
+      xhr.setRequestHeader(
+        'Content-Type',
+        contentType || 'application/octet-stream',
+      );
+      // Register cancel handler in global upload context
+      updateUpload(progressId, { cancel: () => xhr.abort() });
       // Record send time so the first progress event can compute instantBps
       // from byte 0 instead of showing no ETA until the second event.
       uploadStartRef.current.set(progressId, performance.now());
-      xhr.send(formData);
+      xhr.send(file);
     });
   };
 
@@ -835,7 +848,7 @@ export default function FilesPage() {
     progressId: string,
     targetParentId?: string,
   ) => {
-    updateUploadProgress(progressId, { status: 'uploading', progress: 0 });
+    updateUpload(progressId, { status: 'uploading', progress: 0 });
 
     const parentId = targetParentId ?? currentFolderId ?? undefined;
 
@@ -859,11 +872,12 @@ export default function FilesPage() {
         progressId,
       );
     } else {
-      updateUploadProgress(progressId, { progress: 100, status: 'completed' });
+      updateUpload(progressId, { progress: 100, status: 'completed' });
     }
   };
 
-  const uploadMultipleFiles = async (
+  /** Core upload logic — no size-limit check. Called after user confirmation for at-limit files. */
+  const uploadMultipleFilesCore = async (
     fileEntries: { file: File; parentId?: string }[],
   ) => {
     if (fileEntries.length === 0) return;
@@ -919,7 +933,7 @@ export default function FilesPage() {
     // Phase 2: Upload non-duplicate files immediately
     if (readyToUpload.length > 0) {
       const progressIds = readyToUpload.map((entry) =>
-        addUploadProgress(entry.file.name),
+        addUpload(entry.file.name),
       );
       let uploaded = 0;
       let errors = 0;
@@ -944,7 +958,7 @@ export default function FilesPage() {
             uploaded++;
           } catch (err) {
             errors++;
-            updateUploadProgress(progressId, { status: 'error' });
+            updateUpload(progressId, { status: 'error' });
             failures.push({
               fileName: file.name,
               message:
@@ -975,13 +989,7 @@ export default function FilesPage() {
       }
 
       setTimeout(() => {
-        setUploadQueue((prev) =>
-          prev.filter(
-            (p) =>
-              !progressIds.includes(p.id) ||
-              (p.status !== 'completed' && p.status !== 'error'),
-          ),
-        );
+        progressIds.forEach((id) => removeUploadProgress(id));
       }, 3000);
     }
 
@@ -990,6 +998,26 @@ export default function FilesPage() {
       setPendingDuplicates(duplicates);
       setShowDuplicateDialog(true);
     }
+  };
+
+  /** Size-checking wrapper around uploadMultipleFilesCore. */
+  const uploadMultipleFiles = async (
+    fileEntries: { file: File; parentId?: string }[],
+  ) => {
+    if (fileEntries.length === 0) return;
+    const { ok, atLimit, rejected } = checkFileSizeLimits(fileEntries);
+    if (rejected.length > 0) {
+      toast({
+        title: `${rejected.length} file${rejected.length > 1 ? 's' : ''} too large`,
+        description: `Files exceeding 5 GB cannot be uploaded: ${rejected.map((f) => f.name).join(', ')}`,
+        variant: 'destructive',
+      });
+    }
+    if (atLimit.length > 0) {
+      setPendingLargeFileUpload((prev) => [...prev, ...atLimit]);
+      setShowLargeFileWarning(true);
+    }
+    if (ok.length > 0) await uploadMultipleFilesCore(ok);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1007,10 +1035,30 @@ export default function FilesPage() {
     }
 
     const file = fileList[0];
-    const progressId = addUploadProgress(file.name);
+
+    // Single-file size check
+    if (file.size > MAX_FILE_BYTES) {
+      toast({
+        title: 'File too large',
+        description: `${file.name} exceeds the 5 GB upload limit.`,
+        variant: 'destructive',
+      });
+      e.target.value = '';
+      return;
+    }
+    if (file.size === MAX_FILE_BYTES) {
+      setPendingLargeFileUpload([
+        { file, parentId: currentFolderId || undefined },
+      ]);
+      setShowLargeFileWarning(true);
+      e.target.value = '';
+      return;
+    }
+
+    const progressId = addUpload(file.name);
 
     try {
-      updateUploadProgress(progressId, { status: 'checking' });
+      updateUpload(progressId, { status: 'checking' });
       // Returns '' for files >200 MB — large archives/videos skip dedup
       const fileHash = await uploadManager.calculateHash(file);
 
@@ -1049,7 +1097,7 @@ export default function FilesPage() {
         description: errorMessage,
         variant: 'destructive',
       });
-      updateUploadProgress(progressId, { status: 'error' });
+      updateUpload(progressId, { status: 'error' });
       setTimeout(() => removeUploadProgress(progressId), 3000);
     } finally {
       e.target.value = '';
@@ -1063,7 +1111,7 @@ export default function FilesPage() {
 
     if (items.length === 0) return;
 
-    const progressIds = items.map((item) => addUploadProgress(item.file.name));
+    const progressIds = items.map((item) => addUpload(item.file.name));
     let uploaded = 0;
     let errors = 0;
     const failures: UploadFailure[] = [];
@@ -1086,7 +1134,7 @@ export default function FilesPage() {
               ? err.message
               : 'Unable to upload this file.';
           console.error(`Failed to upload ${file.name}:`, errorMessage);
-          updateUploadProgress(progressId, { status: 'error' });
+          updateUpload(progressId, { status: 'error' });
           failures.push({ fileName: file.name, message: errorMessage });
         }
       },
@@ -1107,13 +1155,7 @@ export default function FilesPage() {
     });
 
     setTimeout(() => {
-      setUploadQueue((prev) =>
-        prev.filter(
-          (p) =>
-            !progressIds.includes(p.id) ||
-            (p.status !== 'completed' && p.status !== 'error'),
-        ),
-      );
+      progressIds.forEach((id) => removeUploadProgress(id));
     }, 3000);
   };
 
@@ -1630,31 +1672,6 @@ export default function FilesPage() {
     files.length > 0 && files.every((f) => selectedIds.has(f.id));
   const someSelected = selectedIds.size > 0;
 
-  // Aggregate upload progress for the inline indicator
-  const activeUploads = uploadQueue.filter(
-    (u) =>
-      u.status === 'uploading' ||
-      u.status === 'checking' ||
-      u.status === 'queued',
-  );
-  const isUploading = activeUploads.length > 0;
-  const aggregateProgress =
-    activeUploads.length > 0
-      ? Math.round(
-          activeUploads.reduce((sum, u) => sum + u.progress, 0) /
-            activeUploads.length,
-        )
-      : 100;
-  const aggregateEtaSeconds = (() => {
-    const uploadingWithEta = activeUploads.filter(
-      (u) => u.status === 'uploading' && typeof u.etaSeconds === 'number',
-    );
-    if (uploadingWithEta.length === 0) return undefined;
-    return Math.max(
-      ...uploadingWithEta.map((u) => Math.max(0, Math.ceil(u.etaSeconds ?? 0))),
-    );
-  })();
-
   const currentLocalDateTime = getCurrentLocalDateTime();
   const isPublicShareValid =
     !publicSharePasswordError && !publicShareExpiresAtError;
@@ -1746,36 +1763,6 @@ export default function FilesPage() {
             onBreadcrumbClick={handleBreadcrumbClick}
             onGoBack={handleGoBack}
           />
-
-          {/* Inline upload indicator — thin progress line */}
-          <AnimatePresence>
-            {isUploading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-2"
-              >
-                <Upload className="h-3 w-3 text-muted-foreground animate-pulse" />
-                <span className="text-xs text-muted-foreground">
-                  Uploading
-                  {activeUploads.length > 1
-                    ? ` ${activeUploads.length} files`
-                    : ''}
-                  {aggregateEtaSeconds !== undefined && aggregateEtaSeconds > 0
-                    ? ` • ${formatEta(aggregateEtaSeconds)} left`
-                    : aggregateProgress >= 95
-                      ? ' • a few seconds left'
-                      : ''}
-                  …
-                </span>
-                <Progress
-                  value={aggregateProgress}
-                  className="h-[2px] flex-1 max-w-[160px]"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         {/* Search */}
@@ -1903,6 +1890,33 @@ export default function FilesPage() {
           onUploadAnyway={handleDuplicateProceed}
           onCancel={handleDuplicateCancel}
         />
+
+        {/* Large-file warning — fires when a file is at the 5 GB limit */}
+        <AlertDialog
+          open={showLargeFileWarning}
+          onOpenChange={setShowLargeFileWarning}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Large File Warning</AlertDialogTitle>
+              <AlertDialogDescription>
+                {pendingLargeFileUpload.length === 1
+                  ? `"${pendingLargeFileUpload[0]?.file.name}" is exactly at the 5 GB upload limit.`
+                  : `${pendingLargeFileUpload.length} files are exactly at the 5 GB upload limit.`}{' '}
+                The upload may fail if your storage is low. Do you want to
+                continue?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleLargeFileWarningCancel}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleLargeFileWarningProceed}>
+                Upload Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <FolderUploadDialog
           open={showFolderUploadDialog}
