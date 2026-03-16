@@ -71,7 +71,7 @@ export function PublicShareView({ token }: PublicShareViewProps) {
   useEffect(() => {
     if (!token) return;
     void fetchFile();
-  }, [fetchFile]);
+  }, [fetchFile, token]);
 
   const handleDownload = async () => {
     if (!file?.hasContent) return;
