@@ -78,8 +78,8 @@ interface UploadFailure {
   message: string;
 }
 
-// Maximum allowed upload size (5 GB)
-const MAX_FILE_BYTES = 5 * 1024 * 1024 * 1024;
+// Maximum allowed upload size (15 GB)
+const MAX_FILE_BYTES = 15 * 1024 * 1024 * 1024;
 
 const KNOWN_MIME_PREFIXES = [
   'image/',
@@ -1079,21 +1079,10 @@ export default function FilesPage() {
       await proceedWithUploadForId(file, fileHash, false, progressId);
       await loadFiles();
       emitStorageRefresh();
-      toast({
-        title: 'Upload successful',
-        description: `${file.name} uploaded.`,
-      });
 
       setTimeout(() => removeUploadProgress(progressId), 2000);
     } catch (err) {
       console.error('File upload error:', err);
-      const errorMessage =
-        err instanceof ApiError ? err.message : 'Unable to upload this file.';
-      toast({
-        title: 'Upload failed',
-        description: errorMessage,
-        variant: 'destructive',
-      });
       updateUpload(progressId, { status: 'error' });
       setTimeout(() => removeUploadProgress(progressId), 3000);
     } finally {

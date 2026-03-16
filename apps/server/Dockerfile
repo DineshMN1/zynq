@@ -1,28 +1,17 @@
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
+FROM golang:1.23-alpine AS builder
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN npm run build
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/api ./cmd/api
 
-FROM node:20-alpine
-WORKDIR /app
-
-# Install curl for health checks and debugging
-RUN apk add --no-cache curl
-
-# Create non-root user
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates
 RUN addgroup -S app && adduser -S app -G app
-
-COPY package*.json ./
-RUN npm install --omit=dev
-COPY --from=builder /app/dist ./dist
-
-# Switch to non-root user
-RUN chown -R app:app /app
+COPY --from=builder /bin/api /app/api
+RUN mkdir -p /data/files && chown -R app:app /data/files /app
 USER app
-
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:4000/api/v1/health || exit 1
-CMD ["node", "dist/main.js"]
+    CMD wget -qO- http://localhost:4000/api/v1/health || exit 1
+CMD ["/app/api"]

@@ -8,7 +8,6 @@ on:
 env:
   REGISTRY: docker.io
   APP_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/zynqcloud
-  STORAGE_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/zynq-storage
 
 jobs:
   build-and-push:
@@ -37,7 +36,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # ── Main app image ────────────────────────────────────────────────────
+      # ── Main app image (Go API + React frontend + nginx) ─────────────────
       - name: Build and push app image
         uses: docker/build-push-action@v5
         with:
@@ -52,22 +51,6 @@ jobs:
           cache-from: type=gha,scope=app
           cache-to: type=gha,mode=max,scope=app
 
-      # ── Go storage service image ──────────────────────────────────────────
-      - name: Build and push storage service image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./services/go-storage
-          file: ./services/go-storage/Dockerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          build-args: |
-            APP_VERSION=${{ steps.version.outputs.VERSION }}
-          tags: |
-            ${{ env.STORAGE_IMAGE }}:latest
-            ${{ env.STORAGE_IMAGE }}:${{ steps.version.outputs.VERSION }}
-          cache-from: type=gha,scope=storage
-          cache-to: type=gha,mode=max,scope=storage
-
       # ── GitHub Release ────────────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -79,25 +62,22 @@ jobs:
             install.sh
             update.sh
           body: |
-            ## Docker Images
+            ## Docker Image
 
             ```bash
-            # App
             docker pull ${{ env.APP_IMAGE }}:${{ steps.version.outputs.VERSION }}
-            # Storage service
-            docker pull ${{ env.STORAGE_IMAGE }}:${{ steps.version.outputs.VERSION }}
             ```
 
             ## Fresh Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/DineshMN1/zynq/main/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/Pepperjack-svg/zynq/main/install.sh | bash
             ```
 
             ## Update Existing Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/DineshMN1/zynq/main/update.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/Pepperjack-svg/zynq/main/update.sh | bash
             ```
 
             See [CHANGELOG.md](CHANGELOG.md) for details.

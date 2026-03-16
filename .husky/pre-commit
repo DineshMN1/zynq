@@ -1,2 +1,0 @@
-pnpm lint-staged
-pnpm turbo run lint --filter=...[HEAD~1]

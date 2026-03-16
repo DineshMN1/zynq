@@ -1,16 +1,16 @@
-name: Go Storage Service CI
+name: Go Backend CI
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'services/go-storage/**'
+      - 'apps/server/**'
       - '.github/workflows/go-storage-ci.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'services/go-storage/**'
+      - 'apps/server/**'
       - '.github/workflows/go-storage-ci.yml'
 
 concurrency:
@@ -19,7 +19,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: services/go-storage
+    working-directory: apps/server
 
 jobs:
   # ── Quality + test matrix (Ubuntu / Windows / macOS) ───────────────────────
@@ -36,9 +36,9 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version-file: apps/server/go.mod
           cache: true
-          cache-dependency-path: services/go-storage/go.mod
+          cache-dependency-path: apps/server/go.sum
 
       - name: go vet
         run: go vet ./...
@@ -68,11 +68,11 @@ jobs:
         run: go test -race -count=1 -timeout 120s ./...
 
       - name: go build (native)
-        run: go build -trimpath -ldflags "-s -w" -o /dev/null ./cmd/server
+        run: go build -trimpath -ldflags "-s -w" -o /dev/null ./cmd/api
         if: runner.os != 'Windows'
 
       - name: go build (native, Windows)
-        run: go build -trimpath -ldflags "-s -w" -o NUL ./cmd/server
+        run: go build -trimpath -ldflags "-s -w" -o NUL ./cmd/api
         if: runner.os == 'Windows'
 
   # ── Cross-compilation + artifact upload (Linux runner only) ─────────────────
@@ -86,22 +86,23 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version-file: apps/server/go.mod
           cache: true
-          cache-dependency-path: services/go-storage/go.mod
+          cache-dependency-path: apps/server/go.sum
 
       - name: Cross-compile all targets
+        working-directory: apps/server
         run: |
           mkdir -p bin
-          CGO_ENABLED=0 GOOS=linux   GOARCH=amd64  go build -trimpath -ldflags "-s -w" -o bin/storage-service-linux-amd64    ./cmd/server
-          CGO_ENABLED=0 GOOS=linux   GOARCH=arm64  go build -trimpath -ldflags "-s -w" -o bin/storage-service-linux-arm64    ./cmd/server
-          CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64  go build -trimpath -ldflags "-s -w" -o bin/storage-service-darwin-amd64   ./cmd/server
-          CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64  go build -trimpath -ldflags "-s -w" -o bin/storage-service-darwin-arm64   ./cmd/server
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64  go build -trimpath -ldflags "-s -w" -o bin/storage-service-windows-amd64.exe ./cmd/server
+          CGO_ENABLED=0 GOOS=linux   GOARCH=amd64  go build -trimpath -ldflags "-s -w" -o bin/api-linux-amd64    ./cmd/api
+          CGO_ENABLED=0 GOOS=linux   GOARCH=arm64  go build -trimpath -ldflags "-s -w" -o bin/api-linux-arm64    ./cmd/api
+          CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64  go build -trimpath -ldflags "-s -w" -o bin/api-darwin-amd64   ./cmd/api
+          CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64  go build -trimpath -ldflags "-s -w" -o bin/api-darwin-arm64   ./cmd/api
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64  go build -trimpath -ldflags "-s -w" -o bin/api-windows-amd64.exe ./cmd/api
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: storage-service-${{ github.sha }}
-          path: services/go-storage/bin/
+          name: api-${{ github.sha }}
+          path: apps/server/bin/
           retention-days: 7

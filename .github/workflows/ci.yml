@@ -28,18 +28,12 @@ jobs:
           filters: |
             backend:
               - 'apps/server/**'
-              - 'packages/**'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'pnpm-workspace.yaml'
-              - 'turbo.json'
             frontend:
               - 'apps/client/**'
               - 'packages/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-              - 'turbo.json'
             docker:
               - 'Dockerfile'
               - 'docker-compose.yml'
@@ -47,12 +41,10 @@ jobs:
               - '.dockerignore'
               - 'apps/server/**'
               - 'apps/client/**'
-              - 'services/go-storage/**'
               - 'packages/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-              - 'turbo.json'
 
   backend-lint-test:
     name: Backend Lint & Test
@@ -63,26 +55,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-go@v5
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          go-version-file: apps/server/go.mod
+          cache: true
+          cache-dependency-path: apps/server/go.sum
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: go vet
+        working-directory: apps/server
+        run: go vet ./...
 
-      - name: Lint
-        run: pnpm --filter @zynqcloud/server lint
+      - name: go fmt check
+        working-directory: apps/server
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Run gofmt on these files:"
+            echo "$unformatted"
+            exit 1
+          fi
 
-      - name: Test
-        run: pnpm --filter @zynqcloud/server test
+      - name: go test
+        working-directory: apps/server
+        run: go test -race -count=1 -timeout 120s ./...
 
-      - name: Build
-        run: pnpm --filter @zynqcloud/server build
+      - name: go build
+        working-directory: apps/server
+        run: CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /dev/null ./cmd/api
 
   frontend-lint-test:
     name: Frontend Lint & Test
@@ -114,61 +114,7 @@ jobs:
       - name: Build
         run: pnpm --filter @zynqcloud/client build
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
-          NEXT_TELEMETRY_DISABLED: '1'
-
-  go-storage-lint-test:
-    name: Go Storage Lint & Test
-    runs-on: ubuntu-latest
-    needs: [changes]
-    if: ${{ needs.changes.outputs.docker == 'true' || github.event_name == 'push' }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: services/go-storage/go.mod
-          cache-dependency-path: services/go-storage/go.sum
-
-      - name: Vet
-        working-directory: services/go-storage
-        run: go vet ./...
-
-      - name: Test
-        working-directory: services/go-storage
-        run: go test ./...
-
-      - name: Govulncheck
-        working-directory: services/go-storage
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
-
-  backend-e2e:
-    name: Backend E2E Tests
-    runs-on: ubuntu-latest
-    needs: [changes]
-    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name == 'push' }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: E2E Tests
-        run: pnpm --filter @zynqcloud/server test:e2e
+          VITE_API_URL: /api/v1
 
   docker-build:
     name: Docker Build
@@ -177,23 +123,15 @@ jobs:
       [
         changes,
         backend-lint-test,
-        backend-e2e,
         frontend-lint-test,
-        go-storage-lint-test,
       ]
-    # Only run when docker-relevant files changed.
-    # Gate on upstream jobs: 'skipped' means no changes were detected (still OK).
     if: >
       (needs.changes.outputs.docker == 'true' || github.event_name == 'push') &&
       (needs.backend-lint-test.result == 'success' || needs.backend-lint-test.result == 'skipped') &&
-      (needs.backend-e2e.result == 'success' || needs.backend-e2e.result == 'skipped') &&
-      (needs.frontend-lint-test.result == 'success' || needs.frontend-lint-test.result == 'skipped') &&
-      (needs.go-storage-lint-test.result == 'success' || needs.go-storage-lint-test.result == 'skipped')
+      (needs.frontend-lint-test.result == 'success' || needs.frontend-lint-test.result == 'skipped')
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Build production image
-        env:
-          NEXT_TELEMETRY_DISABLED: '1'
         run: docker build -t zynqcloud:ci .
