@@ -27,11 +27,7 @@ import {
 import { fileApi, type FileMetadata } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
 import { emitStorageRefresh } from '@/lib/storage-events';
-import {
-  getFileIcon,
-  getIconColor,
-  getIconBgColor,
-} from '@/features/file/utils/file-icons';
+import { FileTypeIcon } from '@/features/file/components/file-type-icon';
 import { motion } from 'framer-motion';
 import { toast } from '@/hooks/use-toast';
 
@@ -168,30 +164,7 @@ export default function TrashPage() {
             >
               <Card className="p-4 hover:border-primary/50 transition-colors">
                 <div className="flex items-start justify-between mb-3">
-                  {(() => {
-                    const Icon = getFileIcon(
-                      file.name,
-                      file.mime_type || '',
-                      file.is_folder,
-                    );
-                    const iconColor = getIconColor(
-                      file.name,
-                      file.mime_type || '',
-                      file.is_folder,
-                    );
-                    const iconBg = getIconBgColor(
-                      file.name,
-                      file.mime_type || '',
-                      file.is_folder,
-                    );
-                    return (
-                      <div
-                        className={`h-10 w-10 rounded-lg ${iconBg} flex items-center justify-center`}
-                      >
-                        <Icon className={`h-5 w-5 ${iconColor}`} />
-                      </div>
-                    );
-                  })()}
+                  <FileTypeIcon name={file.name} mimeType={file.mime_type || ''} isFolder={file.is_folder} size={40} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">

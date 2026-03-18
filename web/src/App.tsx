@@ -13,10 +13,10 @@ import DashboardProfilePage from './pages/dashboard/profile';
 import DashboardTrashPage from './pages/dashboard/trash';
 import DashboardSharedPage from './pages/dashboard/shared';
 import DashboardShareTokenPage from './pages/dashboard/share-detail';
-import DashboardSettingsPage from './pages/dashboard/settings/index';
-import DashboardSettingsUsersPage from './pages/dashboard/settings/users';
-import DashboardSettingsNotificationsPage from './pages/dashboard/settings/notifications';
-import DashboardSettingsMonitoringPage from './pages/dashboard/settings/monitoring';
+import AdminLayout from './pages/admin/layout';
+import AdminUsersPage from './pages/dashboard/settings/users';
+import AdminNotificationsPage from './pages/dashboard/settings/notifications';
+import AdminMonitoringPage from './pages/dashboard/settings/monitoring';
 import NotFoundPage from './pages/not-found';
 
 export default function App() {
@@ -43,16 +43,14 @@ export default function App() {
         <Route path="trash" element={<DashboardTrashPage />} />
         <Route path="shared" element={<DashboardSharedPage />} />
         <Route path="share/:token" element={<DashboardShareTokenPage />} />
-        <Route path="settings" element={<DashboardSettingsPage />} />
-        <Route path="settings/users" element={<DashboardSettingsUsersPage />} />
-        <Route
-          path="settings/notifications"
-          element={<DashboardSettingsNotificationsPage />}
-        />
-        <Route
-          path="settings/monitoring"
-          element={<DashboardSettingsMonitoringPage />}
-        />
+      </Route>
+
+      {/* Admin panel — separate layout with its own sidebar */}
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<Navigate to="/admin/users" replace />} />
+        <Route path="users" element={<AdminUsersPage />} />
+        <Route path="notifications" element={<AdminNotificationsPage />} />
+        <Route path="monitoring" element={<AdminMonitoringPage />} />
       </Route>
 
       {/* 404 */}

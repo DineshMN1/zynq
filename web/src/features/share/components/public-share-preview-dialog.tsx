@@ -8,9 +8,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Download, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { ApiError, publicApi } from '@/lib/api';
-import { getFileIcon, getIconColor } from '@/features/file/utils/file-icons';
 import { getPreviewType } from '@/features/file/utils/preview-type';
 import { PreviewContent, getPreviewDialogClasses } from '@/features/file/components/viewers/preview-content';
+import { FileTypeIcon } from '@/features/file/components/file-type-icon';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
@@ -38,8 +38,6 @@ export function PublicSharePreviewDialog({
   const [zoom, setZoom] = useState(1);
 
   const previewType = getPreviewType(file.mimeType, file.name);
-  const IconComponent = getFileIcon(file.name, file.mimeType, false);
-  const iconColor = getIconColor(file.name, file.mimeType, false);
   const hasPreview = previewType !== 'none';
 
   const zoomIn = useCallback(() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2))), []);
@@ -130,7 +128,7 @@ export function PublicSharePreviewDialog({
       >
         <DialogHeader className="px-4 py-2.5 border-b flex-row items-center justify-between space-y-0 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <IconComponent className={cn('h-5 w-5 shrink-0', iconColor)} />
+            <FileTypeIcon name={file.name} mimeType={file.mimeType} isFolder={false} size={20} className="shrink-0" />
             <DialogTitle className="text-sm truncate font-medium">
               {file.name}
             </DialogTitle>
@@ -182,8 +180,7 @@ export function PublicSharePreviewDialog({
             blobUrl={blobUrl}
             textContent={textContent}
             fileName={file.name}
-            iconComponent={IconComponent}
-            iconColor={iconColor}
+            mimeType={file.mimeType}
             zoom={zoom}
             onDownload={handleDownload}
           />

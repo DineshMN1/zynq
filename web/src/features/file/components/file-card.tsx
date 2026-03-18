@@ -18,11 +18,7 @@ import {
 } from 'lucide-react';
 import { type FileMetadata, fileApi } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
-import {
-  getFileIcon,
-  getIconColor,
-  getIconBgColor,
-} from '@/features/file/utils/file-icons';
+import { FileTypeIcon } from '@/features/file/components/file-type-icon';
 
 import { cn } from '@/lib/utils';
 
@@ -58,9 +54,6 @@ export function FileCard({
   };
 
   const hasSelect = !!onToggleSelect;
-  const IconComponent = getFileIcon(file.name, file.mime_type, file.is_folder);
-  const iconColor = getIconColor(file.name, file.mime_type, file.is_folder);
-  const iconBgColor = getIconBgColor(file.name, file.mime_type, file.is_folder);
   const isShared =
     (file.publicShareCount ?? 0) > 0 || (file.privateShareCount ?? 0) > 0;
 
@@ -180,13 +173,8 @@ export function FileCard({
       )}
 
       {/* Large centered icon */}
-      <div
-        className={cn(
-          'h-16 w-16 rounded-2xl flex items-center justify-center mb-2 transition-transform duration-150 group-hover:scale-105',
-          iconBgColor,
-        )}
-      >
-        <IconComponent className={cn('h-8 w-8', iconColor)} />
+      <div className="mb-2 transition-transform duration-150 group-hover:scale-105">
+        <FileTypeIcon name={file.name} mimeType={file.mime_type} isFolder={file.is_folder} size={48} />
       </div>
 
       {/* File name */}
