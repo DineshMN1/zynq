@@ -25,7 +25,7 @@ RUN pnpm --filter @zynqcloud/web build
 # No nginx, no supervisord — one process, one port.
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates curl wget && \
+RUN apk add --no-cache ca-certificates curl wget su-exec && \
     addgroup -S app && adduser -S app -G app
 
 # Go binary
@@ -38,10 +38,14 @@ COPY --from=frontend-builder /build/web/dist /app/static
 # File storage directory
 RUN mkdir -p /data/files && chown -R app:app /app /data/files
 
-USER app
+# Entrypoint fixes bind-mount permissions then drops to app user
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost/api/v1/health || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/app/api"]
