@@ -73,10 +73,7 @@ import { useUploadContext } from '@/context/UploadContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-interface UploadFailure {
-  fileName: string;
-  message: string;
-}
+
 
 // Maximum allowed upload size (15 GB)
 const MAX_FILE_BYTES = 15 * 1024 * 1024 * 1024;
@@ -766,14 +763,15 @@ export default function FilesPage() {
 
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      // Track why the XHR was aborted so handlers can distinguish pause vs cancel
+      const flags = { abortReason: '' as '' | 'pause' | 'cancel' };
+      let settled = false;
 
       xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable) {
           const percent = Math.round((event.loaded / event.total) * 100);
           const now = performance.now();
           const current = uploadSpeedRef.current.get(progressId);
-          // On the first event, use time-since-send so deltaBytes = event.loaded
-          // and we get an immediate speed estimate instead of 0.
           const startTs = uploadStartRef.current.get(progressId) ?? now;
           const previousTs = current?.lastTs ?? startTs;
           const previousLoaded = current?.lastLoaded ?? 0;
@@ -815,31 +813,66 @@ export default function FilesPage() {
         }
       });
 
-      xhr.addEventListener('readystatechange', () => {
-        if (xhr.readyState === 4) {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            updateUpload(progressId, {
-              progress: 100,
-              status: 'completed',
-              etaSeconds: 0,
-            });
-            uploadSpeedRef.current.delete(progressId);
-            uploadStartRef.current.delete(progressId);
-            resolve();
-          } else {
-            updateUpload(progressId, { status: 'error' });
-            uploadSpeedRef.current.delete(progressId);
-            uploadStartRef.current.delete(progressId);
-            reject(
-              new ApiError(
-                getXhrErrorMessage(xhr),
-                xhr.status || 0,
-                'UPLOAD_FAILED',
-                { responseText: xhr.responseText },
-              ),
-            );
-          }
+      xhr.addEventListener('abort', () => {
+        if (settled) return;
+        if (flags.abortReason === 'pause') {
+          settled = true;
+          uploadSpeedRef.current.delete(progressId);
+          uploadStartRef.current.delete(progressId);
+          // Set paused status and register a resume callback
+          const resumeFn = async () => {
+            updateUpload(progressId, { status: 'uploading', progress: 0 });
+            try {
+              await uploadFileWithProgress(url, file, contentType, progressId);
+            } catch {
+              updateUpload(progressId, { status: 'error' });
+            }
+          };
+          updateUpload(progressId, {
+            status: 'paused',
+            pause: undefined,
+            cancel: undefined,
+            retry: resumeFn,
+          });
+          resolve();
+          return;
         }
+        // Normal cancel — don't set error (item is removed from queue)
+      });
+
+      xhr.addEventListener('error', () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Network error'));
+      });
+
+      xhr.addEventListener('readystatechange', () => {
+        if (settled || xhr.readyState !== 4) return;
+        if (xhr.status >= 200 && xhr.status < 300) {
+          settled = true;
+          updateUpload(progressId, {
+            progress: 100,
+            status: 'completed',
+            etaSeconds: 0,
+          });
+          uploadSpeedRef.current.delete(progressId);
+          uploadStartRef.current.delete(progressId);
+          resolve();
+        } else if (xhr.status > 0) {
+          settled = true;
+          updateUpload(progressId, { status: 'error' });
+          uploadSpeedRef.current.delete(progressId);
+          uploadStartRef.current.delete(progressId);
+          reject(
+            new ApiError(
+              getXhrErrorMessage(xhr),
+              xhr.status,
+              'UPLOAD_FAILED',
+              { responseText: xhr.responseText },
+            ),
+          );
+        }
+        // status 0 with no abortReason means cancel — item already removed
       });
 
       xhr.open('PUT', fullUrl);
@@ -848,10 +881,17 @@ export default function FilesPage() {
         'Content-Type',
         contentType || 'application/octet-stream',
       );
-      // Register cancel handler in global upload context
-      updateUpload(progressId, { cancel: () => xhr.abort() });
-      // Record send time so the first progress event can compute instantBps
-      // from byte 0 instead of showing no ETA until the second event.
+      // Register cancel and pause handlers
+      updateUpload(progressId, {
+        cancel: () => {
+          flags.abortReason = 'cancel';
+          xhr.abort();
+        },
+        pause: () => {
+          flags.abortReason = 'pause';
+          xhr.abort();
+        },
+      });
       uploadStartRef.current.set(progressId, performance.now());
       xhr.send(file);
     });
@@ -951,10 +991,6 @@ export default function FilesPage() {
       const progressIds = readyToUpload.map((entry) =>
         addUpload(entry.file.name),
       );
-      let uploaded = 0;
-      let errors = 0;
-      const failures: UploadFailure[] = [];
-
       const uploadTasks = readyToUpload.map((entry, i) => ({
         ...entry,
         progressId: progressIds[i],
@@ -974,17 +1010,8 @@ export default function FilesPage() {
               progressId,
               parentId,
             );
-            uploaded++;
-          } catch (err) {
-            errors++;
+          } catch {
             updateUpload(progressId, { status: 'error' });
-            failures.push({
-              fileName: file.name,
-              message:
-                err instanceof ApiError
-                  ? err.message
-                  : 'Unable to upload this file.',
-            });
           }
         },
         3,
@@ -993,23 +1020,9 @@ export default function FilesPage() {
       await loadFiles();
       emitStorageRefresh();
 
-      if (uploaded > 0 || errors > 0) {
-        const parts: string[] = [];
-        if (uploaded > 0) parts.push(`${uploaded} uploaded`);
-        if (errors > 0) parts.push(`${errors} failed`);
-        const firstFailure = failures[0];
-        toast({
-          title: 'Upload complete',
-          description: firstFailure
-            ? `${parts.join(', ')}. ${firstFailure.fileName}: ${firstFailure.message}`
-            : parts.join(', ') + '.',
-          variant: errors > 0 && uploaded === 0 ? 'destructive' : undefined,
-        });
-      }
-
       setTimeout(() => {
         progressIds.forEach((id) => removeUploadProgress(id));
-      }, 3000);
+      }, 2000);
     }
 
     // Phase 3: Show dialog for duplicates
@@ -1109,7 +1122,7 @@ export default function FilesPage() {
     } catch (err) {
       console.error('File upload error:', err);
       updateUpload(progressId, { status: 'error' });
-      setTimeout(() => removeUploadProgress(progressId), 3000);
+      setTimeout(() => removeUploadProgress(progressId), 2000);
     } finally {
       e.target.value = '';
     }
@@ -1123,9 +1136,6 @@ export default function FilesPage() {
     if (items.length === 0) return;
 
     const progressIds = items.map((item) => addUpload(item.file.name));
-    let uploaded = 0;
-    let errors = 0;
-    const failures: UploadFailure[] = [];
 
     const tasks = items.map((item, i) => ({
       ...item,
@@ -1140,16 +1150,8 @@ export default function FilesPage() {
         );
         try {
           await proceedWithUploadForId(file, hash, true, progressId, parentId);
-          uploaded++;
-        } catch (err) {
-          errors++;
-          const errorMessage =
-            err instanceof ApiError
-              ? err.message
-              : 'Unable to upload this file.';
-          console.error(`Failed to upload ${file.name}:`, errorMessage);
+        } catch {
           updateUpload(progressId, { status: 'error' });
-          failures.push({ fileName: file.name, message: errorMessage });
         }
       },
       3,
@@ -1158,19 +1160,9 @@ export default function FilesPage() {
     await loadFiles();
     emitStorageRefresh();
 
-    const count = items.length;
-    toast({
-      title: uploaded === count ? 'Upload successful' : 'Upload complete',
-      description:
-        uploaded === count
-          ? `${uploaded} file${uploaded > 1 ? 's' : ''} uploaded.`
-          : `${uploaded} uploaded, ${errors} failed.${failures[0] ? ` ${failures[0].fileName}: ${failures[0].message}` : ''}`,
-      variant: errors > 0 && uploaded === 0 ? 'destructive' : undefined,
-    });
-
     setTimeout(() => {
       progressIds.forEach((id) => removeUploadProgress(id));
-    }, 3000);
+    }, 2000);
   };
 
   const handleDuplicateCancel = () => {

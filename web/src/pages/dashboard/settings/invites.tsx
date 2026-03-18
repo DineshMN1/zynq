@@ -90,9 +90,7 @@ export default function InvitesPage() {
   const buildInviteLink = (invite: Invitation & { link?: string }) => {
     if (invite.link) return invite.link;
     if (invite.token)
-      return `${window.location.origin}/register?inviteToken=${invite.token}`;
-    if (invite.id)
-      return `${window.location.origin}/register?invite=${invite.id}`;
+      return `${window.location.origin}/register?token=${invite.token}`;
     return window.location.origin;
   };
 

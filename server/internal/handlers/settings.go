@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"net/smtp"
 
 	"github.com/google/uuid"
 	"github.com/zynqcloud/api/internal/config"
@@ -123,25 +122,43 @@ func (h *SettingsHandler) GetSMTPSettings(w http.ResponseWriter, r *http.Request
 
 // PUT /api/v1/settings/smtp
 func (h *SettingsHandler) UpdateSMTPSettings(w http.ResponseWriter, r *http.Request) {
-	var req map[string]interface{}
+	var req struct {
+		Enabled *bool   `json:"smtp_enabled"`
+		Host    *string `json:"smtp_host"`
+		Port    *int    `json:"smtp_port"`
+		Secure  *bool   `json:"smtp_secure"`
+		User    *string `json:"smtp_user"`
+		Pass    *string `json:"smtp_pass"`
+		From    *string `json:"smtp_from"`
+	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	// Store in global settings table
-	for key, value := range req {
-		var setting models.Setting
-		if err := h.db.Where("user_id IS NULL AND key = ?", "smtp_"+fmt.Sprint(key)).First(&setting).Error; err != nil {
-			setting = models.Setting{
-				ID:    uuid.New(),
-				Key:   "smtp_" + fmt.Sprint(key),
-				Value: models.JSONB{"value": value},
-			}
-			h.db.Create(&setting)
-		} else {
-			h.db.Model(&setting).Update("value", models.JSONB{"value": value})
-		}
+
+	// Update in-memory config so changes take effect immediately
+	if req.Enabled != nil {
+		h.cfg.EmailEnabled = *req.Enabled
 	}
+	if req.Host != nil {
+		h.cfg.SMTPHost = *req.Host
+	}
+	if req.Port != nil {
+		h.cfg.SMTPPort = *req.Port
+	}
+	if req.Secure != nil {
+		h.cfg.SMTPSecure = *req.Secure
+	}
+	if req.User != nil {
+		h.cfg.SMTPUser = *req.User
+	}
+	if req.Pass != nil && *req.Pass != "" {
+		h.cfg.SMTPPass = *req.Pass
+	}
+	if req.From != nil {
+		h.cfg.SMTPFrom = *req.From
+	}
+
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -172,14 +189,11 @@ func (h *SettingsHandler) TestSMTPConnection(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	addr := fmt.Sprintf("%s:%d", h.cfg.SMTPHost, h.cfg.SMTPPort)
-	var auth smtp.Auth
-	if h.cfg.SMTPUser != "" {
-		auth = smtp.PlainAuth("", h.cfg.SMTPUser, h.cfg.SMTPPass, h.cfg.SMTPHost)
-	}
-
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: ZynqCloud SMTP Test\r\n\r\nSMTP test successful.", h.cfg.SMTPFrom, to)
-	if err := smtp.SendMail(addr, auth, h.cfg.SMTPFrom, []string{to}, []byte(msg)); err != nil {
+	msg := fmt.Sprintf(
+		"From: %s\r\nTo: %s\r\nSubject: ZynqCloud SMTP Test\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSMTP test successful.",
+		h.cfg.SMTPFrom, to,
+	)
+	if err := smtpSend(h.cfg, h.cfg.SMTPFrom, []string{to}, []byte(msg)); err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": false,
 			"message": err.Error(),

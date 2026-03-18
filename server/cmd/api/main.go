@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -77,12 +78,17 @@ func main() {
 		slog.Error("failed to initialize storage backend", "error", err)
 		os.Exit(1)
 	}
+	if cfg.DiskStatsPath != "" {
+		localBackend.SetDiskStatsPath(cfg.DiskStatsPath)
+		slog.Info("disk stats override", "path", cfg.DiskStatsPath)
+	}
 	slog.Info("storage backend initialized", "path", cfg.StoragePath)
 
 	// Start cleanup goroutine for stale uploads
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uploadsDir := cfg.StoragePath + "/.uploads"
+	os.MkdirAll(uploadsDir, 0o755)
 	storage.RunCleanupPeriodic(ctx, uploadsDir, 24*time.Hour, time.Hour, slog.Default())
 
 	// Build router
@@ -237,8 +243,15 @@ func main() {
 			// before using it to probe the filesystem.
 			cleanPath := filepath.Join(staticDir, filepath.FromSlash(path.Clean("/"+req.URL.Path)))
 			if _, err := os.Stat(cleanPath); os.IsNotExist(err) {
+				// SPA fallback — always revalidate so new deploys are picked up immediately.
+				w.Header().Set("Cache-Control", "no-cache")
 				http.ServeFile(w, req, filepath.Join(staticDir, "index.html"))
 				return
+			}
+			// For index.html served directly, also prevent caching so new
+			// deploys are picked up without the user clearing their cache.
+			if req.URL.Path == "/" || strings.HasSuffix(req.URL.Path, "/index.html") {
+				w.Header().Set("Cache-Control", "no-cache")
 			}
 			fs.ServeHTTP(w, req)
 		})

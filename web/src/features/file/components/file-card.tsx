@@ -23,7 +23,7 @@ import {
   getIconColor,
   getIconBgColor,
 } from '@/features/file/utils/file-icons';
-import { toast } from '@/hooks/use-toast';
+
 import { cn } from '@/lib/utils';
 
 interface FileCardProps {
@@ -53,20 +53,8 @@ export function FileCard({
   onToggleSelect,
   onCardClick,
 }: FileCardProps) {
-  const handleDownload = async () => {
-    try {
-      const { blob, fileName } = await fileApi.download(file.id);
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = fileName || file.name || 'download';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      toast({ title: 'Download failed', variant: 'destructive' });
-    }
+  const handleDownload = () => {
+    fileApi.download(file.id);
   };
 
   const hasSelect = !!onToggleSelect;

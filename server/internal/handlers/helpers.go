@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/smtp"
+	"time"
 
 	"github.com/zynqcloud/api/internal/config"
 )
@@ -27,16 +30,86 @@ func readJSON(r *http.Request, v interface{}) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
+// dialSMTP connects to the SMTP server. When SMTPSecure is true it
+// wraps the connection in TLS immediately (implicit TLS, port 465).
+// Otherwise it dials plaintext and relies on smtp.SendMail's automatic
+// STARTTLS upgrade (port 587 / 25).
+func dialSMTP(cfg *config.Config) (*smtp.Client, error) {
+	addr := net.JoinHostPort(cfg.SMTPHost, fmt.Sprintf("%d", cfg.SMTPPort))
+	tlsCfg := &tls.Config{ServerName: cfg.SMTPHost}
+
+	if cfg.SMTPSecure {
+		// Implicit TLS (port 465): establish TLS first, then speak SMTP.
+		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 15 * time.Second}, "tcp", addr, tlsCfg)
+		if err != nil {
+			return nil, fmt.Errorf("tls dial: %w", err)
+		}
+		return smtp.NewClient(conn, cfg.SMTPHost)
+	}
+
+	// Plain dial — smtp.SendMail will attempt STARTTLS automatically.
+	conn, err := net.DialTimeout("tcp", addr, 15*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("dial: %w", err)
+	}
+	return smtp.NewClient(conn, cfg.SMTPHost)
+}
+
+// smtpSend sends a message through the SMTP server described by cfg.
+// It handles both implicit TLS (port 465) and STARTTLS (port 587).
+func smtpSend(cfg *config.Config, from string, to []string, msg []byte) error {
+	if !cfg.SMTPSecure {
+		// STARTTLS path — smtp.SendMail handles the upgrade internally.
+		addr := net.JoinHostPort(cfg.SMTPHost, fmt.Sprintf("%d", cfg.SMTPPort))
+		var auth smtp.Auth
+		if cfg.SMTPUser != "" {
+			auth = smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPHost)
+		}
+		return smtp.SendMail(addr, auth, from, to, msg)
+	}
+
+	// Implicit TLS path (port 465).
+	c, err := dialSMTP(cfg)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	if cfg.SMTPUser != "" {
+		auth := smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPHost)
+		if err := c.Auth(auth); err != nil {
+			return fmt.Errorf("auth: %w", err)
+		}
+	}
+	if err := c.Mail(from); err != nil {
+		return fmt.Errorf("mail from: %w", err)
+	}
+	for _, rcpt := range to {
+		if err := c.Rcpt(rcpt); err != nil {
+			return fmt.Errorf("rcpt to: %w", err)
+		}
+	}
+	w, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("data: %w", err)
+	}
+	if _, err := w.Write(msg); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("close data: %w", err)
+	}
+	return c.Quit()
+}
+
 // sendEmail sends a plain-text email via the configured SMTP server.
 // Intended to be called from a goroutine — logs errors instead of returning them.
 func sendEmail(cfg *config.Config, to, subject, body string) {
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s", cfg.SMTPFrom, to, subject, body)
-	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
-	var auth smtp.Auth
-	if cfg.SMTPUser != "" {
-		auth = smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPHost)
-	}
-	if err := smtp.SendMail(addr, auth, cfg.SMTPFrom, []string{to}, []byte(msg)); err != nil {
+	msg := fmt.Sprintf(
+		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s",
+		cfg.SMTPFrom, to, subject, body,
+	)
+	if err := smtpSend(cfg, cfg.SMTPFrom, []string{to}, []byte(msg)); err != nil {
 		slog.Error("failed to send email", "error", err, "to", to, "subject", subject)
 	}
 }

@@ -197,7 +197,7 @@ describe('API Client', () => {
     });
   });
 
-  describe('getFileNameFromDisposition (tested via fileApi.download)', () => {
+  describe('getFileNameFromDisposition (tested via fileApi.downloadBlob)', () => {
     it('parses filename from Content-Disposition header', async () => {
       const mockBlob = new Blob(['data']);
       mockFetch.mockResolvedValue({
@@ -209,7 +209,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await fileApi.download('file-1');
+      const result = await fileApi.downloadBlob('file-1');
       expect(result.fileName).toBe('report.pdf');
       expect(result.blob).toBe(mockBlob);
     });
@@ -226,7 +226,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await fileApi.download('file-2');
+      const result = await fileApi.downloadBlob('file-2');
       expect(result.fileName).toBe('t\u00e9st file.pdf');
     });
 
@@ -239,11 +239,11 @@ describe('API Client', () => {
         headers: new Headers(),
       });
 
-      const result = await fileApi.download('file-3');
+      const result = await fileApi.downloadBlob('file-3');
       expect(result.fileName).toBe('download');
     });
 
-    it('throws ApiError when download response is not ok', async () => {
+    it('throws ApiError when downloadBlob response is not ok', async () => {
       mockFetch.mockResolvedValue({
         ok: false,
         status: 404,
@@ -252,7 +252,7 @@ describe('API Client', () => {
         'token',
       );
 
-      await expect(fileApi.download('file-bad')).rejects.toThrow(ApiError);
+      await expect(fileApi.downloadBlob('file-bad')).rejects.toThrow(ApiError);
     });
   });
 

@@ -62,7 +62,7 @@ export default function RegisterForm() {
   });
 
   useEffect(() => {
-    const token = searchParams.get('invite') || searchParams.get('inviteToken');
+    const token = searchParams.get('token') || searchParams.get('invite') || searchParams.get('inviteToken');
     if (token) {
       setInviteToken(token);
     }
@@ -130,7 +130,7 @@ export default function RegisterForm() {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        inviteToken: inviteToken || undefined,
+        token: inviteToken || undefined,
       });
       login(user);
       navigate('/dashboard');
