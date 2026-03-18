@@ -118,25 +118,8 @@ export default function SharedPage() {
     }
   };
 
-  const handleDownloadShared = async (shareId: string) => {
-    try {
-      const { blob, fileName } = await fileApi.downloadShared(shareId);
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = fileName || 'download';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      console.error('Download failed:', error);
-      toast({
-        title: 'Error downloading',
-        description: 'Unable to download file.',
-        variant: 'destructive',
-      });
-    }
+  const handleDownloadShared = (shareId: string) => {
+    fileApi.downloadShared(shareId);
   };
 
   const handleCopyLink = async (token: string, shareId: string) => {

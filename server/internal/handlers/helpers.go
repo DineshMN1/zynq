@@ -35,7 +35,7 @@ func readJSON(r *http.Request, v interface{}) error {
 // Otherwise it dials plaintext and relies on smtp.SendMail's automatic
 // STARTTLS upgrade (port 587 / 25).
 func dialSMTP(cfg *config.Config) (*smtp.Client, error) {
-	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
+	addr := net.JoinHostPort(cfg.SMTPHost, fmt.Sprintf("%d", cfg.SMTPPort))
 	tlsCfg := &tls.Config{ServerName: cfg.SMTPHost}
 
 	if cfg.SMTPSecure {
@@ -60,7 +60,7 @@ func dialSMTP(cfg *config.Config) (*smtp.Client, error) {
 func smtpSend(cfg *config.Config, from string, to []string, msg []byte) error {
 	if !cfg.SMTPSecure {
 		// STARTTLS path — smtp.SendMail handles the upgrade internally.
-		addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
+		addr := net.JoinHostPort(cfg.SMTPHost, fmt.Sprintf("%d", cfg.SMTPPort))
 		var auth smtp.Auth
 		if cfg.SMTPUser != "" {
 			auth = smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPHost)

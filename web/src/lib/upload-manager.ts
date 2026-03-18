@@ -46,16 +46,14 @@ const TEXT_EXTENSIONS = new Set([
 
 // Extensions that support duplicate detection (must match backend dedup.go)
 const DEDUP_EXTENSIONS = new Set([
-  'pdf',
-  'doc',
-  'docx',
-  'xls',
-  'xlsx',
-  'ppt',
-  'pptx',
-  'txt',
-  'md',
-  'csv',
+  // Standard Text & Data
+  'txt', 'csv', 'md', 'rtf', 'log',
+  // Microsoft Office
+  'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+  // OpenDocument
+  'odt', 'ods', 'odp',
+  // Print & Web / Structured data
+  'pdf', 'html', 'htm', 'xml', 'json',
 ]);
 
 class UploadManager {

@@ -73,10 +73,7 @@ import { useUploadContext } from '@/context/UploadContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-interface UploadFailure {
-  fileName: string;
-  message: string;
-}
+
 
 // Maximum allowed upload size (15 GB)
 const MAX_FILE_BYTES = 15 * 1024 * 1024 * 1024;
@@ -951,10 +948,6 @@ export default function FilesPage() {
       const progressIds = readyToUpload.map((entry) =>
         addUpload(entry.file.name),
       );
-      let uploaded = 0;
-      let errors = 0;
-      const failures: UploadFailure[] = [];
-
       const uploadTasks = readyToUpload.map((entry, i) => ({
         ...entry,
         progressId: progressIds[i],
@@ -974,17 +967,8 @@ export default function FilesPage() {
               progressId,
               parentId,
             );
-            uploaded++;
-          } catch (err) {
-            errors++;
+          } catch {
             updateUpload(progressId, { status: 'error' });
-            failures.push({
-              fileName: file.name,
-              message:
-                err instanceof ApiError
-                  ? err.message
-                  : 'Unable to upload this file.',
-            });
           }
         },
         3,
@@ -993,23 +977,9 @@ export default function FilesPage() {
       await loadFiles();
       emitStorageRefresh();
 
-      if (uploaded > 0 || errors > 0) {
-        const parts: string[] = [];
-        if (uploaded > 0) parts.push(`${uploaded} uploaded`);
-        if (errors > 0) parts.push(`${errors} failed`);
-        const firstFailure = failures[0];
-        toast({
-          title: 'Upload complete',
-          description: firstFailure
-            ? `${parts.join(', ')}. ${firstFailure.fileName}: ${firstFailure.message}`
-            : parts.join(', ') + '.',
-          variant: errors > 0 && uploaded === 0 ? 'destructive' : undefined,
-        });
-      }
-
       setTimeout(() => {
         progressIds.forEach((id) => removeUploadProgress(id));
-      }, 3000);
+      }, 2000);
     }
 
     // Phase 3: Show dialog for duplicates
@@ -1109,7 +1079,7 @@ export default function FilesPage() {
     } catch (err) {
       console.error('File upload error:', err);
       updateUpload(progressId, { status: 'error' });
-      setTimeout(() => removeUploadProgress(progressId), 3000);
+      setTimeout(() => removeUploadProgress(progressId), 2000);
     } finally {
       e.target.value = '';
     }
@@ -1123,9 +1093,6 @@ export default function FilesPage() {
     if (items.length === 0) return;
 
     const progressIds = items.map((item) => addUpload(item.file.name));
-    let uploaded = 0;
-    let errors = 0;
-    const failures: UploadFailure[] = [];
 
     const tasks = items.map((item, i) => ({
       ...item,
@@ -1140,16 +1107,8 @@ export default function FilesPage() {
         );
         try {
           await proceedWithUploadForId(file, hash, true, progressId, parentId);
-          uploaded++;
-        } catch (err) {
-          errors++;
-          const errorMessage =
-            err instanceof ApiError
-              ? err.message
-              : 'Unable to upload this file.';
-          console.error(`Failed to upload ${file.name}:`, errorMessage);
+        } catch {
           updateUpload(progressId, { status: 'error' });
-          failures.push({ fileName: file.name, message: errorMessage });
         }
       },
       3,
@@ -1158,19 +1117,9 @@ export default function FilesPage() {
     await loadFiles();
     emitStorageRefresh();
 
-    const count = items.length;
-    toast({
-      title: uploaded === count ? 'Upload successful' : 'Upload complete',
-      description:
-        uploaded === count
-          ? `${uploaded} file${uploaded > 1 ? 's' : ''} uploaded.`
-          : `${uploaded} uploaded, ${errors} failed.${failures[0] ? ` ${failures[0].fileName}: ${failures[0].message}` : ''}`,
-      variant: errors > 0 && uploaded === 0 ? 'destructive' : undefined,
-    });
-
     setTimeout(() => {
       progressIds.forEach((id) => removeUploadProgress(id));
-    }, 3000);
+    }, 2000);
   };
 
   const handleDuplicateCancel = () => {

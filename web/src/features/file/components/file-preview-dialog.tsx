@@ -10,7 +10,7 @@ import { Loader2, Download, X } from 'lucide-react';
 import { ApiError, type FileMetadata, fileApi } from '@/lib/api';
 import { getFileIcon, getIconColor } from '@/features/file/utils/file-icons';
 import { cn } from '@/lib/utils';
-import { toast } from '@/hooks/use-toast';
+
 
 interface FilePreviewDialogProps {
   file: FileMetadata;
@@ -102,7 +102,7 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
       setLoading(true);
       setError('');
       try {
-        const { blob } = await fileApi.download(file.id);
+        const { blob } = await fileApi.downloadBlob(file.id);
         if (stale) return;
         if (previewType === 'text' || previewType === 'code') {
           const text = await blob.text();
@@ -134,28 +134,8 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
     };
   }, [file.id, previewType]);
 
-  const handleDownload = async () => {
-    try {
-      const { blob, fileName } = await fileApi.download(file.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName || file.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Download failed:', err);
-      toast({
-        title: 'Download failed',
-        description:
-          err instanceof ApiError
-            ? err.message
-            : 'Unable to download this file.',
-        variant: 'destructive',
-      });
-    }
+  const handleDownload = () => {
+    fileApi.download(file.id);
   };
 
   return (

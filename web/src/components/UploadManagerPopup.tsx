@@ -1,14 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronDown,
   X,
   File as FileIcon,
   CheckCircle2,
   AlertCircle,
   Upload,
-  Pause,
-  Play,
   RotateCcw,
   Copy,
 } from 'lucide-react';
@@ -36,21 +33,17 @@ function formatEta(seconds: number): string {
 function statusColor(status: UploadProgress['status']) {
   if (status === 'completed' || status === 'duplicate') return 'text-green-500';
   if (status === 'error') return 'text-destructive';
-  if (status === 'paused') return 'text-amber-500';
+
   return 'text-primary';
 }
 
 function UploadRow({
   item,
   onCancel,
-  onPause,
-  onResume,
   onRetry,
 }: {
   item: UploadProgress;
   onCancel: () => void;
-  onPause: () => void;
-  onResume: () => void;
   onRetry: () => void;
 }) {
   const isActive =
@@ -61,14 +54,6 @@ function UploadRow({
   // Build the detail string shown below the progress bar
   const detail = (() => {
     if (item.status === 'checking') return 'Checking for duplicates…';
-    if (item.status === 'paused') {
-      const pct = `${item.progress}%`;
-      const bytes =
-        item.loadedBytes !== undefined && item.totalBytes !== undefined
-          ? `${formatBytes(item.loadedBytes)} / ${formatBytes(item.totalBytes)}`
-          : '';
-      return [pct, bytes].filter(Boolean).join(' · ');
-    }
     if (item.status === 'queued') return 'Queued';
     if (item.status === 'uploading') {
       const pct = `${item.progress}%`;
@@ -106,8 +91,6 @@ function UploadRow({
             <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
           ) : item.status === 'error' ? (
             <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-          ) : item.status === 'paused' ? (
-            <Pause className="h-3.5 w-3.5 text-amber-500" />
           ) : item.status === 'checking' ? (
             <Copy className="h-3.5 w-3.5 text-muted-foreground animate-pulse" />
           ) : (
@@ -138,11 +121,8 @@ function UploadRow({
       </div>
 
       {/* Row 2: progress bar */}
-      {(isActive || item.status === 'paused') && (
-        <Progress
-          value={item.progress}
-          className={cn('h-1 mb-1.5', item.status === 'paused' && 'opacity-40')}
-        />
+      {isActive && (
+        <Progress value={item.progress} className="h-1 mb-1.5" />
       )}
 
       {/* Row 3: detail + action buttons side by side */}
@@ -158,45 +138,16 @@ function UploadRow({
           </p>
         )}
 
-        {/* Action buttons always on this row so they never overflow */}
+        {/* Action buttons */}
         <div className="flex items-center gap-1 shrink-0">
           {isActive && (
-            <>
-              <button
-                onClick={onPause}
-                title="Pause upload"
-                className="flex items-center gap-1 px-2 h-5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-colors text-[10px] font-medium"
-              >
-                <Pause className="h-2.5 w-2.5" />
-                Pause
-              </button>
-              <button
-                onClick={onCancel}
-                title="Cancel"
-                className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </>
-          )}
-          {item.status === 'paused' && (
-            <>
-              <button
-                onClick={onResume}
-                title="Resume upload"
-                className="flex items-center gap-1 px-2 h-5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 transition-colors text-[10px] font-medium"
-              >
-                <Play className="h-2.5 w-2.5" />
-                Resume
-              </button>
-              <button
-                onClick={onCancel}
-                title="Remove"
-                className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </>
+            <button
+              onClick={onCancel}
+              title="Cancel"
+              className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
           )}
           {item.status === 'error' && (
             <>
@@ -227,13 +178,11 @@ export function UploadManagerPopup() {
   const {
     uploadQueue,
     cancelUpload,
-    pauseUpload,
     resumeUpload,
     cancelAll,
     dismissCompleted,
   } = useUploadContext();
   const isMobile = useIsMobile();
-  const [isMinimized, setIsMinimized] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
   const activeUploads = uploadQueue.filter(
@@ -254,20 +203,17 @@ export function UploadManagerPopup() {
 
   // Count by status for header summary
   const errorCount = uploadQueue.filter((u) => u.status === 'error').length;
-  const pausedCount = uploadQueue.filter((u) => u.status === 'paused').length;
-
   useEffect(() => {
     if (uploadQueue.length > 0) setIsVisible(true);
   }, [uploadQueue.length]);
 
-  // Auto-dismiss 4s after all done (skip if paused items remain)
+  // Auto-dismiss 2s after all done
   useEffect(() => {
-    const hasPaused = uploadQueue.some((u) => u.status === 'paused');
-    if (!hasActive && !hasPaused && uploadQueue.length > 0) {
+    if (!hasActive && uploadQueue.length > 0) {
       const t = setTimeout(() => {
         dismissCompleted();
         setIsVisible(false);
-      }, 4000);
+      }, 2000);
       return () => clearTimeout(t);
     }
   }, [hasActive, uploadQueue, dismissCompleted]);
@@ -288,64 +234,6 @@ export function UploadManagerPopup() {
     <AnimatePresence>
       {isVisible && (
         <>
-          {isMinimized ? (
-            /* Minimized pill */
-            <motion.button
-              key="minimized"
-              initial={{ y: 16, opacity: 0, scale: 0.95 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 16, opacity: 0, scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 340, damping: 28 }}
-              onClick={() => setIsMinimized(false)}
-              className={cn(
-                'fixed right-4 z-50 flex items-center gap-2.5',
-                'bg-card border border-border shadow-lg rounded-full px-4 py-2',
-                'hover:shadow-xl transition-shadow cursor-pointer select-none',
-                bottomClass,
-              )}
-            >
-              {/* Mini circular progress */}
-              <div className="relative h-5 w-5 shrink-0">
-                <svg
-                  className="h-5 w-5 -rotate-90"
-                  viewBox="0 0 20 20"
-                >
-                  <circle
-                    cx="10"
-                    cy="10"
-                    r="8"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeOpacity={0.15}
-                    strokeWidth="2.5"
-                  />
-                  <circle
-                    cx="10"
-                    cy="10"
-                    r="8"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeDasharray={`${2 * Math.PI * 8}`}
-                    strokeDashoffset={`${2 * Math.PI * 8 * (1 - aggregateProgress / 100)}`}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dashoffset 0.3s ease' }}
-                  />
-                </svg>
-              </div>
-              <span className="text-xs font-medium">
-                {hasActive
-                  ? `${aggregateProgress}% · ${activeUploads.length} file${activeUploads.length !== 1 ? 's' : ''}`
-                  : `${uploadQueue.length} file${uploadQueue.length !== 1 ? 's' : ''} done`}
-              </span>
-              {errorCount > 0 && (
-                <span className="text-[10px] font-medium text-destructive">
-                  {errorCount} failed
-                </span>
-              )}
-            </motion.button>
-          ) : (
-            /* Expanded panel */
             <motion.div
               key="expanded"
               initial={{ y: 16, opacity: 0, scale: 0.97 }}
@@ -379,21 +267,10 @@ export function UploadManagerPopup() {
                       · {errorCount} failed
                     </span>
                   )}
-                  {pausedCount > 0 && (
-                    <span className="text-[10px] font-medium text-amber-500 shrink-0">
-                      · {pausedCount} paused
-                    </span>
-                  )}
+
                 </div>
 
                 <div className="flex items-center gap-0.5 ml-2 shrink-0">
-                  <button
-                    onClick={() => setIsMinimized(true)}
-                    className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
-                    title="Minimize"
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </button>
                   <button
                     onClick={handleClose}
                     className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
@@ -419,8 +296,6 @@ export function UploadManagerPopup() {
                       key={item.id}
                       item={item}
                       onCancel={() => cancelUpload(item.id)}
-                      onPause={() => pauseUpload(item.id)}
-                      onResume={() => resumeUpload(item.id)}
                       onRetry={() => resumeUpload(item.id)}
                     />
                   ))}
@@ -444,7 +319,6 @@ export function UploadManagerPopup() {
                 </div>
               )}
             </motion.div>
-          )}
         </>
       )}
     </AnimatePresence>

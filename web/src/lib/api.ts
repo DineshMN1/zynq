@@ -481,24 +481,14 @@ export const fileApi = {
       },
     ),
 
-  downloadShared: async (shareId: string) => {
-    const response = await fetch(
-      `${getApiBaseUrl()}/files/shares/${shareId}/download`,
-      {
-        credentials: 'include',
-      },
-    );
-
-    if (!response.ok) {
-      throw await toApiError(response);
-    }
-
-    const blob = await response.blob();
-    const fileName = getFileNameFromDisposition(
-      response.headers.get('Content-Disposition'),
-    );
-
-    return { blob, fileName };
+  downloadShared: (shareId: string) => {
+    const url = `${getApiBaseUrl()}/files/shares/${shareId}/download`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   },
   bulkDelete: (ids: string[]) =>
     fetchApi<{ deleted: number }>('/files/bulk', {
@@ -517,20 +507,33 @@ export const fileApi = {
       method: 'DELETE',
     }),
 
-  download: async (id: string) => {
+  download: (id: string) => {
+    // Navigate to the download URL directly so the browser handles
+    // streaming, progress, and disk writes natively. Avoids loading
+    // the entire file into memory (which OOMs on multi-GB files).
+    // Cookies are sent automatically for same-origin requests and the
+    // server's Content-Disposition: attachment header triggers a save dialog.
+    const url = `${getApiBaseUrl()}/files/${id}/download`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  },
+
+  /** Fetch file content as a blob — only for in-browser previews of small files. */
+  downloadBlob: async (id: string) => {
     const response = await fetch(`${getApiBaseUrl()}/files/${id}/download`, {
       credentials: 'include',
     });
-
     if (!response.ok) {
       throw await toApiError(response);
     }
-
     const blob = await response.blob();
     const fileName = getFileNameFromDisposition(
       response.headers.get('Content-Disposition'),
     );
-
     return { blob, fileName };
   },
 
