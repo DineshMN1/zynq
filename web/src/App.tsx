@@ -15,7 +15,6 @@ import DashboardSharedPage from './pages/dashboard/shared';
 import DashboardShareTokenPage from './pages/dashboard/share-detail';
 import DashboardSettingsPage from './pages/dashboard/settings/index';
 import DashboardSettingsUsersPage from './pages/dashboard/settings/users';
-import DashboardSettingsInvitesPage from './pages/dashboard/settings/invites';
 import DashboardSettingsNotificationsPage from './pages/dashboard/settings/notifications';
 import DashboardSettingsMonitoringPage from './pages/dashboard/settings/monitoring';
 import NotFoundPage from './pages/not-found';
@@ -46,10 +45,6 @@ export default function App() {
         <Route path="share/:token" element={<DashboardShareTokenPage />} />
         <Route path="settings" element={<DashboardSettingsPage />} />
         <Route path="settings/users" element={<DashboardSettingsUsersPage />} />
-        <Route
-          path="settings/invites"
-          element={<DashboardSettingsInvitesPage />}
-        />
         <Route
           path="settings/notifications"
           element={<DashboardSettingsNotificationsPage />}
