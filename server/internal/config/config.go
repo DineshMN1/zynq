@@ -37,6 +37,7 @@ type Config struct {
 	MaxAssemblyWorkers      int
 	SessionTTLHours         int
 	MinFreeBytes            int64
+	DiskStatsPath           string // override path for disk stats (useful in Docker to point at a host mount)
 	StaticDir               string // directory to serve the React SPA from (empty = disabled)
 	NodeEnv                 string
 }
@@ -92,6 +93,7 @@ func Load() *Config {
 		MaxAssemblyWorkers:      getEnvInt("MAX_ASSEMBLY_WORKERS", 32),
 		SessionTTLHours:         getEnvInt("SESSION_TTL_HOURS", 24),
 		MinFreeBytes:            getEnvInt64("MIN_FREE_BYTES", 536870912),
+		DiskStatsPath:           getEnv("DISK_STATS_PATH", ""),
 		StaticDir:               getEnv("STATIC_DIR", ""),
 		NodeEnv:                 getEnv("NODE_ENV", "development"),
 	}

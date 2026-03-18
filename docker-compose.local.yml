@@ -62,14 +62,12 @@ services:
     ports:
       - '3000:80'
     volumes:
-      - zynq_localbuild_files:/data/files
+      - ${ZYNQ_DATA_PATH:-./data/files}:/data/files
     networks:
       - zynqcloud-localbuild-network
 
 volumes:
   postgres_localbuild_data:
-    driver: local
-  zynq_localbuild_files:
     driver: local
 
 networks:

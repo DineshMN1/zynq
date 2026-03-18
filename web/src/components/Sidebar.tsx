@@ -16,22 +16,39 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  FolderOpen,
+  Shield,
   ChevronsUpDown,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverDescription,
+  PopoverBody,
+  PopoverFooter,
+} from './ui/popover';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
+import { Sheet, SheetContent } from './ui/sheet';
+import {
+  SidebarProvider,
+  Sidebar as UISidebar,
+  SidebarHeader as UISidebarHeader,
+  SidebarContent as UISidebarContent,
+  SidebarFooter as UISidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarSeparator,
+} from './ui/sidebar';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -50,18 +67,30 @@ interface SidebarProps {
 
 type UpdateStep = 'idle' | 'pulling' | 'restarting' | 'done' | 'error';
 
+type NavItem = { href: string; label: string; icon: React.ElementType };
+type NavGroup = {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  items: NavItem[];
+};
+
+const RAIL_W = 60;
+const PANEL_W = 200;
+
 export function Sidebar({ user }: SidebarProps) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const [collapsed, setCollapsed] = useState(false);
+  const [activeGroup, setActiveGroup] = useState<string>('files');
+  const [panelOpen, setPanelOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [storageInfo, setStorageInfo] = useState<StorageOverview | null>(null);
   const [loadingStorage, setLoadingStorage] = useState(true);
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updateStep, setUpdateStep] = useState<UpdateStep>('idle');
-  const isMobile = useIsMobile();
+  const isMobile = useIsMobile(); // true for < 1024px (mobile + tablet)
 
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
   const isOwner = user?.role === 'owner';
@@ -70,15 +99,73 @@ export function Sidebar({ user }: SidebarProps) {
   const usedPercentage = storageInfo?.user.usedPercentage || 0;
   const isUnlimited = storageInfo?.user.isUnlimited;
 
+  const navGroups: NavGroup[] = [
+    {
+      id: 'files',
+      label: 'Files',
+      icon: FolderOpen,
+      items: [
+        { href: '/dashboard/files', label: 'All Files', icon: Files },
+        { href: '/dashboard/shared', label: 'Shared', icon: Share2 },
+        { href: '/dashboard/trash', label: 'Trash', icon: Trash2 },
+      ],
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      items: [
+        { href: '/dashboard/settings', label: 'Preferences', icon: Settings },
+        { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
+      ],
+    },
+    ...(isAdmin
+      ? [
+          {
+            id: 'admin',
+            label: 'Admin',
+            icon: Shield,
+            items: [
+              {
+                href: '/dashboard/settings/users',
+                label: 'Users',
+                icon: Users,
+              },
+              {
+                href: '/dashboard/settings/notifications',
+                label: 'Notifications',
+                icon: Bell,
+              },
+              {
+                href: '/dashboard/settings/monitoring',
+                label: 'Monitoring',
+                icon: Activity,
+              },
+            ],
+          },
+        ]
+      : []),
+  ];
+
+  useEffect(() => {
+    const matched = navGroups.find((g) =>
+      g.items.some(
+        (i) => pathname === i.href || pathname.startsWith(i.href + '/'),
+      ),
+    );
+    if (matched) setActiveGroup(matched.id);
+  }, [pathname]);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   useEffect(() => {
     if (user) void loadStorageInfo();
   }, [user]);
 
   useEffect(() => {
-    systemApi
-      .checkUpdate()
-      .then(setUpdateInfo)
-      .catch(() => {});
+    systemApi.checkUpdate().then(setUpdateInfo).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -88,10 +175,6 @@ export function Sidebar({ user }: SidebarProps) {
     window.addEventListener(STORAGE_REFRESH_EVENT, cb);
     return () => window.removeEventListener(STORAGE_REFRESH_EVENT, cb);
   }, [user]);
-
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
 
   const loadStorageInfo = async () => {
     try {
@@ -119,11 +202,6 @@ export function Sidebar({ user }: SidebarProps) {
     try {
       await systemApi.triggerUpdate();
       setUpdateStep('restarting');
-
-      // Poll /health every 2 s (up to 120 s) instead of using a fixed timer.
-      // The container may come back faster or slower than 8 s depending on
-      // image size and host load. A real health check avoids both false "done"
-      // (page reloaded before service is ready) and unnecessary 8 s waits.
       const start = Date.now();
       const pollHealth = async (): Promise<void> => {
         if (Date.now() - start > 120_000) {
@@ -138,346 +216,155 @@ export function Sidebar({ user }: SidebarProps) {
             return;
           }
         } catch {
-          // Container still restarting — keep polling.
+          // still restarting
         }
         setTimeout(pollHealth, 2000);
       };
-      // Give the container a 3 s head-start before the first health check.
       setTimeout(pollHealth, 3000);
     } catch {
       setUpdateStep('error');
     }
   };
 
-  // ── Nav link definitions ────────────────────────────────────────────────────
-  const mainLinks = [
-    { href: '/dashboard/files', label: 'All Files', icon: Files },
-    { href: '/dashboard/shared', label: 'Shared', icon: Share2 },
-    { href: '/dashboard/trash', label: 'Trash', icon: Trash2 },
-  ];
-
-  const settingsLinks = [
-    { href: '/dashboard/settings', label: 'Preferences', icon: Settings },
-    { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
-  ];
-
-  const adminLinks = isAdmin
-    ? [
-        { href: '/dashboard/settings/users', label: 'Users', icon: Users },
-        {
-          href: '/dashboard/settings/notifications',
-          label: 'Notifications',
-          icon: Bell,
-        },
-        {
-          href: '/dashboard/settings/monitoring',
-          label: 'Monitoring',
-          icon: Activity,
-        },
-      ]
-    : [];
-
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '/');
 
-  // ── Sub-components ──────────────────────────────────────────────────────────
-
-  /** Single navigation item. Wraps in tooltip when sidebar is collapsed. */
-  const NavItem = ({
-    href,
-    label,
-    icon: Icon,
-  }: {
-    href: string;
-    label: string;
-    icon: React.ElementType;
-  }) => {
-    const active = isActive(href);
-    const showLabel = isMobile || !collapsed;
-
-    const inner = (
-      <Link
-        to={href}
-        className={cn(
-          'flex items-center gap-3 px-3 rounded-lg transition-colors',
-          showLabel ? 'py-2.5' : 'py-2 justify-center',
-          active
-            ? 'bg-sidebar-accent text-sidebar-foreground font-medium'
-            : 'text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/60',
-        )}
-      >
-        <Icon className="h-[18px] w-[18px] shrink-0" />
-        {showLabel && (
-          <span className="text-[14px] font-medium leading-none">{label}</span>
-        )}
-      </Link>
-    );
-
-    if (showLabel) return inner;
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>{inner}</TooltipTrigger>
-        <TooltipContent side="right" sideOffset={10}>
-          {label}
-        </TooltipContent>
-      </Tooltip>
-    );
+  const handleRailClick = (groupId: string) => {
+    if (activeGroup === groupId) {
+      setPanelOpen((p) => !p);
+    } else {
+      setActiveGroup(groupId);
+      setPanelOpen(true);
+    }
   };
 
-  /** Thin group separator with optional label (Dokploy "Extra" style). */
-  const GroupLabel = ({ title }: { title: string }) =>
-    isMobile || !collapsed ? (
-      <p className="px-3 pt-5 pb-1.5 text-[11px] font-semibold text-sidebar-foreground/45 select-none uppercase tracking-wider">
-        {title}
-      </p>
-    ) : (
-      <div className="my-3 border-t border-sidebar-border mx-3" />
-    );
+  const currentGroup = navGroups.find((g) => g.id === activeGroup);
 
-  // ── Sidebar body ────────────────────────────────────────────────────────────
-  const sidebarContent = (
-    <aside
-      className={cn(
-        'flex flex-col h-full bg-sidebar border-r border-sidebar-border transition-all duration-200',
-        isMobile ? 'w-full' : collapsed ? 'w-[60px]' : 'w-[256px]',
-      )}
-    >
-      {/* ── Header — logo only, no toggle inside ── */}
-      <div
-        className={cn(
-          'h-14 shrink-0 flex items-center border-b border-sidebar-border',
-          collapsed ? 'justify-center px-2' : 'px-3',
-        )}
-      >
-        {collapsed ? (
-          <Link to="/dashboard/files">
-            <div className="h-7 w-7 rounded-md bg-white border border-sidebar-border flex items-center justify-center overflow-hidden">
-              <img
-                src="/favicon.ico"
-                alt="logo"
-                className="h-full w-full object-contain p-0.5"
-              />
-            </div>
-          </Link>
-        ) : (
-          <Link
-            to="/dashboard/files"
-            className="flex items-center gap-2.5 min-w-0"
-          >
-            <div className="h-7 w-7 rounded-md bg-white border border-sidebar-border flex items-center justify-center overflow-hidden shrink-0">
-              <img
-                src="/favicon.ico"
-                alt="logo"
-                className="h-full w-full object-contain p-0.5"
-              />
-            </div>
-            <span className="font-semibold text-[15px] text-sidebar-foreground truncate">
-              ZynqCloud
-            </span>
-          </Link>
-        )}
-      </div>
-
-      {/* ── Navigation (scrollable) ── */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {mainLinks.map((l) => (
-          <NavItem key={l.href} {...l} />
-        ))}
-
-        <GroupLabel title="Settings" />
-        {settingsLinks.map((l) => (
-          <NavItem key={l.href} {...l} />
-        ))}
-
-        {isAdmin && adminLinks.length > 0 && (
-          <>
-            <GroupLabel title="Admin" />
-            {adminLinks.map((l) => (
-              <NavItem key={l.href} {...l} />
-            ))}
-          </>
-        )}
-      </nav>
-
-      {/* ── Storage bar ── */}
-      {(isMobile || !collapsed) && (
-        <div className="px-4 py-3 border-t border-sidebar-border">
-          <div className="flex items-center justify-between mb-1.5 text-[11px]">
-            <span className="text-sidebar-foreground/40">Storage</span>
-            {!loadingStorage && storageInfo && (
-              <span className="text-sidebar-foreground/50">
-                {isOwner
-                  ? `${formatBytes(storageInfo.system.freeBytes)} free of ${formatBytes(storageInfo.system.totalBytes)}`
-                  : isUnlimited
-                    ? 'Unlimited'
-                    : `${formatBytes(storageInfo.user.usedBytes)} / ${formatBytes(storageInfo.user.quotaBytes)}`}
-              </span>
-            )}
+  // ── Shared: user popover content ─────────────────────────────────────────────
+  const UserPopoverContent = ({ side }: { side: 'top' | 'right' }) => (
+    <PopoverContent align="center" side={side} sideOffset={8} className="w-64 p-0">
+      <PopoverHeader>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-9 w-9 rounded-lg shrink-0">
+            <AvatarFallback className="rounded-lg bg-muted text-foreground text-sm font-semibold">
+              {getInitials(user?.name ?? '')}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <PopoverTitle className="text-[13.5px] truncate">
+              {user?.name}
+            </PopoverTitle>
+            <PopoverDescription className="text-[11px] truncate">
+              {user?.email}
+            </PopoverDescription>
           </div>
-          {loadingStorage ? (
-            <div className="h-1 bg-sidebar-accent rounded-full animate-pulse" />
-          ) : isOwner && storageInfo ? (
-            <Progress
-              value={Math.min(storageInfo.system.usedPercentage, 100)}
-              className={cn(
-                'h-1 bg-sidebar-accent/60',
-                storageInfo.system.usedPercentage >= 90 && '[&>div]:bg-red-500',
-                storageInfo.system.usedPercentage >= 75 &&
-                  storageInfo.system.usedPercentage < 90 &&
-                  '[&>div]:bg-amber-500',
-                storageInfo.system.usedPercentage < 75 &&
-                  '[&>div]:bg-sidebar-primary',
-              )}
-            />
-          ) : !isUnlimited ? (
-            <Progress
-              value={Math.min(usedPercentage, 100)}
-              className={cn(
-                'h-1 bg-sidebar-accent/60',
-                usedPercentage >= 90 && '[&>div]:bg-red-500',
-                usedPercentage >= 75 &&
-                  usedPercentage < 90 &&
-                  '[&>div]:bg-amber-500',
-                usedPercentage < 75 && '[&>div]:bg-sidebar-primary',
-              )}
-            />
-          ) : (
-            <div className="h-1 bg-sidebar-primary/20 rounded-full" />
-          )}
         </div>
-      )}
-
-      {/* ── User row (Dokploy style) ── */}
-      <div className="shrink-0 border-t border-sidebar-border">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                'w-full flex items-center gap-3 px-3 py-2.5 hover:bg-sidebar-accent/60 transition-colors',
-                !isMobile && collapsed && 'justify-center px-2',
-              )}
-            >
-              <Avatar className="h-8 w-8 shrink-0 rounded-lg">
-                <AvatarFallback className="rounded-lg bg-sidebar-primary/20 text-sidebar-foreground text-xs font-semibold">
-                  {getInitials(user?.name ?? '')}
-                </AvatarFallback>
-              </Avatar>
-              {(isMobile || !collapsed) && user && (
-                <>
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="text-[13.5px] font-semibold text-sidebar-foreground leading-tight truncate">
-                      {user.name}
-                    </p>
-                    <p className="text-[11px] text-sidebar-foreground/50 leading-tight truncate mt-0.5">
-                      {user.email}
-                    </p>
-                  </div>
-                  <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/40" />
-                </>
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align={!isMobile && collapsed ? 'center' : 'start'}
-            side="top"
-            className="w-56 mb-1"
-          >
-            <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">{user?.name}</p>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link to="/dashboard/profile" className="cursor-pointer">
-                <UserIcon className="mr-2 h-4 w-4" />
-                Profile
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/dashboard/settings" className="cursor-pointer">
-                <Settings className="mr-2 h-4 w-4" />
-                Preferences
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={toggleTheme} className="cursor-pointer">
-              {theme === 'dark' ? (
-                <>
-                  <Sun className="mr-2 h-4 w-4" />
-                  Light Mode
-                </>
-              ) : (
-                <>
-                  <Moon className="mr-2 h-4 w-4" />
-                  Dark Mode
-                </>
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleLogout}
-              className="text-red-500 focus:text-red-500 cursor-pointer"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* ── Version string (Dokploy style — centered, very muted) ── */}
-        {(isMobile || !collapsed) && (
-          <div className="flex items-center justify-center gap-2 pb-2.5 pt-0">
-            {isOwner && updateAvailable && latestVersion ? (
-              <button
-                onClick={() => setUpdateModalOpen(true)}
-                className="flex items-center gap-1.5 text-[11px] text-blue-500 hover:text-blue-400 transition-colors"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
-                Update to v{latestVersion}
-              </button>
-            ) : updateAvailable && latestVersion ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-[11px] text-sidebar-foreground/30 select-none flex items-center gap-1.5">
-                    Version v{APP_VERSION}
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Update available: v{latestVersion}
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <span className="text-[11px] text-sidebar-foreground/30 select-none">
-                Version v{APP_VERSION}
-              </span>
-            )}
-          </div>
-        )}
-        {/* Collapsed — update dot in version area */}
-        {!isMobile && collapsed && updateAvailable && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                className={cn(
-                  'pb-3 pt-0.5 flex justify-center',
-                  isOwner && 'cursor-pointer',
-                )}
-                onClick={isOwner ? () => setUpdateModalOpen(true) : undefined}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={10}>
-              Update available: v{latestVersion}
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-    </aside>
+      </PopoverHeader>
+      <PopoverBody className="space-y-0.5 px-2 py-1.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+          asChild
+        >
+          <Link to="/dashboard/profile">
+            <UserIcon className="mr-2 h-4 w-4" />
+            Profile
+          </Link>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+          asChild
+        >
+          <Link to="/dashboard/settings">
+            <Settings className="mr-2 h-4 w-4" />
+            Preferences
+          </Link>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+          onClick={toggleTheme}
+        >
+          {theme === 'dark' ? (
+            <>
+              <Sun className="mr-2 h-4 w-4" />
+              Light Mode
+            </>
+          ) : (
+            <>
+              <Moon className="mr-2 h-4 w-4" />
+              Dark Mode
+            </>
+          )}
+        </Button>
+      </PopoverBody>
+      <PopoverFooter>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full bg-transparent text-red-500 hover:text-red-500 border-red-500/20 hover:bg-red-500/10"
+          onClick={handleLogout}
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          Sign Out
+        </Button>
+      </PopoverFooter>
+    </PopoverContent>
   );
 
-  // ── Update modal ────────────────────────────────────────────────────────────
+  // ── Shared: storage bar ───────────────────────────────────────────────────────
+  const StorageBar = () => (
+    <div className="px-4 py-3 border-t border-sidebar-border shrink-0">
+      <div className="flex items-center justify-between mb-1.5 text-[11px]">
+        <span className="text-sidebar-foreground/40">Storage</span>
+        {!loadingStorage && storageInfo && (
+          <span className="text-sidebar-foreground/50 text-right leading-tight">
+            {isOwner
+              ? `${formatBytes(storageInfo.system.freeBytes)} free`
+              : isUnlimited
+                ? 'Unlimited'
+                : `${formatBytes(storageInfo.user.usedBytes)} / ${formatBytes(storageInfo.user.quotaBytes)}`}
+          </span>
+        )}
+      </div>
+      {loadingStorage ? (
+        <div className="h-1 bg-sidebar-accent rounded-full animate-pulse" />
+      ) : isOwner && storageInfo ? (
+        <Progress
+          value={Math.min(storageInfo.system.usedPercentage, 100)}
+          className={cn(
+            'h-1 bg-sidebar-accent/60',
+            storageInfo.system.usedPercentage >= 90 && '[&>div]:bg-red-500',
+            storageInfo.system.usedPercentage >= 75 &&
+              storageInfo.system.usedPercentage < 90 &&
+              '[&>div]:bg-amber-500',
+            storageInfo.system.usedPercentage < 75 &&
+              '[&>div]:bg-sidebar-primary',
+          )}
+        />
+      ) : !isUnlimited ? (
+        <Progress
+          value={Math.min(usedPercentage, 100)}
+          className={cn(
+            'h-1 bg-sidebar-accent/60',
+            usedPercentage >= 90 && '[&>div]:bg-red-500',
+            usedPercentage >= 75 &&
+              usedPercentage < 90 &&
+              '[&>div]:bg-amber-500',
+            usedPercentage < 75 && '[&>div]:bg-sidebar-primary',
+          )}
+        />
+      ) : (
+        <div className="h-1 bg-sidebar-primary/20 rounded-full" />
+      )}
+    </div>
+  );
+
+  // ── Update modal ─────────────────────────────────────────────────────────────
   const updateModal = (
     <AnimatePresence>
       {updateModalOpen && (
@@ -530,9 +417,7 @@ export function Sidebar({ user }: SidebarProps) {
                   </button>
                 )}
               </div>
-
               <div className="space-y-1">
-                {/* Step 1 */}
                 <div
                   className={cn(
                     'flex items-center gap-3 text-sm px-3 py-2.5 rounded-lg transition-colors',
@@ -560,8 +445,6 @@ export function Sidebar({ user }: SidebarProps) {
                   )}
                   <span>Pull latest image</span>
                 </div>
-
-                {/* Step 2 */}
                 <div
                   className={cn(
                     'flex items-center gap-3 text-sm px-3 py-2.5 rounded-lg transition-colors',
@@ -591,7 +474,6 @@ export function Sidebar({ user }: SidebarProps) {
                   <span>Restart container</span>
                 </div>
               </div>
-
               {updateStep === 'done' && (
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -629,28 +511,24 @@ export function Sidebar({ user }: SidebarProps) {
     </AnimatePresence>
   );
 
-  // ── Mobile layout ───────────────────────────────────────────────────────────
+  // ── Mobile / Tablet (< 1024px) ───────────────────────────────────────────────
   if (isMobile) {
     return (
       <>
         {updateModal}
+
+        {/* Fixed top bar */}
         <div className="fixed top-0 left-0 right-0 z-40 h-14 bg-sidebar border-b border-sidebar-border flex items-center px-3 gap-3">
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 text-sidebar-foreground"
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-[280px] bg-sidebar">
-              {sidebarContent}
-            </SheetContent>
-          </Sheet>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-sidebar-foreground shrink-0"
+            onClick={() => setMobileOpen(true)}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
           <Link to="/dashboard/files" className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-md bg-white border border-sidebar-border flex items-center justify-center overflow-hidden">
+            <div className="h-7 w-7 rounded-md bg-white border border-sidebar-border flex items-center justify-center overflow-hidden shrink-0">
               <img
                 src="/favicon.ico"
                 alt="logo"
@@ -661,31 +539,295 @@ export function Sidebar({ user }: SidebarProps) {
               ZynqCloud
             </span>
           </Link>
+          {updateAvailable && (
+            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+          )}
         </div>
+
+        {/* Mobile Sheet sidebar using shadcn sidebar primitives */}
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent
+            side="left"
+            className="p-0 w-[280px] bg-sidebar [&>button]:hidden"
+          >
+            {/*
+              SidebarProvider as pure context wrapper (display:contents)
+              so SidebarMenuButton can access useSidebar() context.
+              The Sheet itself handles open/close.
+            */}
+            <SidebarProvider
+              defaultOpen={true}
+              className="[display:contents]"
+              style={{} as React.CSSProperties}
+            >
+              <UISidebar collapsible="none" className="w-full border-none">
+                {/* Header */}
+                <UISidebarHeader className="border-b border-sidebar-border">
+                  <div className="flex items-center gap-2.5 px-1 py-1">
+                    <div className="h-7 w-7 rounded-md bg-white border border-sidebar-border flex items-center justify-center overflow-hidden shrink-0">
+                      <img
+                        src="/favicon.ico"
+                        alt="logo"
+                        className="h-full w-full object-contain p-0.5"
+                      />
+                    </div>
+                    <span className="font-semibold text-[15px] text-sidebar-foreground">
+                      ZynqCloud
+                    </span>
+                  </div>
+                </UISidebarHeader>
+
+                {/* Nav content */}
+                <UISidebarContent>
+                  {navGroups.map((group) => (
+                    <SidebarGroup key={group.id}>
+                      <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                      <SidebarGroupContent>
+                        <SidebarMenu>
+                          {group.items.map((item) => (
+                            <SidebarMenuItem key={item.href}>
+                              <SidebarMenuButton
+                                asChild
+                                isActive={isActive(item.href)}
+                                size="default"
+                                onClick={() => setMobileOpen(false)}
+                              >
+                                <Link to={item.href}>
+                                  <item.icon />
+                                  <span>{item.label}</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ))}
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    </SidebarGroup>
+                  ))}
+                </UISidebarContent>
+
+                <SidebarSeparator />
+
+                {/* Storage bar */}
+                <StorageBar />
+
+                {/* Footer: user row */}
+                <UISidebarFooter className="border-t border-sidebar-border p-2">
+                  {/* Update button */}
+                  {isOwner && updateAvailable && latestVersion && (
+                    <button
+                      onClick={() => {
+                        setMobileOpen(false);
+                        setUpdateModalOpen(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] text-blue-500 hover:text-blue-400 transition-colors"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
+                      Update to v{latestVersion}
+                    </button>
+                  )}
+
+                  {/* User popover */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <SidebarMenuButton
+                        size="lg"
+                        className="w-full data-[state=open]:bg-sidebar-accent"
+                      >
+                        <Avatar className="h-8 w-8 shrink-0 rounded-lg">
+                          <AvatarFallback className="rounded-lg bg-sidebar-primary/20 text-sidebar-foreground text-xs font-semibold">
+                            {getInitials(user?.name ?? '')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0 text-left">
+                          <p className="text-[13px] font-semibold text-sidebar-foreground leading-tight truncate">
+                            {user?.name}
+                          </p>
+                          <p className="text-[11px] text-sidebar-foreground/50 leading-tight truncate mt-0.5">
+                            {user?.email}
+                          </p>
+                        </div>
+                        <ChevronsUpDown className="h-4 w-4 shrink-0 text-sidebar-foreground/40 ml-auto" />
+                      </SidebarMenuButton>
+                    </PopoverTrigger>
+                    <UserPopoverContent side="top" />
+                  </Popover>
+
+                  {/* Version string */}
+                  <p className="text-center text-[11px] text-sidebar-foreground/30 select-none pt-1">
+                    v{APP_VERSION}
+                  </p>
+                </UISidebarFooter>
+              </UISidebar>
+            </SidebarProvider>
+          </SheetContent>
+        </Sheet>
       </>
     );
   }
 
-  // ── Desktop layout ──────────────────────────────────────────────────────────
+  // ── Desktop (≥ 1024px): two-column rail + detail panel ───────────────────────
   return (
     <>
       {updateModal}
-      {/* Wrapper gives us a positioned ancestor for the floating edge handle */}
-      <div className="relative flex-shrink-0">
-        {sidebarContent}
-        {/* Floating toggle — sits on the right border of the sidebar, half-outside.
-            Matches the Dokploy pattern: handle is outside the sidebar body. */}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="absolute top-[18px] -right-3 z-30 h-6 w-6 rounded-full bg-sidebar border border-sidebar-border flex items-center justify-center text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-all shadow-sm"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      <div className="relative flex-shrink-0 h-full flex">
+        {/* Left icon rail */}
+        <div
+          className="flex flex-col items-center bg-sidebar border-r border-sidebar-border h-full shrink-0"
+          style={{ width: RAIL_W }}
         >
-          {collapsed ? (
-            <ChevronRight className="h-3 w-3" />
-          ) : (
-            <ChevronLeft className="h-3 w-3" />
+          {/* Logo */}
+          <div className="h-14 flex items-center justify-center border-b border-sidebar-border w-full shrink-0">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link to="/dashboard/files">
+                  <div className="h-7 w-7 rounded-md bg-white border border-sidebar-border flex items-center justify-center overflow-hidden">
+                    <img
+                      src="/favicon.ico"
+                      alt="logo"
+                      className="h-full w-full object-contain p-0.5"
+                    />
+                  </div>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                ZynqCloud
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Section icons */}
+          <nav className="flex-1 flex flex-col items-center gap-1 py-3 px-1.5">
+            {navGroups.map((group) => {
+              const isGroupActive = group.items.some((i) => isActive(i.href));
+              const isPanelShowing = panelOpen && activeGroup === group.id;
+              return (
+                <Tooltip key={group.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleRailClick(group.id)}
+                      className={cn(
+                        'flex items-center justify-center rounded-lg h-9 w-9 transition-colors',
+                        isPanelShowing
+                          ? 'bg-sidebar-accent text-sidebar-foreground'
+                          : isGroupActive
+                            ? 'bg-sidebar-accent/60 text-sidebar-foreground'
+                            : 'text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60',
+                      )}
+                    >
+                      <group.icon className="h-[18px] w-[18px]" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    {group.label}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </nav>
+
+          {/* Bottom: update dot + user avatar */}
+          <div className="flex flex-col items-center gap-2 pb-3 px-1.5 shrink-0">
+            {updateAvailable && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={cn(
+                      'flex items-center justify-center h-4',
+                      isOwner && 'cursor-pointer',
+                    )}
+                    onClick={
+                      isOwner ? () => setUpdateModalOpen(true) : undefined
+                    }
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 block" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  Update available: v{latestVersion}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="flex items-center justify-center rounded-lg h-9 w-9 hover:bg-sidebar-accent/60 transition-colors">
+                  <Avatar className="h-7 w-7 shrink-0 rounded-lg">
+                    <AvatarFallback className="rounded-lg bg-sidebar-primary/20 text-sidebar-foreground text-[11px] font-semibold">
+                      {getInitials(user?.name ?? '')}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
+              </PopoverTrigger>
+              <UserPopoverContent side="right" />
+            </Popover>
+          </div>
+        </div>
+
+        {/* Right detail panel */}
+        <AnimatePresence initial={false}>
+          {panelOpen && currentGroup && (
+            <motion.div
+              key={activeGroup}
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: PANEL_W, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              className="flex flex-col h-full bg-sidebar border-r border-sidebar-border overflow-hidden shrink-0"
+            >
+              {/* Panel header */}
+              <div className="h-14 shrink-0 flex items-center px-4 border-b border-sidebar-border">
+                <span className="font-semibold text-[15px] text-sidebar-foreground whitespace-nowrap">
+                  {currentGroup.label}
+                </span>
+              </div>
+
+              {/* Nav items */}
+              <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+                {currentGroup.items.map((item) => (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors whitespace-nowrap',
+                      isActive(item.href)
+                        ? 'bg-sidebar-accent text-sidebar-foreground font-medium'
+                        : 'text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/60',
+                    )}
+                  >
+                    <item.icon className="h-[18px] w-[18px] shrink-0" />
+                    <span className="text-[14px] font-medium leading-none">
+                      {item.label}
+                    </span>
+                  </Link>
+                ))}
+              </nav>
+
+              {/* Storage bar (files section only) */}
+              {activeGroup === 'files' && <StorageBar />}
+
+              {/* Version / update */}
+              <div className="shrink-0 pb-2.5 pt-1.5 flex justify-center border-t border-sidebar-border">
+                {isOwner && updateAvailable && latestVersion ? (
+                  <button
+                    onClick={() => setUpdateModalOpen(true)}
+                    className="flex items-center gap-1.5 text-[11px] text-blue-500 hover:text-blue-400 transition-colors"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
+                    Update to v{latestVersion}
+                  </button>
+                ) : updateAvailable && latestVersion ? (
+                  <span className="text-[11px] text-sidebar-foreground/30 select-none flex items-center gap-1.5">
+                    v{APP_VERSION}
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-sidebar-foreground/30 select-none">
+                    v{APP_VERSION}
+                  </span>
+                )}
+              </div>
+            </motion.div>
           )}
-        </button>
+        </AnimatePresence>
       </div>
     </>
   );

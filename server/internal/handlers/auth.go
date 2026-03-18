@@ -48,7 +48,7 @@ func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, tokenStr string) {
 		Value:    tokenStr,
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   7 * 24 * 60 * 60,
 		Path:     "/",
 	}
@@ -64,7 +64,7 @@ func (h *AuthHandler) clearAuthCookie(w http.ResponseWriter) {
 		Value:    "",
 		HttpOnly: true,
 		Secure:   h.cfg.NodeEnv == "production",
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 		Path:     "/",
 	}

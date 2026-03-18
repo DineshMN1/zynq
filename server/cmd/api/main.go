@@ -77,6 +77,10 @@ func main() {
 		slog.Error("failed to initialize storage backend", "error", err)
 		os.Exit(1)
 	}
+	if cfg.DiskStatsPath != "" {
+		localBackend.SetDiskStatsPath(cfg.DiskStatsPath)
+		slog.Info("disk stats override", "path", cfg.DiskStatsPath)
+	}
 	slog.Info("storage backend initialized", "path", cfg.StoragePath)
 
 	// Start cleanup goroutine for stale uploads

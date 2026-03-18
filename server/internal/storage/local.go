@@ -17,7 +17,8 @@ import (
 //   - os.Rename is used for atomic writes. On Windows it calls MoveFileExW with
 //     MOVEFILE_REPLACE_EXISTING, which is safe on the same volume.
 type Local struct {
-	root string
+	root          string
+	diskStatsPath string // optional override for disk stats (e.g. host mount in Docker)
 }
 
 // NewLocal creates a Local backend rooted at root, creating the directory if needed.
@@ -182,11 +183,23 @@ func (l *Local) Rename(src, dst string) error {
 	return os.Rename(absSrc, absDst)
 }
 
+// SetDiskStatsPath sets an override path for disk statistics queries.
+// When running in Docker, this can point to a host filesystem mount
+// so that DiskStats reports the real host disk, not the container's virtual disk.
+func (l *Local) SetDiskStatsPath(path string) {
+	l.diskStatsPath = path
+}
+
 // DiskStats returns the available and total bytes on the volume that holds l.root.
-// Returns (0, 0) on platforms where disk stats are not implemented (non-Linux).
+// If a DiskStatsPath override is set, it queries that path instead.
+// Returns (0, 0) on platforms where disk stats are not implemented.
 // Callers must treat (0, 0) as "stats unavailable", not "disk full".
 func (l *Local) DiskStats() (avail, total uint64) {
-	return diskStats(l.root)
+	path := l.root
+	if l.diskStatsPath != "" {
+		path = l.diskStatsPath
+	}
+	return diskStats(path)
 }
 
 // MkdirAll creates path and all parents under root.
