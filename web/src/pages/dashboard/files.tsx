@@ -825,7 +825,7 @@ export default function FilesPage() {
             try {
               await uploadFileWithProgress(url, file, contentType, progressId);
             } catch {
-              updateUpload(progressId, { status: 'error' });
+              updateUpload(progressId, { status: 'error', retry: resumeFn });
             }
           };
           updateUpload(progressId, {

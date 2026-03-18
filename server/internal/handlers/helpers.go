@@ -34,23 +34,17 @@ func readJSON(r *http.Request, v interface{}) error {
 // wraps the connection in TLS immediately (implicit TLS, port 465).
 // Otherwise it dials plaintext and relies on smtp.SendMail's automatic
 // STARTTLS upgrade (port 587 / 25).
+// dialSMTP connects to the SMTP server over implicit TLS (port 465).
 func dialSMTP(cfg *config.Config) (*smtp.Client, error) {
 	addr := net.JoinHostPort(cfg.SMTPHost, fmt.Sprintf("%d", cfg.SMTPPort))
-	tlsCfg := &tls.Config{ServerName: cfg.SMTPHost}
-
-	if cfg.SMTPSecure {
-		// Implicit TLS (port 465): establish TLS first, then speak SMTP.
-		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 15 * time.Second}, "tcp", addr, tlsCfg)
-		if err != nil {
-			return nil, fmt.Errorf("tls dial: %w", err)
-		}
-		return smtp.NewClient(conn, cfg.SMTPHost)
+	tlsCfg := &tls.Config{
+		ServerName: cfg.SMTPHost,
+		MinVersion: tls.VersionTLS12,
 	}
 
-	// Plain dial — smtp.SendMail will attempt STARTTLS automatically.
-	conn, err := net.DialTimeout("tcp", addr, 15*time.Second)
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 15 * time.Second}, "tcp", addr, tlsCfg)
 	if err != nil {
-		return nil, fmt.Errorf("dial: %w", err)
+		return nil, fmt.Errorf("tls dial: %w", err)
 	}
 	return smtp.NewClient(conn, cfg.SMTPHost)
 }

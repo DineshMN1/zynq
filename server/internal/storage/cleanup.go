@@ -22,9 +22,10 @@ import (
 func CleanupSessions(uploadsDir string, ttl time.Duration, logger *slog.Logger) {
 	entries, err := os.ReadDir(uploadsDir)
 	if err != nil {
-		if !os.IsNotExist(err) && !os.IsPermission(err) {
-			logger.Warn("cleanup: readdir failed", "dir", uploadsDir, "err", err)
+		if os.IsNotExist(err) {
+			return // directory doesn't exist yet — nothing to clean
 		}
+		logger.Error("cleanup: readdir failed", "dir", uploadsDir, "err", err)
 		return
 	}
 
