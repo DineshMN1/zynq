@@ -311,7 +311,7 @@ export const authApi = {
     name: string;
     email: string;
     password: string;
-    inviteToken?: string;
+    token?: string;
   }) =>
     fetchApi<User>('/auth/register', {
       method: 'POST',

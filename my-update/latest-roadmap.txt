@@ -1,0 +1,102 @@
+ZynqCloud — Latest Project Roadmap (Updated: 2026-03-18)
+=========================================================
+
+COMPLETED (This Sprint)
+-----------------------
+
+1. CSS Theme Overhaul
+   - Replaced HSL-based theme with hex color values (light + dark modes)
+   - Dark mode: true black (#0a0a0a), neutral grays (#262626)
+   - Blue chart palette, 0.625rem border radius
+   - Light mode: white background, clean neutral grays
+
+2. Sidebar Rewrite — Desktop (Two-Column Rail + Panel)
+   - Left icon rail (60px, always visible): Logo, section icons (Files/Settings/Admin), user avatar with Popover
+   - Right detail panel (200px, animated open/close via framer-motion)
+   - Nav groups: Files (All Files, Shared, Trash), Settings (Preferences, Profile), Admin (Users, Invites, Notifications, Monitoring)
+   - Storage bar shown in Files section, version string in panel footer
+
+3. Sidebar Rewrite — Mobile/Tablet (shadcn Primitives)
+   - Extended mobile breakpoint to 1024px (tablets now use mobile sidebar)
+   - Sheet-based sidebar using SidebarProvider, SidebarMenu, SidebarMenuButton, etc.
+   - User popover with ChevronsUpDown in footer
+   - Fixed top bar with hamburger menu + logo
+
+4. User Popover Component
+   - Extended Popover with PopoverHeader, PopoverTitle, PopoverDescription, PopoverBody, PopoverFooter
+   - Shows avatar, name, email, Profile/Preferences/Theme toggle, Sign Out button
+   - Replaces old DropdownMenu pattern
+
+5. Cross-Platform Disk Stats
+   - diskstats_windows.go: GetDiskFreeSpaceEx via golang.org/x/sys/windows
+   - diskstats_freebsd.go: syscall.Statfs (same pattern as Darwin)
+   - diskstats_other.go: updated build constraint to exclude windows+freebsd
+   - diskstats_linux.go: uses Frsize for correct reporting on overlayfs
+   - diskstats_darwin.go: uses Bsize
+   - All platforms verified via cross-compilation
+
+6. Docker Disk Stats Accuracy
+   - Changed docker-compose.local.yml from Docker-managed volume to bind mount (${ZYNQ_DATA_PATH:-./data/files}:/data/files)
+   - Added DISK_STATS_PATH config option for explicit override
+   - Container now reports real host disk stats via bind mount statfs
+
+7. Mobile Auth Fix (401 Errors)
+   - Root cause: SameSite=Strict on JWT cookie dropped by mobile browsers
+   - Fix: Changed to SameSite=Lax in both setAuthCookie and clearAuthCookie
+   - Mobile login + subsequent API requests now work correctly
+
+8. Go Version Bump (1.25.0 -> 1.25.8)
+   - Resolved 15 stdlib CVEs flagged by govulncheck in CI
+   - Updated go.mod and Dockerfile
+
+9. SMTP Settings Fix
+   - UpdateSMTPSettings now updates in-memory config (was only saving to DB with wrong keys, never read back)
+   - Changes via the Notifications UI take effect immediately without server restart
+   - Test Connection / Send Test Email now use the updated values
+
+10. Invite Token Flow Fix
+    - Backend link uses ?token=, frontend now reads ?token= (was only reading ?invite/?inviteToken)
+    - Frontend register API sends field "token" (was sending "inviteToken", backend expected "token")
+    - Invite link fallback in invites page uses ?token= consistently
+
+11. Sidebar Navigation Fix
+    - Added missing "Invites" link to Admin section in sidebar
+    - All dashboard pages now reachable from sidebar nav
+
+
+ARCHITECTURE SNAPSHOT
+---------------------
+
+Frontend: React + Vite SPA (port 5173 dev / bundled in Docker)
+Backend:  Go (chi router, GORM+postgres, golang-jwt)
+Storage:  AES-256-GCM encrypted, CAS dedup for documents
+Docker:   Single container (Go binary serves API + SPA), supervisord not needed
+CI:       go-storage-ci.yml (multi-OS matrix), ci.yml (lint/test/build), release.yml (Docker Hub)
+
+Key Paths:
+  apps/server/cmd/api/main.go       — entrypoint
+  apps/server/internal/handlers/    — REST handlers (auth, files, share, users, storage, invitations, settings, system)
+  apps/server/internal/storage/     — local backend, CAS, disk stats, cleanup
+  apps/server/internal/crypto/      — envelope encryption (AES-256-GCM-STREAM)
+  web/src/components/Sidebar.tsx    — sidebar component
+  web/src/lib/api.ts                — typed API client
+  web/src/pages/dashboard/          — all dashboard pages
+
+
+UPCOMING / BACKLOG
+------------------
+
+- [ ] SMTP settings persistence: Load saved SMTP config from DB on server startup (currently env vars only; UI changes are runtime-only)
+- [ ] Email templates: Replace plain-text emails with HTML templates for invitations and password resets
+- [ ] File preview: In-browser preview for images, PDFs, text files, and code
+- [ ] Folder sharing: Share entire folders (currently file-only)
+- [ ] Activity log: Audit trail for uploads, downloads, shares, and admin actions
+- [ ] 2FA / TOTP: Two-factor authentication for user accounts
+- [ ] S3 storage backend: Pluggable storage backend for S3-compatible object storage
+- [ ] Chunked uploads: Resume interrupted large file uploads
+- [ ] User avatars: Profile picture upload and display
+- [ ] Search: Full-text search across file names and metadata
+- [ ] Webhook notifications: Notify external services on file events
+- [ ] Rate limiting per-route: Fine-grained rate limits (currently global)
+- [ ] Dark/light mode auto-detect: Follow system preference by default
+- [ ] PWA support: Offline-capable progressive web app with service worker
