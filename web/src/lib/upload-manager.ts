@@ -44,7 +44,7 @@ const TEXT_EXTENSIONS = new Set([
   'ts',
 ]);
 
-// Extensions that support duplicate detection
+// Extensions that support duplicate detection (must match backend dedup.go)
 const DEDUP_EXTENSIONS = new Set([
   'pdf',
   'doc',
@@ -56,13 +56,6 @@ const DEDUP_EXTENSIONS = new Set([
   'txt',
   'md',
   'csv',
-  'jpg',
-  'jpeg',
-  'png',
-  'gif',
-  'webp',
-  'svg',
-  'bmp',
 ]);
 
 class UploadManager {

@@ -87,6 +87,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uploadsDir := cfg.StoragePath + "/.uploads"
+	os.MkdirAll(uploadsDir, 0o755)
 	storage.RunCleanupPeriodic(ctx, uploadsDir, 24*time.Hour, time.Hour, slog.Default())
 
 	// Build router

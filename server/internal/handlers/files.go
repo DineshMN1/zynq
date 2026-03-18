@@ -220,9 +220,22 @@ func (h *FilesHandler) EmptyTrash(w http.ResponseWriter, r *http.Request) {
 	var files []models.File
 	h.db.Where("owner_id = ? AND deleted_at IS NOT NULL", userID).Find(&files)
 
+	// Collect IDs of files being deleted so we can exclude them from ref checks
+	deleteIDs := make([]uuid.UUID, 0, len(files))
+	for _, f := range files {
+		deleteIDs = append(deleteIDs, f.ID)
+	}
+
 	for _, f := range files {
 		if !f.IsFolder && f.StoragePath != nil {
-			h.backend.Delete(*f.StoragePath)
+			// Only delete blob if no other file (outside this trash batch) references it
+			var refCount int64
+			h.db.Model(&models.File{}).
+				Where("storage_path = ? AND id NOT IN ?", *f.StoragePath, deleteIDs).
+				Count(&refCount)
+			if refCount == 0 {
+				h.backend.Delete(*f.StoragePath)
+			}
 		}
 		h.db.Where("file_id = ?", f.ID).Delete(&models.Share{})
 		h.db.Delete(&f)
@@ -894,7 +907,12 @@ func (h *FilesHandler) PermanentDelete(w http.ResponseWriter, r *http.Request) {
 	fileSize := file.Size
 
 	if !file.IsFolder && file.StoragePath != nil {
-		h.backend.Delete(*file.StoragePath)
+		// Only delete the blob if no other file references the same storage path
+		var refCount int64
+		h.db.Model(&models.File{}).Where("storage_path = ? AND id != ?", *file.StoragePath, file.ID).Count(&refCount)
+		if refCount == 0 {
+			h.backend.Delete(*file.StoragePath)
+		}
 	}
 
 	h.db.Where("file_id = ?", file.ID).Delete(&models.Share{})

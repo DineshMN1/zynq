@@ -63,6 +63,12 @@ COMPLETED (This Sprint)
     - Added missing "Invites" link to Admin section in sidebar
     - All dashboard pages now reachable from sidebar nav
 
+12. Upload & Download Dedup Safety
+    - Fixed frontend DEDUP_EXTENSIONS mismatch: removed image extensions (jpg, jpeg, png, gif, webp, svg, bmp) from upload-manager.ts to match backend's document-only dedup (dedup.go)
+    - Fixed orphaned blob risk in PermanentDelete: now checks if other files reference the same storage_path before deleting the blob
+    - Fixed orphaned blob risk in EmptyTrash: batch-aware reference counting ensures shared blobs are preserved when other non-trashed files still reference them
+    - Created .uploads directory at startup to prevent cleanup warning on fresh containers
+
 
 ARCHITECTURE SNAPSHOT
 ---------------------
