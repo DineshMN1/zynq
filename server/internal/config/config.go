@@ -4,9 +4,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Config struct {
+	Mu                      sync.RWMutex `json:"-"` // protects mutable fields (SMTP settings, etc.)
 	Port                    string
 	DatabaseURL             string
 	DatabaseHost            string

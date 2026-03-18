@@ -23,6 +23,7 @@ import (
 	"github.com/zynqcloud/api/internal/models"
 	"github.com/zynqcloud/api/internal/storage"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var blockedExtensionsRe = regexp.MustCompile(`(?i)\.(exe|bat|cmd|com|ps1|psd1|psm1|vbs|vbe|jse|wsf|wsh|msc|dll|msi|scr|hta|cpl|inf|reg|sys|drv|bin|run|jar|dex|apk|ipa|dmg|pkg|deb|rpm|sh|bash|zsh|fish|ksh|csh|tcsh|command)$`)
@@ -220,23 +221,52 @@ func (h *FilesHandler) EmptyTrash(w http.ResponseWriter, r *http.Request) {
 	var files []models.File
 	h.db.Where("owner_id = ? AND deleted_at IS NOT NULL", userID).Find(&files)
 
-	// Collect IDs of files being deleted so we can exclude them from ref checks
+	// Collect IDs and unique storage paths for batch processing.
 	deleteIDs := make([]uuid.UUID, 0, len(files))
+	uniquePaths := make(map[string]struct{})
 	for _, f := range files {
 		deleteIDs = append(deleteIDs, f.ID)
+		if !f.IsFolder && f.StoragePath != nil {
+			uniquePaths[*f.StoragePath] = struct{}{}
+		}
 	}
 
-	for _, f := range files {
-		if !f.IsFolder && f.StoragePath != nil {
-			// Only delete blob if no other file (outside this trash batch) references it
-			var refCount int64
-			h.db.Model(&models.File{}).
-				Where("storage_path = ? AND id NOT IN ?", *f.StoragePath, deleteIDs).
-				Count(&refCount)
-			if refCount == 0 {
-				h.backend.Delete(*f.StoragePath)
+	// For each unique storage path, atomically check references and delete blob.
+	for storagePath := range uniquePaths {
+		if err := h.db.Transaction(func(tx *gorm.DB) error {
+			// Lock all file rows that reference this storage path so no concurrent
+			// dedup upload can insert a new reference between the count and the delete.
+			var locked []models.File
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("storage_path = ?", storagePath).
+				Find(&locked).Error; err != nil {
+				return err
 			}
+			// Count references outside the trash batch.
+			var refCount int64
+			for _, lf := range locked {
+				isBeingDeleted := false
+				for _, did := range deleteIDs {
+					if lf.ID == did {
+						isBeingDeleted = true
+						break
+					}
+				}
+				if !isBeingDeleted {
+					refCount++
+				}
+			}
+			if refCount == 0 {
+				h.backend.Delete(storagePath)
+			}
+			return nil
+		}); err != nil {
+			slog.Error("empty trash: ref-count check failed", "path", storagePath, "error", err)
 		}
+	}
+
+	// Delete shares and file records.
+	for _, f := range files {
 		h.db.Where("file_id = ?", f.ID).Delete(&models.Share{})
 		h.db.Delete(&f)
 	}
@@ -645,13 +675,19 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if storage.ShouldDedup(file.Name) {
 		computedHash = hex.EncodeToString(hasher.Sum(nil))
 
-		var existing models.File
-		err := h.db.Where(
-			"owner_id = ? AND file_hash = ? AND is_folder = false AND deleted_at IS NULL AND storage_path IS NOT NULL",
-			userID, computedHash,
-		).First(&existing).Error
+		var dedupDone bool
+		dedupErr := h.db.Transaction(func(tx *gorm.DB) error {
+			var existing models.File
+			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where(
+					"owner_id = ? AND file_hash = ? AND is_folder = false AND deleted_at IS NULL AND storage_path IS NOT NULL",
+					userID, computedHash,
+				).First(&existing).Error
 
-		if err == nil && existing.StoragePath != nil {
+			if err != nil || existing.StoragePath == nil {
+				return nil // no dedup match — proceed with normal upload
+			}
+
 			mimeStr := mimeType
 			hashStr := computedHash
 			updates := map[string]interface{}{
@@ -663,16 +699,23 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 				"mime_type":       mimeStr,
 				"file_hash":       hashStr,
 			}
-			if err := h.db.Model(&file).Updates(updates).Error; err != nil {
-				writeError(w, http.StatusInternalServerError, "Failed to update file record")
-				return
+			if err := tx.Model(&file).Updates(updates).Error; err != nil {
+				return err
 			}
-			h.db.Model(&models.User{}).Where("id = ?", userID).
+			tx.Model(&models.User{}).Where("id = ?", userID).
 				UpdateColumn("storage_used", gorm.Expr("storage_used + ?", plainSize))
 			file.Size = plainSize
 			file.MimeType = &mimeStr
 			file.StoragePath = existing.StoragePath
 			file.FileHash = &hashStr
+			dedupDone = true
+			return nil
+		})
+		if dedupErr != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to update file record")
+			return
+		}
+		if dedupDone {
 			writeJSON(w, http.StatusOK, file)
 			return
 		}
@@ -907,12 +950,18 @@ func (h *FilesHandler) PermanentDelete(w http.ResponseWriter, r *http.Request) {
 	fileSize := file.Size
 
 	if !file.IsFolder && file.StoragePath != nil {
-		// Only delete the blob if no other file references the same storage path
-		var refCount int64
-		h.db.Model(&models.File{}).Where("storage_path = ? AND id != ?", *file.StoragePath, file.ID).Count(&refCount)
-		if refCount == 0 {
-			h.backend.Delete(*file.StoragePath)
-		}
+		// Atomically lock, check references, and delete blob.
+		_ = h.db.Transaction(func(tx *gorm.DB) error {
+			var refCount int64
+			tx.Model(&models.File{}).
+				Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("storage_path = ? AND id != ?", *file.StoragePath, file.ID).
+				Count(&refCount)
+			if refCount == 0 {
+				h.backend.Delete(*file.StoragePath)
+			}
+			return nil
+		})
 	}
 
 	h.db.Where("file_id = ?", file.ID).Delete(&models.Share{})

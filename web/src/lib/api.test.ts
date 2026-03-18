@@ -248,9 +248,6 @@ describe('API Client', () => {
         ok: false,
         status: 404,
       });
-      (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(
-        'token',
-      );
 
       await expect(fileApi.downloadBlob('file-bad')).rejects.toThrow(ApiError);
     });

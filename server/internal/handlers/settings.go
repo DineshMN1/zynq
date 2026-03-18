@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -18,6 +19,52 @@ type SettingsHandler struct {
 
 func NewSettingsHandler(db *gorm.DB, cfg *config.Config) *SettingsHandler {
 	return &SettingsHandler{db: db, cfg: cfg}
+}
+
+// LoadSMTPFromDB loads persisted SMTP settings from the settings table into cfg.
+// Call once at startup so SMTP config survives restarts.
+func LoadSMTPFromDB(db *gorm.DB, cfg *config.Config) {
+	var setting models.Setting
+	if err := db.Where("user_id IS NULL AND key = ?", "smtp").First(&setting).Error; err != nil {
+		return // no persisted SMTP settings — use env defaults
+	}
+
+	raw, err := json.Marshal(setting.Value)
+	if err != nil {
+		return
+	}
+	var s struct {
+		Enabled bool   `json:"smtp_enabled"`
+		Host    string `json:"smtp_host"`
+		Port    int    `json:"smtp_port"`
+		Secure  bool   `json:"smtp_secure"`
+		User    string `json:"smtp_user"`
+		Pass    string `json:"smtp_pass"`
+		From    string `json:"smtp_from"`
+	}
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return
+	}
+
+	cfg.Mu.Lock()
+	defer cfg.Mu.Unlock()
+	cfg.EmailEnabled = s.Enabled
+	if s.Host != "" {
+		cfg.SMTPHost = s.Host
+	}
+	if s.Port != 0 {
+		cfg.SMTPPort = s.Port
+	}
+	cfg.SMTPSecure = s.Secure
+	if s.User != "" {
+		cfg.SMTPUser = s.User
+	}
+	if s.Pass != "" {
+		cfg.SMTPPass = s.Pass
+	}
+	if s.From != "" {
+		cfg.SMTPFrom = s.From
+	}
 }
 
 // GET /api/v1/settings
@@ -108,6 +155,9 @@ func (h *SettingsHandler) UpdateGlobalSettings(w http.ResponseWriter, r *http.Re
 
 // GET /api/v1/settings/smtp
 func (h *SettingsHandler) GetSMTPSettings(w http.ResponseWriter, r *http.Request) {
+	h.cfg.Mu.RLock()
+	defer h.cfg.Mu.RUnlock()
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"smtp_enabled": h.cfg.EmailEnabled,
 		"smtp_host":    h.cfg.SMTPHost,
@@ -136,7 +186,8 @@ func (h *SettingsHandler) UpdateSMTPSettings(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Update in-memory config so changes take effect immediately
+	// Update in-memory config under lock
+	h.cfg.Mu.Lock()
 	if req.Enabled != nil {
 		h.cfg.EmailEnabled = *req.Enabled
 	}
@@ -159,6 +210,31 @@ func (h *SettingsHandler) UpdateSMTPSettings(w http.ResponseWriter, r *http.Requ
 		h.cfg.SMTPFrom = *req.From
 	}
 
+	// Build snapshot for persistence
+	persistValue := models.JSONB{
+		"smtp_enabled": h.cfg.EmailEnabled,
+		"smtp_host":    h.cfg.SMTPHost,
+		"smtp_port":    h.cfg.SMTPPort,
+		"smtp_secure":  h.cfg.SMTPSecure,
+		"smtp_user":    h.cfg.SMTPUser,
+		"smtp_pass":    h.cfg.SMTPPass,
+		"smtp_from":    h.cfg.SMTPFrom,
+	}
+	h.cfg.Mu.Unlock()
+
+	// Persist to DB so settings survive restarts
+	var setting models.Setting
+	if err := h.db.Where("user_id IS NULL AND key = ?", "smtp").First(&setting).Error; err != nil {
+		setting = models.Setting{
+			ID:    uuid.New(),
+			Key:   "smtp",
+			Value: persistValue,
+		}
+		h.db.Create(&setting)
+	} else {
+		h.db.Model(&setting).Update("value", persistValue)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -167,9 +243,17 @@ func (h *SettingsHandler) TestSMTPConnection(w http.ResponseWriter, r *http.Requ
 	var req struct {
 		Email string `json:"email"`
 	}
-	readJSON(r, &req)
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
 
-	if h.cfg.SMTPHost == "" {
+	h.cfg.Mu.RLock()
+	smtpHost := h.cfg.SMTPHost
+	smtpFrom := h.cfg.SMTPFrom
+	h.cfg.Mu.RUnlock()
+
+	if smtpHost == "" {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": false,
 			"message": "SMTP not configured",
@@ -179,7 +263,7 @@ func (h *SettingsHandler) TestSMTPConnection(w http.ResponseWriter, r *http.Requ
 
 	to := req.Email
 	if to == "" {
-		to = h.cfg.SMTPFrom
+		to = smtpFrom
 	}
 	if to == "" {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -191,9 +275,14 @@ func (h *SettingsHandler) TestSMTPConnection(w http.ResponseWriter, r *http.Requ
 
 	msg := fmt.Sprintf(
 		"From: %s\r\nTo: %s\r\nSubject: ZynqCloud SMTP Test\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSMTP test successful.",
-		h.cfg.SMTPFrom, to,
+		smtpFrom, to,
 	)
-	if err := smtpSend(h.cfg, h.cfg.SMTPFrom, []string{to}, []byte(msg)); err != nil {
+
+	h.cfg.Mu.RLock()
+	cfgCopy := h.cfg
+	h.cfg.Mu.RUnlock()
+
+	if err := smtpSend(cfgCopy, smtpFrom, []string{to}, []byte(msg)); err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": false,
 			"message": err.Error(),

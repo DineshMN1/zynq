@@ -42,6 +42,8 @@ const TEXT_EXTENSIONS = new Set([
   'css',
   'js',
   'ts',
+  'rtf',
+  'log',
 ]);
 
 // Extensions that support duplicate detection (must match backend dedup.go)

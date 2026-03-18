@@ -51,7 +51,7 @@ import {
   SidebarSeparator,
 } from './ui/sidebar';
 import { cn } from '@/lib/utils';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { User, UpdateCheckResult, StorageOverview } from '@/lib/api';
 import { storageApi, authApi, systemApi } from '@/lib/api';
@@ -100,58 +100,61 @@ export function Sidebar({ user }: SidebarProps) {
   const usedPercentage = storageInfo?.user.usedPercentage || 0;
   const isUnlimited = storageInfo?.user.isUnlimited;
 
-  const navGroups: NavGroup[] = [
-    {
-      id: 'files',
-      label: 'Files',
-      icon: FolderOpen,
-      items: [
-        { href: '/dashboard/files', label: 'All Files', icon: Files },
-        { href: '/dashboard/shared', label: 'Shared', icon: Share2 },
-        { href: '/dashboard/trash', label: 'Trash', icon: Trash2 },
-      ],
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: Settings,
-      items: [
-        { href: '/dashboard/settings', label: 'Preferences', icon: Settings },
-        { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
-      ],
-    },
-    ...(isAdmin
-      ? [
-          {
-            id: 'admin',
-            label: 'Admin',
-            icon: Shield,
-            items: [
-              {
-                href: '/dashboard/settings/users',
-                label: 'Users',
-                icon: Users,
-              },
-              {
-                href: '/dashboard/settings/invites',
-                label: 'Invites',
-                icon: Mail,
-              },
-              {
-                href: '/dashboard/settings/notifications',
-                label: 'Notifications',
-                icon: Bell,
-              },
-              {
-                href: '/dashboard/settings/monitoring',
-                label: 'Monitoring',
-                icon: Activity,
-              },
-            ],
-          },
-        ]
-      : []),
-  ];
+  const navGroups: NavGroup[] = useMemo(
+    () => [
+      {
+        id: 'files',
+        label: 'Files',
+        icon: FolderOpen,
+        items: [
+          { href: '/dashboard/files', label: 'All Files', icon: Files },
+          { href: '/dashboard/shared', label: 'Shared', icon: Share2 },
+          { href: '/dashboard/trash', label: 'Trash', icon: Trash2 },
+        ],
+      },
+      {
+        id: 'settings',
+        label: 'Settings',
+        icon: Settings,
+        items: [
+          { href: '/dashboard/settings', label: 'Preferences', icon: Settings },
+          { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
+        ],
+      },
+      ...(isAdmin
+        ? [
+            {
+              id: 'admin',
+              label: 'Admin',
+              icon: Shield,
+              items: [
+                {
+                  href: '/dashboard/settings/users',
+                  label: 'Users',
+                  icon: Users,
+                },
+                {
+                  href: '/dashboard/settings/invites',
+                  label: 'Invites',
+                  icon: Mail,
+                },
+                {
+                  href: '/dashboard/settings/notifications',
+                  label: 'Notifications',
+                  icon: Bell,
+                },
+                {
+                  href: '/dashboard/settings/monitoring',
+                  label: 'Monitoring',
+                  icon: Activity,
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
+    [isAdmin],
+  );
 
   useEffect(() => {
     const matched = navGroups.find((g) =>
@@ -160,7 +163,7 @@ export function Sidebar({ user }: SidebarProps) {
       ),
     );
     if (matched) setActiveGroup(matched.id);
-  }, [pathname]);
+  }, [pathname, navGroups]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -247,7 +250,7 @@ export function Sidebar({ user }: SidebarProps) {
   const currentGroup = navGroups.find((g) => g.id === activeGroup);
 
   // ── Shared: user popover content ─────────────────────────────────────────────
-  const UserPopoverContent = ({ side }: { side: 'top' | 'right' }) => (
+  const UserPopoverContent = useCallback(({ side }: { side: 'top' | 'right' }) => (
     <PopoverContent align="center" side={side} sideOffset={8} className="w-64 p-0">
       <PopoverHeader>
         <div className="flex items-center gap-3">
@@ -320,10 +323,10 @@ export function Sidebar({ user }: SidebarProps) {
         </Button>
       </PopoverFooter>
     </PopoverContent>
-  );
+  ), [user, theme, toggleTheme, handleLogout]);
 
   // ── Shared: storage bar ───────────────────────────────────────────────────────
-  const StorageBar = () => (
+  const StorageBar = useCallback(() => (
     <div className="px-4 py-3 border-t border-sidebar-border shrink-0">
       <div className="flex items-center justify-between mb-1.5 text-[11px]">
         <span className="text-sidebar-foreground/40">Storage</span>
@@ -368,7 +371,7 @@ export function Sidebar({ user }: SidebarProps) {
         <div className="h-1 bg-sidebar-primary/20 rounded-full" />
       )}
     </div>
-  );
+  ), [loadingStorage, storageInfo, isOwner, isUnlimited, usedPercentage]);
 
   // ── Update modal ─────────────────────────────────────────────────────────────
   const updateModal = (

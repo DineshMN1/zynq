@@ -59,6 +59,10 @@ func main() {
 	}
 	slog.Info("schema verified")
 
+	// Load persisted SMTP settings from DB (overrides env vars if present)
+	handlers.LoadSMTPFromDB(db, cfg)
+	slog.Info("SMTP settings loaded from DB")
+
 	// Initialize crypto (may be nil if not configured — upload/download will 503)
 	var cryptoSvc *crypto.Crypto
 	if cfg.FileEncryptionMasterKey != "" {
@@ -88,7 +92,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uploadsDir := cfg.StoragePath + "/.uploads"
-	os.MkdirAll(uploadsDir, 0o755)
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
+		slog.Error("failed to create uploads directory", "dir", uploadsDir, "error", err)
+		os.Exit(1)
+	}
 	storage.RunCleanupPeriodic(ctx, uploadsDir, 24*time.Hour, time.Hour, slog.Default())
 
 	// Build router

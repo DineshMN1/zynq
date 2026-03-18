@@ -40,6 +40,7 @@ function PopoverContent({
 function PopoverHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
+      data-slot="popover-header"
       className={cn(
         'flex w-full flex-col gap-1 rounded-t-md border-b px-3 py-2',
         className,
@@ -49,9 +50,9 @@ function PopoverHeader({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function PopoverTitle({ className, ...props }: React.ComponentProps<'p'>) {
+function PopoverTitle({ className, ...props }: React.ComponentProps<'h3'>) {
   return (
-    <p className={cn('text-foreground font-medium', className)} {...props} />
+    <h3 data-slot="popover-title" className={cn('text-foreground font-medium', className)} {...props} />
   );
 }
 
@@ -67,6 +68,7 @@ function PopoverDescription({
 function PopoverFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
+      data-slot="popover-footer"
       className={cn(
         'mt-auto grid w-full gap-2 rounded-b-md border-t px-3 py-2',
         className,
@@ -82,7 +84,7 @@ function PopoverBody({
   ...props
 }: React.ComponentProps<'div'>) {
   return (
-    <div className={cn('p-3', className)} {...props}>
+    <div data-slot="popover-body" className={cn('p-3', className)} {...props}>
       {children}
     </div>
   );
