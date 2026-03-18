@@ -23,7 +23,7 @@ RUN pnpm --filter @zynqcloud/web build
 # ── Stage 3: Production image ─────────────────────────────────
 # Single Go binary serves both the API and the React SPA.
 # No nginx, no supervisord — one process, one port.
-FROM alpine:3.19
+FROM alpine:3.23
 
 RUN apk add --no-cache ca-certificates curl wget su-exec && \
     addgroup -S app && adduser -S app -G app
