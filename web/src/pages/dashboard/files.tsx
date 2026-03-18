@@ -763,14 +763,15 @@ export default function FilesPage() {
 
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      // Track why the XHR was aborted so handlers can distinguish pause vs cancel
+      const flags = { abortReason: '' as '' | 'pause' | 'cancel' };
+      let settled = false;
 
       xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable) {
           const percent = Math.round((event.loaded / event.total) * 100);
           const now = performance.now();
           const current = uploadSpeedRef.current.get(progressId);
-          // On the first event, use time-since-send so deltaBytes = event.loaded
-          // and we get an immediate speed estimate instead of 0.
           const startTs = uploadStartRef.current.get(progressId) ?? now;
           const previousTs = current?.lastTs ?? startTs;
           const previousLoaded = current?.lastLoaded ?? 0;
@@ -812,31 +813,66 @@ export default function FilesPage() {
         }
       });
 
-      xhr.addEventListener('readystatechange', () => {
-        if (xhr.readyState === 4) {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            updateUpload(progressId, {
-              progress: 100,
-              status: 'completed',
-              etaSeconds: 0,
-            });
-            uploadSpeedRef.current.delete(progressId);
-            uploadStartRef.current.delete(progressId);
-            resolve();
-          } else {
-            updateUpload(progressId, { status: 'error' });
-            uploadSpeedRef.current.delete(progressId);
-            uploadStartRef.current.delete(progressId);
-            reject(
-              new ApiError(
-                getXhrErrorMessage(xhr),
-                xhr.status || 0,
-                'UPLOAD_FAILED',
-                { responseText: xhr.responseText },
-              ),
-            );
-          }
+      xhr.addEventListener('abort', () => {
+        if (settled) return;
+        if (flags.abortReason === 'pause') {
+          settled = true;
+          uploadSpeedRef.current.delete(progressId);
+          uploadStartRef.current.delete(progressId);
+          // Set paused status and register a resume callback
+          const resumeFn = async () => {
+            updateUpload(progressId, { status: 'uploading', progress: 0 });
+            try {
+              await uploadFileWithProgress(url, file, contentType, progressId);
+            } catch {
+              updateUpload(progressId, { status: 'error' });
+            }
+          };
+          updateUpload(progressId, {
+            status: 'paused',
+            pause: undefined,
+            cancel: undefined,
+            retry: resumeFn,
+          });
+          resolve();
+          return;
         }
+        // Normal cancel — don't set error (item is removed from queue)
+      });
+
+      xhr.addEventListener('error', () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Network error'));
+      });
+
+      xhr.addEventListener('readystatechange', () => {
+        if (settled || xhr.readyState !== 4) return;
+        if (xhr.status >= 200 && xhr.status < 300) {
+          settled = true;
+          updateUpload(progressId, {
+            progress: 100,
+            status: 'completed',
+            etaSeconds: 0,
+          });
+          uploadSpeedRef.current.delete(progressId);
+          uploadStartRef.current.delete(progressId);
+          resolve();
+        } else if (xhr.status > 0) {
+          settled = true;
+          updateUpload(progressId, { status: 'error' });
+          uploadSpeedRef.current.delete(progressId);
+          uploadStartRef.current.delete(progressId);
+          reject(
+            new ApiError(
+              getXhrErrorMessage(xhr),
+              xhr.status,
+              'UPLOAD_FAILED',
+              { responseText: xhr.responseText },
+            ),
+          );
+        }
+        // status 0 with no abortReason means cancel — item already removed
       });
 
       xhr.open('PUT', fullUrl);
@@ -845,10 +881,17 @@ export default function FilesPage() {
         'Content-Type',
         contentType || 'application/octet-stream',
       );
-      // Register cancel handler in global upload context
-      updateUpload(progressId, { cancel: () => xhr.abort() });
-      // Record send time so the first progress event can compute instantBps
-      // from byte 0 instead of showing no ETA until the second event.
+      // Register cancel and pause handlers
+      updateUpload(progressId, {
+        cancel: () => {
+          flags.abortReason = 'cancel';
+          xhr.abort();
+        },
+        pause: () => {
+          flags.abortReason = 'pause';
+          xhr.abort();
+        },
+      });
       uploadStartRef.current.set(progressId, performance.now());
       xhr.send(file);
     });

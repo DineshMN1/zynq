@@ -23,6 +23,7 @@ export interface UploadProgress {
     | 'error'
     | 'duplicate';
   cancel?: () => void;
+  pause?: () => void;
   retry?: () => void;
 }
 
@@ -89,14 +90,13 @@ export const UploadProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const pauseUpload = useCallback((id: string) => {
-    setUploadQueue((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
-        // Abort the in-flight XHR (no-op if already queued/checking)
-        item.cancel?.();
-        return { ...item, status: 'paused' as const, cancel: undefined };
-      }),
-    );
+    setUploadQueue((prev) => {
+      const item = prev.find((u) => u.id === id);
+      if (item?.pause) {
+        item.pause();
+      }
+      return prev;
+    });
   }, []);
 
   const resumeUpload = useCallback((id: string) => {

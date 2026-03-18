@@ -8,6 +8,8 @@ import {
   Upload,
   RotateCcw,
   Copy,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -33,18 +35,20 @@ function formatEta(seconds: number): string {
 function statusColor(status: UploadProgress['status']) {
   if (status === 'completed' || status === 'duplicate') return 'text-green-500';
   if (status === 'error') return 'text-destructive';
-
+  if (status === 'paused') return 'text-yellow-500';
   return 'text-primary';
 }
 
 function UploadRow({
   item,
   onCancel,
-  onRetry,
+  onPause,
+  onResume,
 }: {
   item: UploadProgress;
   onCancel: () => void;
-  onRetry: () => void;
+  onPause: () => void;
+  onResume: () => void;
 }) {
   const isActive =
     item.status === 'uploading' ||
@@ -69,6 +73,7 @@ function UploadRow({
         item.etaSeconds !== undefined ? formatEta(item.etaSeconds) : '';
       return [pct, bytes, speed, eta].filter(Boolean).join(' · ');
     }
+    if (item.status === 'paused') return 'Paused';
     if (item.status === 'completed') return 'Upload complete';
     if (item.status === 'duplicate') return 'Already exists';
     if (item.status === 'error') return 'Upload failed';
@@ -84,13 +89,15 @@ function UploadRow({
       transition={{ duration: 0.18 }}
       className="px-3 py-2.5 border-b border-border/40 last:border-0 w-full min-w-0"
     >
-      {/* Row 1: icon + filename (truncated, full width) + dismiss for done states */}
+      {/* Row 1: icon + filename + dismiss for done states */}
       <div className="flex items-center gap-1.5 w-full min-w-0 mb-1.5">
         <div className="shrink-0">
           {item.status === 'completed' || item.status === 'duplicate' ? (
             <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
           ) : item.status === 'error' ? (
             <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+          ) : item.status === 'paused' ? (
+            <Pause className="h-3.5 w-3.5 text-yellow-500" />
           ) : item.status === 'checking' ? (
             <Copy className="h-3.5 w-3.5 text-muted-foreground animate-pulse" />
           ) : (
@@ -98,7 +105,6 @@ function UploadRow({
           )}
         </div>
 
-        {/* Filename: capped at 28 chars, rest truncated, full extension shown via title */}
         <span
           className="text-xs font-medium truncate flex-1 min-w-0"
           title={item.fileName}
@@ -108,7 +114,7 @@ function UploadRow({
             : item.fileName}
         </span>
 
-        {/* Dismiss button for finished states inline */}
+        {/* Dismiss button for finished states */}
         {(item.status === 'completed' || item.status === 'duplicate') && (
           <button
             onClick={onCancel}
@@ -121,11 +127,11 @@ function UploadRow({
       </div>
 
       {/* Row 2: progress bar */}
-      {isActive && (
+      {(isActive || item.status === 'paused') && (
         <Progress value={item.progress} className="h-1 mb-1.5" />
       )}
 
-      {/* Row 3: detail + action buttons side by side */}
+      {/* Row 3: detail + action buttons */}
       <div className="flex items-center justify-between gap-2 w-full min-w-0">
         {detail && (
           <p
@@ -138,9 +144,28 @@ function UploadRow({
           </p>
         )}
 
-        {/* Action buttons */}
         <div className="flex items-center gap-1 shrink-0">
-          {isActive && (
+          {/* Uploading: pause + cancel */}
+          {item.status === 'uploading' && (
+            <>
+              <button
+                onClick={onPause}
+                title="Pause"
+                className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted text-muted-foreground transition-colors"
+              >
+                <Pause className="h-3 w-3" />
+              </button>
+              <button
+                onClick={onCancel}
+                title="Cancel"
+                className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </>
+          )}
+          {/* Queued/checking: cancel only */}
+          {(item.status === 'queued' || item.status === 'checking') && (
             <button
               onClick={onCancel}
               title="Cancel"
@@ -149,10 +174,31 @@ function UploadRow({
               <X className="h-3 w-3" />
             </button>
           )}
+          {/* Paused: resume + cancel */}
+          {item.status === 'paused' && (
+            <>
+              <button
+                onClick={onResume}
+                title="Resume"
+                className="flex items-center gap-1 px-2 h-5 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors text-[10px] font-medium"
+              >
+                <Play className="h-2.5 w-2.5" />
+                Resume
+              </button>
+              <button
+                onClick={onCancel}
+                title="Cancel"
+                className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </>
+          )}
+          {/* Error: retry + dismiss */}
           {item.status === 'error' && (
             <>
               <button
-                onClick={onRetry}
+                onClick={onResume}
                 title="Retry upload"
                 className="flex items-center gap-1 px-2 h-5 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors text-[10px] font-medium"
               >
@@ -178,6 +224,7 @@ export function UploadManagerPopup() {
   const {
     uploadQueue,
     cancelUpload,
+    pauseUpload,
     resumeUpload,
     cancelAll,
     dismissCompleted,
@@ -192,6 +239,7 @@ export function UploadManagerPopup() {
       u.status === 'checking',
   );
   const hasActive = activeUploads.length > 0;
+  const hasPaused = uploadQueue.some((u) => u.status === 'paused');
 
   const aggregateProgress =
     activeUploads.length > 0
@@ -201,22 +249,22 @@ export function UploadManagerPopup() {
         )
       : 100;
 
-  // Count by status for header summary
   const errorCount = uploadQueue.filter((u) => u.status === 'error').length;
+
   useEffect(() => {
     if (uploadQueue.length > 0) setIsVisible(true);
   }, [uploadQueue.length]);
 
-  // Auto-dismiss 2s after all done
+  // Auto-dismiss 2s after all done (don't dismiss if paused uploads exist)
   useEffect(() => {
-    if (!hasActive && uploadQueue.length > 0) {
+    if (!hasActive && !hasPaused && uploadQueue.length > 0) {
       const t = setTimeout(() => {
         dismissCompleted();
         setIsVisible(false);
       }, 2000);
       return () => clearTimeout(t);
     }
-  }, [hasActive, uploadQueue, dismissCompleted]);
+  }, [hasActive, hasPaused, uploadQueue, dismissCompleted]);
 
   const handleClose = () => {
     cancelAll();
@@ -267,7 +315,6 @@ export function UploadManagerPopup() {
                       · {errorCount} failed
                     </span>
                   )}
-
                 </div>
 
                 <div className="flex items-center gap-0.5 ml-2 shrink-0">
@@ -281,13 +328,6 @@ export function UploadManagerPopup() {
                 </div>
               </div>
 
-              {/* ── Overall progress bar (only while uploading) ── */}
-              {hasActive && (
-                <div className="px-4 pt-2 pb-0.5 shrink-0">
-                  <Progress value={aggregateProgress} className="h-0.5" />
-                </div>
-              )}
-
               {/* ── File list ── */}
               <ScrollArea className="flex-1 overflow-auto">
                 <AnimatePresence initial={false}>
@@ -296,7 +336,8 @@ export function UploadManagerPopup() {
                       key={item.id}
                       item={item}
                       onCancel={() => cancelUpload(item.id)}
-                      onRetry={() => resumeUpload(item.id)}
+                      onPause={() => pauseUpload(item.id)}
+                      onResume={() => resumeUpload(item.id)}
                     />
                   ))}
                 </AnimatePresence>
