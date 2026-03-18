@@ -21,11 +21,7 @@ import { formatBytes } from '@/lib/auth';
 import { motion } from 'framer-motion';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
-import {
-  getFileIcon,
-  getIconBgColor,
-  getIconColor,
-} from '@/features/file/utils/file-icons';
+import { FileTypeIcon } from '@/features/file/components/file-type-icon';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -257,17 +253,6 @@ export default function SharedPage() {
                   const mimeType = share.file?.mime_type ?? '';
                   const isFolder = !!share.file?.is_folder;
                   const expiryLabel = formatExpiryLabel(share.expires_at);
-                  const IconComponent = getFileIcon(
-                    fileName,
-                    mimeType,
-                    isFolder,
-                  );
-                  const iconColor = getIconColor(fileName, mimeType, isFolder);
-                  const iconBgColor = getIconBgColor(
-                    fileName,
-                    mimeType,
-                    isFolder,
-                  );
                   return (
                     <motion.div
                       key={share.id}
@@ -278,13 +263,7 @@ export default function SharedPage() {
                       <Card className="h-full border-border/70 bg-gradient-to-b from-background to-muted/20 p-4 transition-colors hover:border-primary/50">
                         <div className="flex h-full flex-col">
                           <div className="flex items-start justify-between">
-                            <div
-                              className={`h-12 w-12 rounded-xl flex items-center justify-center ${iconBgColor}`}
-                            >
-                              <IconComponent
-                                className={`h-6 w-6 ${iconColor}`}
-                              />
-                            </div>
+                            <FileTypeIcon name={fileName} mimeType={mimeType} isFolder={isFolder} size={44} />
                             <Badge variant="outline" className="gap-1">
                               <Globe className="h-3 w-3" />
                               Public
@@ -385,17 +364,6 @@ export default function SharedPage() {
                   const fileName = share.file?.name ?? 'File';
                   const mimeType = share.file?.mime_type ?? '';
                   const isFolder = !!share.file?.is_folder;
-                  const IconComponent = getFileIcon(
-                    fileName,
-                    mimeType,
-                    isFolder,
-                  );
-                  const iconColor = getIconColor(fileName, mimeType, isFolder);
-                  const iconBgColor = getIconBgColor(
-                    fileName,
-                    mimeType,
-                    isFolder,
-                  );
                   return (
                     <motion.div
                       key={share.id}
@@ -406,13 +374,7 @@ export default function SharedPage() {
                       <Card className="p-4 h-full hover:border-primary/50 transition-colors">
                         <div className="flex h-full flex-col">
                           <div className="flex items-start justify-between">
-                            <div
-                              className={`h-12 w-12 rounded-xl flex items-center justify-center ${iconBgColor}`}
-                            >
-                              <IconComponent
-                                className={`h-6 w-6 ${iconColor}`}
-                              />
-                            </div>
+                            <FileTypeIcon name={fileName} mimeType={mimeType} isFolder={isFolder} size={44} />
                             <Badge
                               variant={
                                 share.permission === 'write'
@@ -479,17 +441,6 @@ export default function SharedPage() {
                   const fileName = share.file?.name ?? 'File';
                   const mimeType = share.file?.mime_type ?? '';
                   const isFolder = !!share.file?.is_folder;
-                  const IconComponent = getFileIcon(
-                    fileName,
-                    mimeType,
-                    isFolder,
-                  );
-                  const iconColor = getIconColor(fileName, mimeType, isFolder);
-                  const iconBgColor = getIconBgColor(
-                    fileName,
-                    mimeType,
-                    isFolder,
-                  );
                   return (
                     <motion.div
                       key={share.id}
@@ -500,13 +451,7 @@ export default function SharedPage() {
                       <Card className="p-4 h-full hover:border-primary/50 transition-colors">
                         <div className="flex h-full flex-col">
                           <div className="flex items-start justify-between">
-                            <div
-                              className={`h-12 w-12 rounded-xl flex items-center justify-center ${iconBgColor}`}
-                            >
-                              <IconComponent
-                                className={`h-6 w-6 ${iconColor}`}
-                              />
-                            </div>
+                            <FileTypeIcon name={fileName} mimeType={mimeType} isFolder={isFolder} size={44} />
                             <Badge
                               variant={
                                 share.permission === 'write'

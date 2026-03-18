@@ -6,13 +6,9 @@ import { Loader2, Cloud, Download, Eye } from 'lucide-react';
 import { formatBytes } from '@/lib/auth';
 import { ApiError, publicApi } from '@/lib/api';
 import { PublicSharePreviewDialog } from '@/features/share/components/public-share-preview-dialog';
-import {
-  getFileIcon,
-  getIconColor,
-  getIconBgColor,
-} from '@/features/file/utils/file-icons';
+import { FileTypeIcon } from '@/features/file/components/file-type-icon';
 import { getPreviewType } from '@/features/file/utils/preview-type';
-import { cn } from '@/lib/utils';
+
 
 interface SharedFile {
   id: string;
@@ -162,33 +158,7 @@ export function PublicShareView({ token }: PublicShareViewProps) {
         {file && (
           <>
             <div className="flex flex-col items-center space-y-2 text-center rounded-xl border bg-background/50 p-4">
-              {(() => {
-                const IconComponent = getFileIcon(
-                  file.name,
-                  file.mimeType,
-                  file.isFolder,
-                );
-                const iconColor = getIconColor(
-                  file.name,
-                  file.mimeType,
-                  file.isFolder,
-                );
-                const iconBgColor = getIconBgColor(
-                  file.name,
-                  file.mimeType,
-                  file.isFolder,
-                );
-                return (
-                  <div
-                    className={cn(
-                      'h-14 w-14 rounded-xl flex items-center justify-center',
-                      iconBgColor,
-                    )}
-                  >
-                    <IconComponent className={cn('h-7 w-7', iconColor)} />
-                  </div>
-                );
-              })()}
+              <FileTypeIcon name={file.name} mimeType={file.mimeType} isFolder={file.isFolder} size={52} />
               <div className="flex items-center gap-2 max-w-full">
                 <p className="text-lg font-medium break-all max-w-full">
                   {file.name}

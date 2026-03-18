@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { type FileMetadata, fileApi } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
-import { getFileIcon, getIconColor } from '@/features/file/utils/file-icons';
+import { FileTypeIcon } from '@/features/file/components/file-type-icon';
 
 import { cn } from '@/lib/utils';
 
@@ -73,8 +73,6 @@ export function FileListRow({
   const actionBtnClass =
     'h-9 w-9 sm:h-8 sm:w-8 text-muted-foreground hover:text-foreground';
   const hasSelect = !!onToggleSelect;
-  const IconComponent = getFileIcon(file.name, file.mime_type, file.is_folder);
-  const iconColor = getIconColor(file.name, file.mime_type, file.is_folder);
   const isShared =
     (file.publicShareCount ?? 0) > 0 || (file.privateShareCount ?? 0) > 0;
 
@@ -117,7 +115,7 @@ export function FileListRow({
 
       {/* Icon + Name */}
       <div className="flex-1 min-w-0 flex items-center gap-2.5">
-        <IconComponent className={cn('h-5 w-5 shrink-0', iconColor)} />
+        <FileTypeIcon name={file.name} mimeType={file.mime_type} isFolder={file.is_folder} size={24} className="shrink-0" />
         <span
           className="truncate text-sm"
           title={file.name}

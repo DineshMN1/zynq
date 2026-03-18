@@ -1,9 +1,8 @@
 import { lazy, Suspense, useRef, useEffect } from 'react';
 import { Loader2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import type { PreviewType } from '@/features/file/utils/preview-type';
-import type { LucideIcon } from 'lucide-react';
+import { FileTypeIcon } from '@/features/file/components/file-type-icon';
 
 // Lazy-load heavy viewers for code-splitting
 const PdfViewer = lazy(() =>
@@ -50,8 +49,7 @@ interface PreviewContentProps {
   blobUrl: string | null;
   textContent: string | null;
   fileName: string;
-  iconComponent: LucideIcon;
-  iconColor: string;
+  mimeType: string;
   zoom: number;
   onDownload: () => void;
 }
@@ -88,8 +86,7 @@ export function PreviewContent({
   blobUrl,
   textContent,
   fileName,
-  iconComponent: IconComponent,
-  iconColor,
+  mimeType,
   zoom,
   onDownload,
 }: PreviewContentProps) {
@@ -147,7 +144,7 @@ export function PreviewContent({
   if (previewType === 'audio' && blobUrl) {
     return (
       <div className="py-8 px-4 w-full flex flex-col items-center gap-4" style={zoomStyle}>
-        <IconComponent className={cn('h-16 w-16', iconColor)} />
+        <FileTypeIcon name={fileName} mimeType={mimeType} isFolder={false} size={64} />
         <p className="text-sm font-medium">{fileName}</p>
         <MediaElement tag="audio" src={blobUrl} className="w-full max-w-md" />
       </div>
@@ -185,7 +182,7 @@ export function PreviewContent({
   // No preview available
   return (
     <div className="py-12 text-center flex flex-col items-center gap-3">
-      <IconComponent className={cn('h-12 w-12', iconColor)} />
+      <FileTypeIcon name={fileName} mimeType={mimeType} isFolder={false} size={48} />
       <p className="text-sm text-muted-foreground">
         No preview available for this file type.
       </p>

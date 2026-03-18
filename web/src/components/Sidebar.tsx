@@ -3,20 +3,15 @@ import {
   Files,
   Share2,
   Trash2,
-  Settings,
-  Users,
-  Bell,
   LogOut,
   User as UserIcon,
   Moon,
   Sun,
-  Activity,
+  Hammer,
   RefreshCw,
   X,
   CheckCircle2,
   AlertCircle,
-  FolderOpen,
-  Shield,
   ChevronsUpDown,
 } from 'lucide-react';
 import { Progress } from './ui/progress';
@@ -102,28 +97,14 @@ export function AppSidebar({ user }: AppSidebarProps) {
         ],
       },
       {
-        id: 'settings',
-        label: 'Settings',
+        id: 'account',
+        label: 'Account',
         items: [
-          { href: '/dashboard/settings', label: 'Preferences', icon: Settings },
           { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
         ],
       },
-      ...(isAdmin
-        ? [
-            {
-              id: 'admin',
-              label: 'Admin',
-              items: [
-                { href: '/dashboard/settings/users', label: 'Users', icon: Users },
-                { href: '/dashboard/settings/notifications', label: 'Notifications', icon: Bell },
-                { href: '/dashboard/settings/monitoring', label: 'Monitoring', icon: Activity },
-              ],
-            },
-          ]
-        : []),
     ],
-    [isAdmin],
+    [],
   );
 
   useEffect(() => {
@@ -357,6 +338,24 @@ export function AppSidebar({ user }: AppSidebarProps) {
               </SidebarGroupContent>
             </SidebarGroup>
           ))}
+
+          {/* Admin button — only for admin/owner */}
+          {isAdmin && (
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="Admin">
+                      <Link to="/admin">
+                        <Hammer />
+                        <span>Admin</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
         </SidebarContent>
 
         {/* Footer */}
@@ -479,12 +478,6 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       <Link to="/dashboard/profile">
                         <UserIcon className="mr-2 h-4 w-4" />
                         Profile
-                      </Link>
-                    </Button>
-                    <Button variant="ghost" size="sm" className="w-full justify-start" asChild>
-                      <Link to="/dashboard/settings">
-                        <Settings className="mr-2 h-4 w-4" />
-                        Preferences
                       </Link>
                     </Button>
                     <Button
