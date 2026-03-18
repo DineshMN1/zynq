@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"net/smtp"
 
 	"github.com/google/uuid"
 	"github.com/zynqcloud/api/internal/config"
@@ -190,14 +189,11 @@ func (h *SettingsHandler) TestSMTPConnection(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	addr := fmt.Sprintf("%s:%d", h.cfg.SMTPHost, h.cfg.SMTPPort)
-	var auth smtp.Auth
-	if h.cfg.SMTPUser != "" {
-		auth = smtp.PlainAuth("", h.cfg.SMTPUser, h.cfg.SMTPPass, h.cfg.SMTPHost)
-	}
-
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: ZynqCloud SMTP Test\r\n\r\nSMTP test successful.", h.cfg.SMTPFrom, to)
-	if err := smtp.SendMail(addr, auth, h.cfg.SMTPFrom, []string{to}, []byte(msg)); err != nil {
+	msg := fmt.Sprintf(
+		"From: %s\r\nTo: %s\r\nSubject: ZynqCloud SMTP Test\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSMTP test successful.",
+		h.cfg.SMTPFrom, to,
+	)
+	if err := smtpSend(h.cfg, h.cfg.SMTPFrom, []string{to}, []byte(msg)); err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": false,
 			"message": err.Error(),
