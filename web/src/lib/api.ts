@@ -89,6 +89,7 @@ export interface FileMetadata {
   name: string;
   mime_type: string;
   size: number;
+  folder_size?: number;
   storage_path?: string;
   parent_id?: string | null;
   is_folder: boolean;

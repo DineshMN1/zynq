@@ -18,7 +18,7 @@ echo "Postgres ready."
 
 # Start Go API in background
 echo "Starting Go API (compiling...)..."
-sh "$ROOT/scripts/dev-api.sh" &
+bash "$ROOT/scripts/dev-api.sh" &
 API_PID=$!
 
 # Kill API when this script exits (Ctrl+C or error)

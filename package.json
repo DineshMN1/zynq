@@ -7,9 +7,9 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build": "pnpm --filter @zynqcloud/web build",
-    "dev": "sh scripts/dev.sh",
+    "dev": "node scripts/dev.mjs",
     "dev:db": "docker compose -f docker-compose.dev.yml up -d",
-    "dev:api": "sh scripts/dev-api.sh",
+    "dev:api": "node scripts/dev-api.mjs",
     "dev:web": "VITE_API_URL=/api/v1 pnpm --filter @zynqcloud/web dev",
     "lint": "pnpm --filter @zynqcloud/web lint",
     "test": "pnpm --filter @zynqcloud/web test",

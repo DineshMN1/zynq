@@ -22,6 +22,8 @@ build/
 .next/
 out/
 apps/server/bin/
+server/bin/
+*.exe
 
 # ===============================
 # Testing

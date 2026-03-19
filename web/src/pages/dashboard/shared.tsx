@@ -278,7 +278,7 @@ export default function SharedPage() {
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
                               {share.file?.is_folder
-                                ? 'Folder'
+                                ? formatBytes(Number(share.file?.folder_size || 0))
                                 : formatBytes(Number(share.file?.size || 0))}
                             </p>
                             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -403,7 +403,7 @@ export default function SharedPage() {
                             {share.file && (
                               <p className="text-xs text-muted-foreground">
                                 {share.file.is_folder
-                                  ? 'Folder'
+                                  ? formatBytes(Number(share.file.folder_size || 0))
                                   : formatBytes(Number(share.file.size || 0))}
                               </p>
                             )}
@@ -474,7 +474,7 @@ export default function SharedPage() {
                             {share.file && (
                               <p className="text-xs text-muted-foreground mt-1">
                                 {share.file.is_folder
-                                  ? 'Folder'
+                                  ? formatBytes(Number(share.file.folder_size || 0))
                                   : formatBytes(Number(share.file.size || 0))}
                               </p>
                             )}

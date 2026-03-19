@@ -285,6 +285,25 @@ func (h *SpacesHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
 		Offset(offset).Limit(limit).
 		Find(&files)
 
+	// Compute folder sizes
+	for i := range files {
+		if files[i].IsFolder {
+			var folderSize int64
+			h.db.Raw(`
+				WITH RECURSIVE descendants AS (
+					SELECT id, is_folder, size FROM files
+					WHERE parent_id = ? AND deleted_at IS NULL
+					UNION ALL
+					SELECT f.id, f.is_folder, f.size FROM files f
+					INNER JOIN descendants d ON f.parent_id = d.id
+					WHERE f.deleted_at IS NULL
+				)
+				SELECT COALESCE(SUM(size), 0) FROM descendants WHERE is_folder = false
+			`, files[i].ID).Scan(&folderSize)
+			files[i].FolderSize = folderSize
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"items": files,
 		"meta": map[string]interface{}{

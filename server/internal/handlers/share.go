@@ -146,16 +146,33 @@ func (h *ShareHandler) GetPublicShare(w http.ResponseWriter, r *http.Request) {
 		mimeType = *share.File.MimeType
 	}
 
+	// Compute folder size if shared item is a folder
+	var folderSize int64
+	if share.File.IsFolder {
+		h.db.Raw(`
+			WITH RECURSIVE descendants AS (
+				SELECT id, is_folder, size FROM files
+				WHERE parent_id = ? AND deleted_at IS NULL
+				UNION ALL
+				SELECT f.id, f.is_folder, f.size FROM files f
+				INNER JOIN descendants d ON f.parent_id = d.id
+				WHERE f.deleted_at IS NULL
+			)
+			SELECT COALESCE(SUM(size), 0) FROM descendants WHERE is_folder = false
+		`, share.File.ID).Scan(&folderSize)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"id":          share.ID,
 		"name":        share.File.Name,
 		"size":        share.File.Size,
+		"folderSize":  folderSize,
 		"mimeType":    mimeType,
 		"owner":       ownerName,
 		"ownerId":     share.File.OwnerID,
 		"createdAt":   share.CreatedAt,
 		"isFolder":    share.File.IsFolder,
-		"hasContent":  share.File.StoragePath != nil,
+		"hasContent":  share.File.StoragePath != nil || share.File.IsFolder,
 		"hasPassword": share.Password != nil && *share.Password != "",
 		"expiresAt":   share.ExpiresAt,
 	})
@@ -184,7 +201,7 @@ func (h *ShareHandler) DownloadPublicShare(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	if share.File == nil || share.File.StoragePath == nil {
+	if share.File == nil {
 		writeError(w, http.StatusNotFound, "File not found")
 		return
 	}
@@ -194,6 +211,16 @@ func (h *ShareHandler) DownloadPublicShare(w http.ResponseWriter, r *http.Reques
 		cfg:     h.cfg,
 		crypto:  h.crypto,
 		backend: h.backend,
+	}
+
+	if share.File.IsFolder {
+		fh.streamFolderAsZip(w, r, share.File)
+		return
+	}
+
+	if share.File.StoragePath == nil {
+		writeError(w, http.StatusNotFound, "File data not found")
+		return
 	}
 	fh.streamDecryptedFile(w, r, share.File)
 }
