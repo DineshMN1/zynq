@@ -174,6 +174,9 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enroll new user in all existing spaces
+	AutoEnrollUserInSpaces(h.db, user.ID, user.Role)
+
 	tokenStr, err := h.generateToken(user)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate token")

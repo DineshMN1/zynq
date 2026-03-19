@@ -106,6 +106,10 @@ func main() {
 	r.Use(mw.Logger)
 	r.Use(mw.CORS(cfg.CORSOrigins))
 
+	// Bootstrap default Team space (idempotent — no-op if spaces already exist)
+	handlers.SpaceBootstrap(db)
+	slog.Info("space bootstrap complete")
+
 	// Initialize handlers
 	authH := handlers.NewAuthHandler(db, cfg)
 	filesH := handlers.NewFilesHandler(db, cfg, cryptoSvc, localBackend)
@@ -114,6 +118,7 @@ func main() {
 	invitationsH := handlers.NewInvitationsHandler(db, cfg)
 	storageStatsH := handlers.NewStorageStatsHandler(localBackend, db)
 	shareH := handlers.NewShareHandler(db, cfg, cryptoSvc, localBackend)
+	spacesH := handlers.NewSpacesHandler(db, cfg, cryptoSvc, localBackend)
 
 	authMiddleware := mw.Auth(cfg.JWTSecret)
 	adminMiddleware := mw.RequireRole("admin", "owner")
@@ -185,6 +190,24 @@ func main() {
 				r.Post("/{id}/restore", filesH.Restore)
 				r.Delete("/{id}/permanent", filesH.PermanentDelete)
 				r.Post("/{id}/share", filesH.ShareFile)
+			})
+
+			// Spaces
+			r.Route("/spaces", func(r chi.Router) {
+				r.Get("/", spacesH.List)
+				r.Post("/", spacesH.Create)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/files", spacesH.GetFiles)
+					r.Post("/files", spacesH.CreateFile)
+					r.Put("/files/{fid}/upload", spacesH.Upload)
+					r.Get("/files/{fid}/download", spacesH.Download)
+					r.Patch("/files/{fid}", spacesH.RenameFile)
+					r.Delete("/files/{fid}", spacesH.DeleteFile)
+					r.Get("/members", spacesH.ListMembers)
+					r.Patch("/members/{uid}", spacesH.UpdateMember)
+					r.Delete("/members/{uid}", spacesH.RemoveMember)
+					r.Get("/activity", spacesH.GetActivity)
+				})
 			})
 
 			// Settings
