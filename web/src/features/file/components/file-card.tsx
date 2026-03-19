@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -19,7 +20,7 @@ import {
 import { type FileMetadata, fileApi } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
 import { FileTypeIcon } from '@/features/file/components/file-type-icon';
-
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 interface FileCardProps {
@@ -34,6 +35,14 @@ interface FileCardProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onCardClick?: (id: string, e: React.MouseEvent) => void;
+  // drag-and-drop
+  isDragging?: boolean;
+  isDragTarget?: boolean;
+  onDragStartFile?: () => void;
+  onDragEndFile?: () => void;
+  onDragEnterFolder?: () => void;
+  onDragLeaveFolder?: () => void;
+  onDropOnFolder?: (draggedId: string) => void;
 }
 
 export function FileCard({
@@ -48,7 +57,16 @@ export function FileCard({
   isSelected,
   onToggleSelect,
   onCardClick,
+  isDragging = false,
+  isDragTarget = false,
+  onDragStartFile,
+  onDragEndFile,
+  onDragEnterFolder,
+  onDragLeaveFolder,
+  onDropOnFolder,
 }: FileCardProps) {
+  const [dropSuccess, setDropSuccess] = useState(false);
+
   const handleDownload = () => {
     fileApi.download(file.id);
   };
@@ -65,12 +83,76 @@ export function FileCard({
     if (file.is_folder) onOpenFolder(file);
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', file.id);
+    e.dataTransfer.effectAllowed = 'move';
+    onDragStartFile?.();
+  };
+
+  const handleDragEnd = () => {
+    onDragEndFile?.();
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!file.is_folder) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!file.is_folder) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onDragEnterFolder?.();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!file.is_folder) return;
+    e.stopPropagation();
+    // Only fire leave if we've actually left the element (not moved to a child)
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      onDragLeaveFolder?.();
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (!file.is_folder) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const draggedId = e.dataTransfer.getData('text/plain');
+    if (draggedId && draggedId !== file.id) {
+      setDropSuccess(true);
+      setTimeout(() => setDropSuccess(false), 700);
+      onDropOnFolder?.(draggedId);
+    }
+    onDragLeaveFolder?.();
+  };
+
   return (
     <div
+      draggable={true}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+    <motion.div
+      animate={{
+        scale: isDragging ? 0.92 : isDragTarget ? 1.06 : dropSuccess ? 1.08 : 1,
+        opacity: isDragging ? 0.35 : 1,
+        filter: isDragging ? 'blur(1px)' : 'blur(0px)',
+      }}
+      transition={{ type: 'spring', stiffness: 400, damping: 28 }}
       className={cn(
         'group relative flex flex-col items-center px-2 py-3 rounded-lg cursor-pointer transition-colors duration-100 select-none',
         'hover:bg-muted/50',
         isSelected && 'bg-primary/5 ring-1 ring-primary/30',
+        isDragTarget && 'bg-primary/8 ring-2 ring-primary/60 shadow-lg shadow-primary/20',
+        dropSuccess && 'bg-green-500/10 ring-2 ring-green-500/50',
+        isDragging && 'cursor-grabbing',
       )}
       onClick={handleClick}
       onDoubleClick={(e) => {
@@ -79,7 +161,33 @@ export function FileCard({
         else if (onPreview) onPreview(file);
       }}
     >
-      {/* Checkbox — top-left, appears on hover/selected */}
+      {/* Drop target glow overlay */}
+      <AnimatePresence>
+        {isDragTarget && (
+          <motion.div
+            key="drop-glow"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 rounded-lg pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse 80% 60% at 50% 50%, hsl(var(--primary) / 0.15) 0%, transparent 70%)',
+            }}
+          />
+        )}
+        {dropSuccess && (
+          <motion.div
+            key="drop-success"
+            initial={{ scale: 0, opacity: 0.8 }}
+            animate={{ scale: 2.5, opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
+            className="absolute inset-0 rounded-full bg-green-500/20 pointer-events-none"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Checkbox */}
       {hasSelect && (
         <div
           className="absolute top-1.5 left-1.5 z-10"
@@ -99,7 +207,7 @@ export function FileCard({
         </div>
       )}
 
-      {/* Kebab menu — top-right, always visible */}
+      {/* Kebab menu */}
       <div
         className="absolute top-1 right-1 z-10"
         onClick={(e) => e.stopPropagation()}
@@ -116,42 +224,27 @@ export function FileCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             {!file.is_folder && onPreview && (
-              <DropdownMenuItem
-                onClick={() => onPreview(file)}
-                className="gap-2 text-sm"
-              >
+              <DropdownMenuItem onClick={() => onPreview(file)} className="gap-2 text-sm">
                 <Eye className="h-4 w-4" />
                 Preview
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem
-              onClick={handleDownload}
-              className="gap-2 text-sm"
-            >
+            <DropdownMenuItem onClick={handleDownload} className="gap-2 text-sm">
               <Download className="h-4 w-4" />
               {file.is_folder ? 'Download as zip' : 'Download'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {onRename && (
-              <DropdownMenuItem
-                onClick={() => onRename(file.id)}
-                className="gap-2 text-sm"
-              >
+              <DropdownMenuItem onClick={() => onRename(file.id)} className="gap-2 text-sm">
                 <Pencil className="h-4 w-4" />
                 Rename
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem
-              onClick={() => onShareUser(file.id)}
-              className="gap-2 text-sm"
-            >
+            <DropdownMenuItem onClick={() => onShareUser(file.id)} className="gap-2 text-sm">
               <UserPlus className="h-4 w-4" />
               Share with user
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => onSharePublic(file.id)}
-              className="gap-2 text-sm"
-            >
+            <DropdownMenuItem onClick={() => onSharePublic(file.id)} className="gap-2 text-sm">
               <LinkIcon className="h-4 w-4" />
               Copy public link
             </DropdownMenuItem>
@@ -172,10 +265,14 @@ export function FileCard({
         <div className="absolute top-2 right-8 z-10 h-2 w-2 rounded-full bg-blue-400" />
       )}
 
-      {/* Large centered icon */}
-      <div className="mb-2 transition-transform duration-150 group-hover:scale-105">
+      {/* Icon — bounces when drag target */}
+      <motion.div
+        className="mb-2 transition-transform duration-150 group-hover:scale-105"
+        animate={isDragTarget ? { y: [0, -4, 0, -4, 0] } : { y: 0 }}
+        transition={isDragTarget ? { duration: 0.5, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
+      >
         <FileTypeIcon name={file.name} mimeType={file.mime_type} isFolder={file.is_folder} size={48} />
-      </div>
+      </motion.div>
 
       {/* File name */}
       <p
@@ -193,6 +290,22 @@ export function FileCard({
             : 'Folder'
           : formatBytes(Number(file.size || 0))}
       </p>
+
+      {/* Drop hint label */}
+      <AnimatePresence>
+        {isDragTarget && (
+          <motion.p
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.15 }}
+            className="text-[9px] font-semibold text-primary mt-0.5"
+          >
+            Drop here
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </motion.div>
     </div>
   );
 }

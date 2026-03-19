@@ -16,9 +16,10 @@ import { cn } from '@/lib/utils';
 interface FilePreviewDialogProps {
   file: FileMetadata;
   onClose: () => void;
+  downloadUrl?: string;
 }
 
-export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
+export function FilePreviewDialog({ file, onClose, downloadUrl }: FilePreviewDialogProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +41,14 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
       setLoading(true);
       setError('');
       try {
-        const { blob } = await fileApi.downloadBlob(file.id);
+        let blob: Blob;
+        if (downloadUrl) {
+          const res = await fetch(downloadUrl, { credentials: 'include' });
+          if (!res.ok) throw new ApiError(res.statusText || 'Download failed', res.status);
+          blob = await res.blob();
+        } else {
+          ({ blob } = await fileApi.downloadBlob(file.id));
+        }
         if (stale) return;
         if (previewType === 'text' || previewType === 'code' || previewType === 'markdown') {
           const text = await blob.text();
@@ -70,7 +78,7 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
       stale = true;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [file.id, previewType]);
+  }, [file.id, previewType, downloadUrl]);
 
   const handleDownload = () => {
     fileApi.download(file.id);
