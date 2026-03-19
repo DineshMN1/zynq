@@ -70,9 +70,10 @@ type File struct {
 	EncryptionAlgo string     `gorm:"column:encryption_algo;default:'AES-256-GCM'" json:"encryption_algo,omitempty"`
 	DeletedAt      *time.Time `gorm:"column:deleted_at" json:"deleted_at,omitempty"`
 	// computed fields (not in DB)
-	ShareCount        int `gorm:"-" json:"shareCount,omitempty"`
-	PublicShareCount  int `gorm:"-" json:"publicShareCount,omitempty"`
-	PrivateShareCount int `gorm:"-" json:"privateShareCount,omitempty"`
+	FolderSize        int64 `gorm:"-" json:"folder_size"`
+	ShareCount        int   `gorm:"-" json:"shareCount,omitempty"`
+	PublicShareCount  int   `gorm:"-" json:"publicShareCount,omitempty"`
+	PrivateShareCount int   `gorm:"-" json:"privateShareCount,omitempty"`
 }
 
 func (File) TableName() string { return "files" }

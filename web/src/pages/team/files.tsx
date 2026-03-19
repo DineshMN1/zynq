@@ -739,7 +739,7 @@ function FileCard({
         </p>
         <div className="flex items-center justify-between">
           <span className="text-[10.5px] text-muted-foreground">
-            {file.is_folder ? 'Folder' : formatBytes(file.size)}
+            {file.is_folder ? formatBytes(file.folder_size || 0) : formatBytes(file.size)}
           </span>
           {file.owner && (
             <Avatar className="h-4 w-4 shrink-0">

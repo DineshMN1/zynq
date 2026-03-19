@@ -285,9 +285,7 @@ export function FileCard({
       {/* Sub-label */}
       <p className="text-[10px] text-muted-foreground/60 mt-0.5">
         {file.is_folder
-          ? file.size > 0
-            ? formatBytes(Number(file.size))
-            : 'Folder'
+          ? formatBytes(Number(file.folder_size || 0))
           : formatBytes(Number(file.size || 0))}
       </p>
 

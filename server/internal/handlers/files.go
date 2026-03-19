@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -82,7 +83,7 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 	var files []models.File
 	query.Order("is_folder DESC, name ASC").Offset(offset).Limit(limit).Find(&files)
 
-	// Compute share counts
+	// Compute share counts and folder sizes
 	for i := range files {
 		var shareCount, publicCount, privateCount int64
 		h.db.Model(&models.Share{}).Where("file_id = ?", files[i].ID).Count(&shareCount)
@@ -91,6 +92,22 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 		files[i].ShareCount = int(shareCount)
 		files[i].PublicShareCount = int(publicCount)
 		files[i].PrivateShareCount = int(privateCount)
+
+		if files[i].IsFolder {
+			var folderSize int64
+			h.db.Raw(`
+				WITH RECURSIVE descendants AS (
+					SELECT id, is_folder, size FROM files
+					WHERE parent_id = ? AND deleted_at IS NULL
+					UNION ALL
+					SELECT f.id, f.is_folder, f.size FROM files f
+					INNER JOIN descendants d ON f.parent_id = d.id
+					WHERE f.deleted_at IS NULL
+				)
+				SELECT COALESCE(SUM(size), 0) FROM descendants WHERE is_folder = false
+			`, files[i].ID).Scan(&folderSize)
+			files[i].FolderSize = folderSize
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -845,7 +862,7 @@ func (h *FilesHandler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if file.IsFolder {
-		writeError(w, http.StatusBadRequest, "Cannot download a folder")
+		h.streamFolderAsZip(w, r, &file)
 		return
 	}
 
@@ -906,6 +923,88 @@ func (h *FilesHandler) streamDecryptedFile(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Length", strconv.FormatInt(int64(len(plaintext)), 10))
 	w.WriteHeader(http.StatusOK)
 	w.Write(plaintext)
+}
+
+// streamFolderAsZip recursively collects all files in a folder, decrypts them,
+// and streams the result as a ZIP archive.
+func (h *FilesHandler) streamFolderAsZip(w http.ResponseWriter, r *http.Request, folder *models.File) {
+	// Recursively collect all non-folder files under this folder.
+	type entry struct {
+		file models.File
+		path string // relative path inside the ZIP
+	}
+	var entries []entry
+
+	var collect func(parentID uuid.UUID, prefix string)
+	collect = func(parentID uuid.UUID, prefix string) {
+		var children []models.File
+		h.db.Where("parent_id = ? AND deleted_at IS NULL", parentID).
+			Order("is_folder DESC, name ASC").Find(&children)
+		for _, child := range children {
+			childPath := prefix + child.Name
+			if child.IsFolder {
+				collect(child.ID, childPath+"/")
+			} else if child.StoragePath != nil {
+				entries = append(entries, entry{file: child, path: childPath})
+			}
+		}
+	}
+	collect(folder.ID, "")
+
+	if len(entries) == 0 {
+		writeError(w, http.StatusNotFound, "Folder is empty")
+		return
+	}
+
+	zipName := folder.Name + ".zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, zipName))
+	w.Header().Set("Cache-Control", "private, no-cache")
+	w.WriteHeader(http.StatusOK)
+
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	for _, e := range entries {
+		rc, _, err := h.backend.Read(*e.file.StoragePath)
+		if err != nil {
+			slog.Error("zip: failed to read file", "file_id", e.file.ID, "err", err)
+			continue
+		}
+
+		dek, err := h.crypto.DecryptFileKey(e.file.EncryptedDEK)
+		if err != nil {
+			rc.Close()
+			slog.Error("zip: failed to decrypt key", "file_id", e.file.ID, "err", err)
+			continue
+		}
+
+		zf, err := zw.Create(e.path)
+		if err != nil {
+			rc.Close()
+			slog.Error("zip: failed to create entry", "path", e.path, "err", err)
+			continue
+		}
+
+		if e.file.EncryptionAlgo == "AES-256-GCM-STREAM" {
+			if err := crypto.DecryptStream(rc, zf, dek, e.file.EncryptionIV); err != nil {
+				slog.Error("zip: stream decrypt failed", "file_id", e.file.ID, "err", err)
+			}
+		} else {
+			ciphertext, err := io.ReadAll(rc)
+			if err == nil {
+				plaintext, err := crypto.DecryptBuffer(ciphertext, dek, e.file.EncryptionIV)
+				if err == nil {
+					zf.Write(plaintext)
+				} else {
+					slog.Error("zip: buffer decrypt failed", "file_id", e.file.ID, "err", err)
+				}
+			} else {
+				slog.Error("zip: read failed", "file_id", e.file.ID, "err", err)
+			}
+		}
+		rc.Close()
+	}
 }
 
 // DELETE /api/v1/files/{id}
