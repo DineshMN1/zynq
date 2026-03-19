@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { spaceApi, type Space, type SpaceActivity } from '@/lib/api';
+import { spaceApi, type SpaceActivity } from '@/lib/api';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Clock, Loader2, Upload, Trash2, Pencil, UserPlus, UserMinus, UserCog } from 'lucide-react';
@@ -38,7 +38,6 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function TeamActivityPage() {
-  const [space, setSpace] = useState<Space | null>(null);
   const [spaceId, setSpaceId] = useState<string | null>(null);
   const [activities, setActivities] = useState<SpaceActivity[]>([]);
   const [total, setTotal] = useState(0);
@@ -51,7 +50,6 @@ export default function TeamActivityPage() {
     spaceApi.list()
       .then((spaces) => {
         if (spaces.length > 0) {
-          setSpace(spaces[0]);
           setSpaceId(spaces[0].id);
         } else {
           setLoading(false);
@@ -104,7 +102,7 @@ export default function TeamActivityPage() {
           </div>
         ) : (
           <div className="max-w-2xl space-y-0.5">
-            {activities.map((act, i) => {
+            {activities.map((act) => {
               const ActionIcon = ACTION_ICON[act.action] ?? Clock;
               const label = ACTION_LABEL[act.action] ?? act.action;
               const userName = act.user?.name ?? 'Someone';

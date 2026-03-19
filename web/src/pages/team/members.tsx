@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { spaceApi, type Space, type SpaceMember, ApiError } from '@/lib/api';
+import { spaceApi, type SpaceMember, ApiError } from '@/lib/api';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +34,6 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function TeamMembersPage() {
   const { user: currentUser } = useAuth();
-  const [space, setSpace] = useState<Space | null>(null);
   const [spaceId, setSpaceId] = useState<string | null>(null);
   const [members, setMembers] = useState<SpaceMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +46,6 @@ export default function TeamMembersPage() {
     spaceApi.list()
       .then((spaces) => {
         if (spaces.length > 0) {
-          setSpace(spaces[0]);
           setSpaceId(spaces[0].id);
         } else {
           setLoading(false);

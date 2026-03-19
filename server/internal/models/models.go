@@ -165,8 +165,8 @@ type SpaceMember struct {
 	AddedBy *uuid.UUID `gorm:"column:added_by" json:"added_by,omitempty"`
 	AddedAt time.Time  `gorm:"column:added_at;autoCreateTime" json:"added_at"`
 	// associations
-	User    *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Adder   *User  `gorm:"foreignKey:AddedBy" json:"adder,omitempty"`
+	User  *User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Adder *User `gorm:"foreignKey:AddedBy" json:"adder,omitempty"`
 }
 
 func (SpaceMember) TableName() string { return "space_members" }
