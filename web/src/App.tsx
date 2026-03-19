@@ -17,6 +17,10 @@ import AdminLayout from './pages/admin/layout';
 import AdminUsersPage from './pages/dashboard/settings/users';
 import AdminNotificationsPage from './pages/dashboard/settings/notifications';
 import AdminMonitoringPage from './pages/dashboard/settings/monitoring';
+import TeamLayout from './pages/team/layout';
+import TeamFilesPage from './pages/team/files';
+import TeamActivityPage from './pages/team/activity';
+import TeamMembersPage from './pages/team/members';
 import NotFoundPage from './pages/not-found';
 
 export default function App() {
@@ -51,6 +55,20 @@ export default function App() {
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="notifications" element={<AdminNotificationsPage />} />
         <Route path="monitoring" element={<AdminMonitoringPage />} />
+      </Route>
+
+      {/* Team space — separate layout with its own sidebar */}
+      <Route path="/team" element={<TeamLayout />}>
+        <Route index element={<Navigate to="/team/files" replace />} />
+        <Route path="files" element={<TeamFilesPage />} />
+        <Route path="photos" element={<TeamFilesPage />} />
+        <Route path="docs" element={<TeamFilesPage />} />
+        <Route path="videos" element={<TeamFilesPage />} />
+        <Route path="audio" element={<TeamFilesPage />} />
+        <Route path="code" element={<TeamFilesPage />} />
+        <Route path="others" element={<TeamFilesPage />} />
+        <Route path="activity" element={<TeamActivityPage />} />
+        <Route path="members" element={<TeamMembersPage />} />
       </Route>
 
       {/* 404 */}

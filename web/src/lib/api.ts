@@ -496,10 +496,10 @@ export const fileApi = {
       body: JSON.stringify({ ids }),
     }),
 
-  rename: (id: string, name: string) =>
+  rename: (id: string, payload: { name?: string; parentId?: string; moveToRoot?: boolean }): Promise<FileMetadata> =>
     fetchApi<FileMetadata>(`/files/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(payload),
     }),
 
   emptyTrash: () =>
@@ -724,6 +724,120 @@ export const publicApi = {
     );
 
     return { blob, fileName };
+  },
+};
+
+// ── Spaces ────────────────────────────────────────────────────────────────────
+
+export interface Space {
+  id: string;
+  name: string;
+  description?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  my_role: 'viewer' | 'contributor' | 'admin';
+  member_count: number;
+}
+
+export interface SpaceMember {
+  space_id: string;
+  user_id: string;
+  role: 'viewer' | 'contributor' | 'admin';
+  added_at: string;
+  user?: { id: string; name: string; email: string };
+}
+
+export interface SpaceActivity {
+  id: string;
+  space_id: string;
+  user_id?: string;
+  action: string;
+  file_id?: string;
+  file_name?: string;
+  details?: Record<string, unknown>;
+  created_at: string;
+  user?: { id: string; name: string; email: string };
+}
+
+export const spaceApi = {
+  list: (): Promise<Space[]> => fetchApi<Space[]>('/spaces'),
+
+  create: (name: string, description?: string): Promise<Space> =>
+    fetchApi<Space>('/spaces', {
+      method: 'POST',
+      body: JSON.stringify({ name, description }),
+    }),
+
+  getFiles: (
+    spaceId: string,
+    params?: { page?: number; limit?: number; search?: string; category?: string; parentId?: string | null },
+  ): Promise<PaginatedResponse<FileMetadata>> => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.search) q.set('search', params.search);
+    if (params?.category) q.set('category', params.category);
+    if (params?.parentId) q.set('parentId', params.parentId);
+    const qs = q.toString();
+    return fetchApi<PaginatedResponse<FileMetadata>>(`/spaces/${spaceId}/files${qs ? `?${qs}` : ''}`);
+  },
+
+  createFile: (
+    spaceId: string,
+    payload: { name: string; isFolder?: boolean; parentId?: string; mimeType?: string; size?: number },
+  ): Promise<FileMetadata & { uploadUrl?: string }> =>
+    fetchApi<FileMetadata & { uploadUrl?: string }>(`/spaces/${spaceId}/files`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  uploadFile: async (
+    spaceId: string,
+    fileId: string,
+    body: ReadableStream | Blob | ArrayBuffer,
+  ): Promise<FileMetadata> => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/spaces/${spaceId}/files/${fileId}/upload`,
+      { method: 'PUT', body, credentials: 'include' },
+    );
+    if (!response.ok) throw await toApiError(response);
+    return response.json() as Promise<FileMetadata>;
+  },
+
+  downloadFile: (spaceId: string, fileId: string): string =>
+    `${getApiBaseUrl()}/spaces/${spaceId}/files/${fileId}/download`,
+
+  renameFile: (spaceId: string, fileId: string, payload: { name?: string; parentId?: string; moveToRoot?: boolean }): Promise<FileMetadata> =>
+    fetchApi<FileMetadata>(`/spaces/${spaceId}/files/${fileId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteFile: (spaceId: string, fileId: string): Promise<{ message: string }> =>
+    fetchApi<{ message: string }>(`/spaces/${spaceId}/files/${fileId}`, { method: 'DELETE' }),
+
+  listMembers: (spaceId: string): Promise<SpaceMember[]> =>
+    fetchApi<SpaceMember[]>(`/spaces/${spaceId}/members`),
+
+  updateMember: (spaceId: string, userId: string, role: string): Promise<{ message: string }> =>
+    fetchApi<{ message: string }>(`/spaces/${spaceId}/members/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+
+  removeMember: (spaceId: string, userId: string): Promise<{ message: string }> =>
+    fetchApi<{ message: string }>(`/spaces/${spaceId}/members/${userId}`, { method: 'DELETE' }),
+
+  getActivity: (
+    spaceId: string,
+    params?: { page?: number; limit?: number },
+  ): Promise<PaginatedResponse<SpaceActivity>> => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return fetchApi<PaginatedResponse<SpaceActivity>>(`/spaces/${spaceId}/activity${qs ? `?${qs}` : ''}`);
   },
 };
 

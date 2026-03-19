@@ -1376,12 +1376,22 @@ export default function FilesPage() {
     try {
       const updated = await fileApi.rename(
         renameDialog.fileId,
-        renameValue.trim(),
+        { name: renameValue.trim() },
       );
       setFiles((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
       setRenameDialog({ open: false, fileId: null, currentName: '' });
     } catch {
       toast({ title: 'Rename failed', variant: 'destructive' });
+    }
+  };
+
+  const handleMove = async (fileId: string, targetFolderId: string) => {
+    try {
+      await fileApi.rename(fileId, { parentId: targetFolderId });
+      toast({ title: 'Moved successfully' });
+      void loadFiles();
+    } catch {
+      toast({ title: 'Failed to move file', variant: 'destructive' });
     }
   };
 
@@ -1573,6 +1583,8 @@ export default function FilesPage() {
     e.stopPropagation();
     dragCounter.current = 0;
     setIsDragActive(false);
+    // Ignore internal card-to-folder drags (those are handled by FileCard's onDrop)
+    if (!e.dataTransfer.types.includes('Files')) return;
 
     const items = e.dataTransfer.items;
     if (!items || items.length === 0) {
@@ -1828,19 +1840,25 @@ export default function FilesPage() {
         </AnimatePresence>
 
         {/* Files Grid */}
-        <FileGrid
-          files={files}
-          loading={loading}
-          onOpenFolder={handleOpenFolder}
-          onDelete={handleDelete}
-          onShareUser={handleShareWithUser}
-          onSharePublic={handlePublicShare}
-          onRename={handleRenameOpen}
-          onPreview={handlePreview}
-          selectedIds={selectedIds}
-          onToggleSelect={toggleSelect}
-          onCardClick={handleCardClick}
-        />
+        <motion.div
+          animate={{ scale: isDragActive ? 0.97 : 1, opacity: isDragActive ? 0.4 : 1 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+        >
+          <FileGrid
+            files={files}
+            loading={loading}
+            onOpenFolder={handleOpenFolder}
+            onDelete={handleDelete}
+            onShareUser={handleShareWithUser}
+            onSharePublic={handlePublicShare}
+            onRename={handleRenameOpen}
+            onPreview={handlePreview}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onCardClick={handleCardClick}
+            onMove={handleMove}
+          />
+        </motion.div>
 
         {/* Status Bar */}
         {!loading && files.length > 0 && (
