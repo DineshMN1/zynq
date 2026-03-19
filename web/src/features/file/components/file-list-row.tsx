@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -20,7 +21,7 @@ import {
 import { type FileMetadata, fileApi } from '@/lib/api';
 import { formatBytes } from '@/lib/auth';
 import { FileTypeIcon } from '@/features/file/components/file-type-icon';
-
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 interface FileListRowProps {
@@ -35,6 +36,14 @@ interface FileListRowProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onCardClick?: (id: string, e: React.MouseEvent) => void;
+  // drag-and-drop
+  isDragging?: boolean;
+  isDragTarget?: boolean;
+  onDragStartFile?: () => void;
+  onDragEndFile?: () => void;
+  onDragEnterFolder?: () => void;
+  onDragLeaveFolder?: () => void;
+  onDropOnFolder?: (draggedId: string) => void;
 }
 
 function formatDate(dateString: string): string {
@@ -65,7 +74,16 @@ export function FileListRow({
   isSelected,
   onToggleSelect,
   onCardClick,
+  isDragging = false,
+  isDragTarget = false,
+  onDragStartFile,
+  onDragEndFile,
+  onDragEnterFolder,
+  onDragLeaveFolder,
+  onDropOnFolder,
 }: FileListRowProps) {
+  const [dropSuccess, setDropSuccess] = useState(false);
+
   const handleDownload = () => {
     fileApi.download(file.id);
   };
@@ -84,12 +102,75 @@ export function FileListRow({
     if (file.is_folder) onOpenFolder(file);
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', file.id);
+    e.dataTransfer.effectAllowed = 'move';
+    onDragStartFile?.();
+  };
+
+  const handleDragEnd = () => {
+    onDragEndFile?.();
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!file.is_folder) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!file.is_folder) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onDragEnterFolder?.();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!file.is_folder) return;
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      onDragLeaveFolder?.();
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (!file.is_folder) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const draggedId = e.dataTransfer.getData('text/plain');
+    if (draggedId && draggedId !== file.id) {
+      setDropSuccess(true);
+      setTimeout(() => setDropSuccess(false), 700);
+      onDropOnFolder?.(draggedId);
+    }
+    onDragLeaveFolder?.();
+  };
+
   return (
     <div
+      draggable={true}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+    <motion.div
+      animate={{
+        scale: isDragging ? 0.98 : isDragTarget ? 1.01 : 1,
+        opacity: isDragging ? 0.35 : 1,
+        backgroundColor: isDragTarget ? 'hsl(var(--primary) / 0.06)' : undefined,
+      }}
+      transition={{ duration: 0.15 }}
       className={cn(
         'group flex h-14 sm:h-12 cursor-pointer items-center gap-3 px-3 sm:px-5 py-0 transition-colors duration-100',
         'hover:bg-muted/40',
         isSelected && 'bg-primary/5 hover:bg-primary/8',
+        isDragTarget && 'ring-1 ring-primary/40',
+        dropSuccess && 'bg-green-500/10 ring-1 ring-green-500/40',
+        isDragging && 'cursor-grabbing',
       )}
       onClick={handleRowClick}
     >
@@ -130,6 +211,21 @@ export function FileListRow({
         {isShared && (
           <Share2 className="h-3.5 w-3.5 shrink-0 text-blue-400 opacity-70" />
         )}
+
+        {/* Drop here label */}
+        <AnimatePresence>
+          {isDragTarget && (
+            <motion.span
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -4 }}
+              transition={{ duration: 0.15 }}
+              className="ml-2 text-[10px] font-semibold text-primary shrink-0"
+            >
+              Drop here →
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Size */}
@@ -225,6 +321,7 @@ export function FileListRow({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+    </motion.div>
     </div>
   );
 }

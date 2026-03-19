@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronsUpDown,
+  Building2,
 } from 'lucide-react';
 import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -339,23 +340,32 @@ export function AppSidebar({ user }: AppSidebarProps) {
             </SidebarGroup>
           ))}
 
-          {/* Admin button — only for admin/owner */}
-          {isAdmin && (
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
+          {/* Workspaces group — Team (all users) + Admin (admin/owner only) */}
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspaces</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Team" isActive={pathname.startsWith('/team')}>
+                    <Link to="/team/files">
+                      <Building2 />
+                      <span>Team</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {isAdmin && (
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip="Admin">
+                    <SidebarMenuButton asChild tooltip="Admin" isActive={pathname.startsWith('/admin')}>
                       <Link to="/admin">
                         <Hammer />
                         <span>Admin</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         </SidebarContent>
 
         {/* Footer */}

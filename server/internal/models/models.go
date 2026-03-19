@@ -57,6 +57,7 @@ type File struct {
 	UpdatedAt      time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 	OwnerID        uuid.UUID  `gorm:"column:owner_id;not null" json:"owner_id"`
 	Owner          *User      `gorm:"foreignKey:OwnerID" json:"owner,omitempty"`
+	SpaceID        *uuid.UUID `gorm:"column:space_id" json:"space_id,omitempty"`
 	Name           string     `gorm:"not null" json:"name"`
 	MimeType       *string    `gorm:"column:mime_type" json:"mime_type"`
 	Size           int64      `gorm:"default:0" json:"size"`
@@ -134,3 +135,64 @@ type Setting struct {
 }
 
 func (Setting) TableName() string { return "settings" }
+
+// Space is a shared workspace accessible to all (or selected) org members.
+type Space struct {
+	ID          uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	CreatedAt   time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	Name        string     `gorm:"not null" json:"name"`
+	Description *string    `gorm:"column:description" json:"description,omitempty"`
+	CreatedBy   *uuid.UUID `gorm:"column:created_by" json:"created_by,omitempty"`
+	Creator     *User      `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
+	// computed
+	MemberCount int `gorm:"-" json:"memberCount,omitempty"`
+}
+
+func (Space) TableName() string { return "spaces" }
+
+// SpaceMemberRole constants
+const (
+	SpaceRoleViewer      = "viewer"
+	SpaceRoleContributor = "contributor"
+	SpaceRoleAdmin       = "admin"
+)
+
+type SpaceMember struct {
+	SpaceID uuid.UUID  `gorm:"column:space_id;primaryKey" json:"space_id"`
+	UserID  uuid.UUID  `gorm:"column:user_id;primaryKey" json:"user_id"`
+	Role    string     `gorm:"not null;default:'contributor'" json:"role"`
+	AddedBy *uuid.UUID `gorm:"column:added_by" json:"added_by,omitempty"`
+	AddedAt time.Time  `gorm:"column:added_at;autoCreateTime" json:"added_at"`
+	// associations
+	User  *User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Adder *User `gorm:"foreignKey:AddedBy" json:"adder,omitempty"`
+}
+
+func (SpaceMember) TableName() string { return "space_members" }
+
+// SpaceActivityAction constants
+const (
+	SpaceActionUpload            = "upload"
+	SpaceActionDelete            = "delete"
+	SpaceActionRename            = "rename"
+	SpaceActionMove              = "move"
+	SpaceActionMemberAdded       = "member_added"
+	SpaceActionMemberRoleChanged = "member_role_changed"
+	SpaceActionMemberRemoved     = "member_removed"
+)
+
+type SpaceActivity struct {
+	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	CreatedAt time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	SpaceID   uuid.UUID  `gorm:"column:space_id;not null" json:"space_id"`
+	UserID    *uuid.UUID `gorm:"column:user_id" json:"user_id,omitempty"`
+	Action    string     `gorm:"not null" json:"action"`
+	FileID    *uuid.UUID `gorm:"column:file_id" json:"file_id,omitempty"`
+	FileName  *string    `gorm:"column:file_name" json:"file_name,omitempty"`
+	Details   JSONB      `gorm:"type:jsonb" json:"details,omitempty"`
+	// associations
+	User *User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+func (SpaceActivity) TableName() string { return "space_activity" }

@@ -59,7 +59,7 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * limit
 
 	query := h.db.Model(&models.File{}).
-		Where("owner_id = ? AND deleted_at IS NULL", userID)
+		Where("owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", userID)
 
 	if parentIDStr == "" || parentIDStr == "null" || parentIDStr == "root" {
 		query = query.Where("parent_id IS NULL")
@@ -136,7 +136,7 @@ func (h *FilesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Verify parent exists and is owned by user
 	if req.ParentID != nil {
 		var parent models.File
-		if err := h.db.Where("id = ? AND owner_id = ? AND is_folder = true AND deleted_at IS NULL", req.ParentID, userID).First(&parent).Error; err != nil {
+		if err := h.db.Where("id = ? AND owner_id = ? AND is_folder = true AND deleted_at IS NULL AND space_id IS NULL", req.ParentID, userID).First(&parent).Error; err != nil {
 			writeError(w, http.StatusNotFound, "Parent folder not found")
 			return
 		}
@@ -195,10 +195,10 @@ func (h *FilesHandler) Trash(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * limit
 
 	var total int64
-	h.db.Model(&models.File{}).Where("owner_id = ? AND deleted_at IS NOT NULL", userID).Count(&total)
+	h.db.Model(&models.File{}).Where("owner_id = ? AND deleted_at IS NOT NULL AND space_id IS NULL", userID).Count(&total)
 
 	var files []models.File
-	h.db.Where("owner_id = ? AND deleted_at IS NOT NULL", userID).
+	h.db.Where("owner_id = ? AND deleted_at IS NOT NULL AND space_id IS NULL", userID).
 		Order("deleted_at DESC").
 		Offset(offset).Limit(limit).
 		Find(&files)
@@ -219,7 +219,7 @@ func (h *FilesHandler) EmptyTrash(w http.ResponseWriter, r *http.Request) {
 	userID, _ := uuid.Parse(claims.Sub)
 
 	var files []models.File
-	h.db.Where("owner_id = ? AND deleted_at IS NOT NULL", userID).Find(&files)
+	h.db.Where("owner_id = ? AND deleted_at IS NOT NULL AND space_id IS NULL", userID).Find(&files)
 
 	// Collect IDs and unique storage paths for batch processing.
 	deleteIDs := make([]uuid.UUID, 0, len(files))
@@ -274,7 +274,7 @@ func (h *FilesHandler) EmptyTrash(w http.ResponseWriter, r *http.Request) {
 	// Update storage used
 	var totalSize int64
 	h.db.Model(&models.File{}).
-		Where("owner_id = ? AND deleted_at IS NULL AND is_folder = false", userID).
+		Where("owner_id = ? AND deleted_at IS NULL AND is_folder = false AND space_id IS NULL", userID).
 		Select("COALESCE(SUM(size), 0)").Scan(&totalSize)
 	h.db.Model(&models.User{}).Where("id = ?", userID).Update("storage_used", totalSize)
 
@@ -462,7 +462,7 @@ func (h *FilesHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	h.db.Model(&models.File{}).
-		Where("id IN ? AND owner_id = ? AND deleted_at IS NULL", req.IDs, userID).
+		Where("id IN ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", req.IDs, userID).
 		Update("deleted_at", now)
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Files moved to trash"})
@@ -488,7 +488,7 @@ func (h *FilesHandler) CheckDuplicate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := h.db.Model(&models.File{}).
-		Where("owner_id = ? AND file_hash = ? AND is_folder = false AND deleted_at IS NULL", userID, req.FileHash)
+		Where("owner_id = ? AND file_hash = ? AND is_folder = false AND deleted_at IS NULL AND space_id IS NULL", userID, req.FileHash)
 
 	var file models.File
 	if err := query.First(&file).Error; err != nil {
@@ -512,7 +512,7 @@ func (h *FilesHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var file models.File
-	if err := h.db.Where("id = ? AND owner_id = ?", fileID, userID).First(&file).Error; err != nil {
+	if err := h.db.Where("id = ? AND owner_id = ? AND space_id IS NULL", fileID, userID).First(&file).Error; err != nil {
 		writeError(w, http.StatusNotFound, "File not found")
 		return
 	}
@@ -533,43 +533,69 @@ func (h *FilesHandler) Rename(w http.ResponseWriter, r *http.Request) {
 	claims := mw.GetClaims(r)
 	userID, _ := uuid.Parse(claims.Sub)
 
-	fileIDStr := chi.URLParam(r, "id")
-	fileID, err := uuid.Parse(fileIDStr)
+	fileID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid file ID")
 		return
 	}
 
 	var req struct {
-		Name string `json:"name"`
+		Name       *string    `json:"name"`
+		ParentID   *uuid.UUID `json:"parentId"`
+		MoveToRoot bool       `json:"moveToRoot"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
-		return
-	}
-
 	var file models.File
-	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL", fileID, userID).First(&file).Error; err != nil {
+	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", fileID, userID).First(&file).Error; err != nil {
 		writeError(w, http.StatusNotFound, "File not found")
 		return
 	}
 
-	if !file.IsFolder && blockedExtensionsRe.MatchString(req.Name) {
-		writeError(w, http.StatusBadRequest, "File type not allowed")
+	updates := map[string]interface{}{}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			writeError(w, http.StatusBadRequest, "name cannot be empty")
+			return
+		}
+		if !file.IsFolder && blockedExtensionsRe.MatchString(name) {
+			writeError(w, http.StatusBadRequest, "File type not allowed")
+			return
+		}
+		updates["name"] = name
+	}
+
+	if req.MoveToRoot {
+		updates["parent_id"] = nil
+	} else if req.ParentID != nil {
+		if *req.ParentID == fileID {
+			writeError(w, http.StatusBadRequest, "Cannot move a file into itself")
+			return
+		}
+		var parent models.File
+		if err := h.db.Where("id = ? AND owner_id = ? AND is_folder = true AND deleted_at IS NULL AND space_id IS NULL", *req.ParentID, userID).First(&parent).Error; err != nil {
+			writeError(w, http.StatusNotFound, "Target folder not found")
+			return
+		}
+		updates["parent_id"] = *req.ParentID
+	}
+
+	if len(updates) == 0 {
+		writeJSON(w, http.StatusOK, file)
 		return
 	}
 
-	if err := h.db.Model(&file).Update("name", req.Name).Error; err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to rename file")
+	if err := h.db.Model(&file).Updates(updates).Error; err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to update file")
 		return
 	}
 
+	h.db.Where("id = ?", fileID).First(&file)
 	writeJSON(w, http.StatusOK, file)
 }
 
@@ -586,7 +612,7 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var file models.File
-	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL", fileID, userID).First(&file).Error; err != nil {
+	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", fileID, userID).First(&file).Error; err != nil {
 		writeError(w, http.StatusNotFound, "File not found")
 		return
 	}
@@ -680,7 +706,7 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			var existing models.File
 			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 				Where(
-					"owner_id = ? AND file_hash = ? AND is_folder = false AND deleted_at IS NULL AND storage_path IS NOT NULL",
+					"owner_id = ? AND file_hash = ? AND is_folder = false AND deleted_at IS NULL AND storage_path IS NOT NULL AND space_id IS NULL",
 					userID, computedHash,
 				).First(&existing).Error
 
@@ -801,7 +827,7 @@ func (h *FilesHandler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var file models.File
-	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL", fileID, userID).First(&file).Error; err != nil {
+	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", fileID, userID).First(&file).Error; err != nil {
 		// Also check if user has a share for this file
 		var share models.Share
 		var shareUser models.User
@@ -895,7 +921,7 @@ func (h *FilesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var file models.File
-	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL", fileID, userID).First(&file).Error; err != nil {
+	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", fileID, userID).First(&file).Error; err != nil {
 		writeError(w, http.StatusNotFound, "File not found")
 		return
 	}
@@ -919,7 +945,7 @@ func (h *FilesHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var file models.File
-	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NOT NULL", fileID, userID).First(&file).Error; err != nil {
+	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NOT NULL AND space_id IS NULL", fileID, userID).First(&file).Error; err != nil {
 		writeError(w, http.StatusNotFound, "File not found in trash")
 		return
 	}
@@ -942,7 +968,7 @@ func (h *FilesHandler) PermanentDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var file models.File
-	if err := h.db.Where("id = ? AND owner_id = ?", fileID, userID).First(&file).Error; err != nil {
+	if err := h.db.Where("id = ? AND owner_id = ? AND space_id IS NULL", fileID, userID).First(&file).Error; err != nil {
 		writeError(w, http.StatusNotFound, "File not found")
 		return
 	}
@@ -989,7 +1015,7 @@ func (h *FilesHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var file models.File
-	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL", fileID, userID).First(&file).Error; err != nil {
+	if err := h.db.Where("id = ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", fileID, userID).First(&file).Error; err != nil {
 		writeError(w, http.StatusNotFound, "File not found")
 		return
 	}

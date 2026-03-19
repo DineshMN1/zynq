@@ -4,7 +4,7 @@ import { type FileMetadata } from '@/lib/api';
 import { FileCard } from './file-card';
 import { FileListRow } from './file-list-row';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 interface FileGridProps {
@@ -19,6 +19,7 @@ interface FileGridProps {
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onCardClick?: (id: string, e: React.MouseEvent) => void;
+  onMove?: (fileId: string, targetFolderId: string) => void;
 }
 
 type ViewMode = 'grid' | 'list';
@@ -35,7 +36,13 @@ export function FileGrid({
   selectedIds,
   onToggleSelect,
   onCardClick,
+  onMove,
 }: FileGridProps) {
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragTargetId, setDragTargetId] = useState<string | null>(null);
+  // Ref so drag-enter callbacks always see the current dragging ID without stale closures
+  const draggingIdRef = useRef<string | null>(null);
+
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('zynq-view-mode') as ViewMode;
     return saved === 'grid' || saved === 'list' ? saved : 'list';
@@ -153,6 +160,13 @@ export function FileGrid({
                     isSelected={selectedIds?.has(file.id)}
                     onToggleSelect={onToggleSelect}
                     onCardClick={onCardClick}
+                    isDragging={draggingId === file.id}
+                    isDragTarget={dragTargetId === file.id && file.is_folder && draggingId !== file.id}
+                    onDragStartFile={() => { draggingIdRef.current = file.id; setDraggingId(file.id); }}
+                    onDragEndFile={() => { draggingIdRef.current = null; setDraggingId(null); setDragTargetId(null); }}
+                    onDragEnterFolder={() => { if (draggingIdRef.current && draggingIdRef.current !== file.id && file.is_folder) setDragTargetId(file.id); }}
+                    onDragLeaveFolder={() => setDragTargetId(null)}
+                    onDropOnFolder={(draggedId) => { draggingIdRef.current = null; setDraggingId(null); setDragTargetId(null); onMove?.(draggedId, file.id); }}
                   />
                 ))}
               </div>
@@ -181,6 +195,13 @@ export function FileGrid({
                 isSelected={selectedIds?.has(file.id)}
                 onToggleSelect={onToggleSelect}
                 onCardClick={onCardClick}
+                isDragging={draggingId === file.id}
+                isDragTarget={dragTargetId === file.id && file.is_folder && draggingId !== file.id}
+                onDragStartFile={() => { draggingIdRef.current = file.id; setDraggingId(file.id); }}
+                onDragEndFile={() => { draggingIdRef.current = null; setDraggingId(null); setDragTargetId(null); }}
+                onDragEnterFolder={() => { if (draggingIdRef.current && draggingIdRef.current !== file.id && file.is_folder) setDragTargetId(file.id); }}
+                onDragLeaveFolder={() => setDragTargetId(null)}
+                onDropOnFolder={(draggedId) => { draggingIdRef.current = null; setDraggingId(null); setDragTargetId(null); onMove?.(draggedId, file.id); }}
               />
             ))}
           </motion.div>
