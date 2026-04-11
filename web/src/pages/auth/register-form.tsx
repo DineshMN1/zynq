@@ -78,6 +78,10 @@ export default function RegisterForm() {
       try {
         const result = await inviteApi.validate(inviteToken);
         if (!isActive) return;
+        if (!result.valid) {
+          setInviteValidationError('Invalid or expired invitation');
+          return;
+        }
         setFormData((prev) => ({ ...prev, email: result.email }));
       } catch (err) {
         if (!isActive) return;

@@ -31,8 +31,9 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	inviterID, _ := uuid.Parse(claims.Sub)
 
 	var req struct {
-		Email string `json:"email"`
-		Role  string `json:"role"`
+		Email     string  `json:"email"`
+		Role      string  `json:"role"`
+		ChannelID *string `json:"channel_id"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
@@ -81,25 +82,65 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	inviteLink := fmt.Sprintf("%s/register?token=%s", h.cfg.FrontendURL, invitation.Token.String())
 	emailSent := false
+	emailMessage := ""
 
-	// Send invitation email if enabled
-	if h.cfg.EmailEnabled {
+	subject := "You've been invited to ZynqCloud"
+	body := fmt.Sprintf("You have been invited to join ZynqCloud.\n\nClick the link below to create your account:\n%s\n\nThis invitation expires in %d hours.", inviteLink, h.cfg.InviteTokenTTLHours)
+
+	if req.ChannelID != nil && *req.ChannelID != "" && *req.ChannelID != "auto" {
+		// Admin explicitly selected a channel — use it directly
+		chID, parseErr := uuid.Parse(*req.ChannelID)
+		if parseErr != nil {
+			emailMessage = "Invalid channel ID provided."
+		} else {
+			var ch models.NotificationChannel
+			if dbErr := h.db.First(&ch, "id = ? AND type = 'email' AND enabled = true", chID).Error; dbErr != nil {
+				emailMessage = "Selected email channel not found or disabled."
+			} else {
+				if sendErr := SmtpSendToAddress(ch.Config, req.Email, subject, body); sendErr != nil {
+					slog.Error("invitation email via selected channel failed", "channel", ch.Name, "error", sendErr)
+					emailMessage = "Failed to send via " + ch.Name + ": " + sendErr.Error()
+				} else {
+					emailSent = true
+					emailMessage = "Invitation email sent via " + ch.Name + "."
+					slog.Info("invitation email sent via selected channel", "channel", ch.Name, "to", req.Email)
+				}
+			}
+		}
+	} else if h.cfg.EmailEnabled && h.cfg.SMTPHost != "" {
+		// Auto: use global SMTP
 		go h.sendInvitationEmail(req.Email, inviteLink)
 		emailSent = true
+		emailMessage = "Invitation email sent via global SMTP."
 	} else {
-		slog.Info("invitation created (email disabled)", "token", invitation.Token, "email", req.Email)
+		// Auto: fallback to any enabled email channel with user_invited action
+		ch, found := h.findInviteEmailChannel()
+		if found {
+			if sendErr := SmtpSendToAddress(ch.Config, req.Email, subject, body); sendErr != nil {
+				slog.Error("invitation email via channel failed", "channel", ch.Name, "error", sendErr)
+				emailMessage = "Failed to send via " + ch.Name + ": " + sendErr.Error()
+			} else {
+				emailSent = true
+				emailMessage = "Invitation email sent via " + ch.Name + "."
+				slog.Info("invitation email sent via channel", "channel", ch.Name, "to", req.Email)
+			}
+		} else {
+			slog.Info("invitation created — no email channel configured", "token", invitation.Token, "email", req.Email)
+			emailMessage = "No email source configured. Add an email notification channel with the 'User Invited' action."
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
-		"id":         invitation.ID,
-		"email":      invitation.Email,
-		"token":      invitation.Token,
-		"role":       invitation.Role,
-		"status":     invitation.Status,
-		"created_at": invitation.CreatedAt,
-		"expires_at": invitation.ExpiresAt,
-		"link":       inviteLink,
-		"email_sent": emailSent,
+		"id":            invitation.ID,
+		"email":         invitation.Email,
+		"token":         invitation.Token,
+		"role":          invitation.Role,
+		"status":        invitation.Status,
+		"created_at":    invitation.CreatedAt,
+		"expires_at":    invitation.ExpiresAt,
+		"link":          inviteLink,
+		"email_sent":    emailSent,
+		"email_message": emailMessage,
 	})
 }
 
@@ -240,4 +281,19 @@ func (h *InvitationsHandler) sendInvitationEmail(to, inviteURL string) {
 	subject := "You've been invited to ZynqCloud"
 	body := fmt.Sprintf("You have been invited to join ZynqCloud.\n\nClick the link below to create your account:\n%s\n\nThis invitation expires in %d hours.", inviteURL, h.cfg.InviteTokenTTLHours)
 	sendEmail(h.cfg, to, subject, body)
+}
+
+// findInviteEmailChannel returns the first enabled email notification channel
+// that has the "user_invited" action configured.
+func (h *InvitationsHandler) findInviteEmailChannel() (models.NotificationChannel, bool) {
+	var channels []models.NotificationChannel
+	h.db.Where("enabled = true AND type = 'email'").Order("created_at ASC").Find(&channels)
+	for _, ch := range channels {
+		for _, a := range ch.Actions {
+			if a == "user_invited" {
+				return ch, true
+			}
+		}
+	}
+	return models.NotificationChannel{}, false
 }

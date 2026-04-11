@@ -14,8 +14,9 @@ import {
   AlertCircle,
   ChevronsUpDown,
   Building2,
+  Bell,
+  HardDrive,
 } from 'lucide-react';
-import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import {
   Popover,
@@ -45,10 +46,9 @@ import {
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import type { User, UpdateCheckResult, StorageOverview } from '@/lib/api';
-import { storageApi, authApi, systemApi } from '@/lib/api';
-import { formatBytes, getInitials } from '@/lib/auth';
-import { STORAGE_REFRESH_EVENT } from '@/lib/storage-events';
+import type { User, UpdateCheckResult } from '@/lib/api';
+import { authApi, systemApi } from '@/lib/api';
+import { getInitials } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0';
@@ -73,8 +73,6 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
 
-  const [storageInfo, setStorageInfo] = useState<StorageOverview | null>(null);
-  const [loadingStorage, setLoadingStorage] = useState(true);
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updateStep, setUpdateStep] = useState<UpdateStep>('idle');
@@ -83,57 +81,38 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const isOwner = user?.role === 'owner';
   const updateAvailable = !!updateInfo?.hasUpdate;
   const latestVersion = updateInfo?.latest;
-  const usedPercentage = storageInfo?.user.usedPercentage || 0;
-  const isUnlimited = storageInfo?.user.isUnlimited;
 
-  const navGroups: NavGroup[] = useMemo(
+  const homeItems: NavItem[] = useMemo(
     () => [
-      {
-        id: 'files',
-        label: 'Files',
-        items: [
-          { href: '/dashboard/files', label: 'All Files', icon: Files },
-          { href: '/dashboard/shared', label: 'Shared', icon: Share2 },
-          { href: '/dashboard/trash', label: 'Trash', icon: Trash2 },
-        ],
-      },
-      {
-        id: 'account',
-        label: 'Account',
-        items: [
-          { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
-        ],
-      },
+      { href: '/dashboard/files', label: 'My Files', icon: Files },
+      { href: '/dashboard/shared', label: 'Shared', icon: Share2 },
+      { href: '/dashboard/trash', label: 'Trash', icon: Trash2 },
+      { href: '/team/files', label: 'Team', icon: Building2 },
     ],
     [],
   );
 
-  useEffect(() => {
-    if (user) void loadStorageInfo();
-  }, [user]);
+  const settingsItems: NavItem[] = useMemo(
+    () => [
+      { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
+      ...(isAdmin
+        ? [{ href: '/admin', label: 'Admin', icon: Hammer } as NavItem]
+        : []),
+    ],
+    [isAdmin],
+  );
+
+  const navGroups: NavGroup[] = useMemo(
+    () => [
+      { id: 'home', label: 'Home', items: homeItems },
+      { id: 'settings', label: 'Settings', items: settingsItems },
+    ],
+    [homeItems, settingsItems],
+  );
 
   useEffect(() => {
     systemApi.checkUpdate().then(setUpdateInfo).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    const cb = () => {
-      if (user) void loadStorageInfo();
-    };
-    window.addEventListener(STORAGE_REFRESH_EVENT, cb);
-    return () => window.removeEventListener(STORAGE_REFRESH_EVENT, cb);
-  }, [user]);
-
-  const loadStorageInfo = async () => {
-    try {
-      setLoadingStorage(true);
-      setStorageInfo(await storageApi.getOverview());
-    } catch {
-      /* ignore */
-    } finally {
-      setLoadingStorage(false);
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -295,21 +274,42 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
       {/* Sidebar */}
       <UISidebar collapsible="icon">
-        {/* Header: Logo */}
+        {/* Header: Workspace selector */}
         <SidebarHeader className="border-b border-sidebar-border">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" asChild tooltip="ZynqCloud">
-                <Link to="/dashboard/files">
-                  <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-white border border-sidebar-border overflow-hidden">
-                    <img src="/favicon.ico" alt="logo" className="size-full object-contain p-0.5" />
-                  </div>
-                  <div className="flex flex-col gap-0.5 leading-none">
-                    <span className="font-semibold text-[15px]">ZynqCloud</span>
-                    <span className="text-[11px] text-sidebar-foreground/50">v{APP_VERSION}</span>
-                  </div>
-                </Link>
-              </SidebarMenuButton>
+              <div className="flex items-center gap-1 px-1 py-1.5">
+                <SidebarMenuButton
+                  size="lg"
+                  className="flex-1 data-[state=open]:bg-sidebar-accent"
+                  tooltip="ZynqCloud"
+                  asChild
+                >
+                  <Link to="/dashboard/files">
+                    <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary/10">
+                      <HardDrive className="size-4 text-sidebar-primary" />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-0 leading-none min-w-0">
+                      <span className="font-semibold text-[14px] truncate">ZynqCloud</span>
+                      <span className="text-[11px] text-sidebar-foreground/50 truncate">
+                        {user?.role ?? 'user'}
+                      </span>
+                    </div>
+                    <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/40" />
+                  </Link>
+                </SidebarMenuButton>
+                {!collapsed && (
+                  <button
+                    className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                    aria-label="Notifications"
+                  >
+                    <Bell className="size-4" />
+                    {updateAvailable && (
+                      <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-blue-500" />
+                    )}
+                  </button>
+                )}
+              </div>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
@@ -339,83 +339,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
               </SidebarGroupContent>
             </SidebarGroup>
           ))}
-
-          {/* Workspaces group — Team (all users) + Admin (admin/owner only) */}
-          <SidebarGroup>
-            <SidebarGroupLabel>Workspaces</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Team" isActive={pathname.startsWith('/team')}>
-                    <Link to="/team/files">
-                      <Building2 />
-                      <span>Team</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                {isAdmin && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip="Admin" isActive={pathname.startsWith('/admin')}>
-                      <Link to="/admin">
-                        <Hammer />
-                        <span>Admin</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
         </SidebarContent>
 
-        {/* Footer */}
-        <SidebarFooter>
-          {/* Storage bar — hidden when collapsed */}
-          {!collapsed && (
-            <div className="px-2 pb-2">
-              <div className="flex items-center justify-between mb-1.5 text-[11px]">
-                <span className="text-sidebar-foreground/40">Storage</span>
-                {!loadingStorage && storageInfo && (
-                  <span className="text-sidebar-foreground/50 text-right leading-tight">
-                    {isOwner
-                      ? `${formatBytes(storageInfo.system.freeBytes)} free`
-                      : isUnlimited
-                        ? 'Unlimited'
-                        : `${formatBytes(storageInfo.user.usedBytes)} / ${formatBytes(storageInfo.user.quotaBytes)}`}
-                  </span>
-                )}
-              </div>
-              {loadingStorage ? (
-                <div className="h-1 bg-sidebar-accent rounded-full animate-pulse" />
-              ) : isOwner && storageInfo ? (
-                <Progress
-                  value={Math.min(storageInfo.system.usedPercentage, 100)}
-                  className={cn(
-                    'h-1 bg-sidebar-accent/60',
-                    storageInfo.system.usedPercentage >= 90 && '[&>div]:bg-red-500',
-                    storageInfo.system.usedPercentage >= 75 &&
-                      storageInfo.system.usedPercentage < 90 &&
-                      '[&>div]:bg-amber-500',
-                    storageInfo.system.usedPercentage < 75 && '[&>div]:bg-sidebar-primary',
-                  )}
-                />
-              ) : !isUnlimited ? (
-                <Progress
-                  value={Math.min(usedPercentage, 100)}
-                  className={cn(
-                    'h-1 bg-sidebar-accent/60',
-                    usedPercentage >= 90 && '[&>div]:bg-red-500',
-                    usedPercentage >= 75 && usedPercentage < 90 && '[&>div]:bg-amber-500',
-                    usedPercentage < 75 && '[&>div]:bg-sidebar-primary',
-                  )}
-                />
-              ) : (
-                <div className="h-1 bg-sidebar-primary/20 rounded-full" />
-              )}
-            </div>
-          )}
-
-          {/* Update button — hidden when collapsed */}
+        {/* Footer: Account */}
+        <SidebarFooter className="border-t border-sidebar-border">
+          {/* Update button */}
           {!collapsed && isOwner && updateAvailable && latestVersion && (
             <button
               onClick={() => setUpdateModalOpen(true)}
@@ -425,10 +353,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
               Update to v{latestVersion}
             </button>
           )}
-
-          {/* Update dot when collapsed */}
           {collapsed && updateAvailable && (
-            <div className="flex justify-center">
+            <div className="flex justify-center py-1">
               <button
                 onClick={isOwner ? () => setUpdateModalOpen(true) : undefined}
                 className={cn('flex items-center justify-center h-4', isOwner && 'cursor-pointer')}
@@ -438,7 +364,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
             </div>
           )}
 
-          {/* User popover */}
+          {/* Account row */}
           <SidebarMenu>
             <SidebarMenuItem>
               <Popover>
@@ -453,7 +379,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                         {getInitials(user?.name ?? '')}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
+                    <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
                       <span className="truncate font-semibold">{user?.name}</span>
                       <span className="truncate text-xs text-sidebar-foreground/50">{user?.email}</span>
                     </div>
@@ -524,6 +450,13 @@ export function AppSidebar({ user }: AppSidebarProps) {
               </Popover>
             </SidebarMenuItem>
           </SidebarMenu>
+
+          {/* Version */}
+          {!collapsed && (
+            <p className="px-2 pb-1 text-[11px] text-sidebar-foreground/30 text-center">
+              Version v{APP_VERSION}
+            </p>
+          )}
         </SidebarFooter>
 
         <SidebarRail />

@@ -58,10 +58,12 @@ import {
   adminApi,
   storageApi,
   inviteApi,
+  notificationChannelApi,
   type User,
   type UserStorageInfo,
   type Invitation,
   type StorageOverview,
+  type NotificationChannel,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -118,11 +120,12 @@ export default function UsersPage() {
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
-  const [inviteForm, setInviteForm] = useState({ email: '', role: 'user' });
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'user', channelId: '' });
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
   const [revokeInviteDialogOpen, setRevokeInviteDialogOpen] = useState(false);
   const [selectedInviteId, setSelectedInviteId] = useState<string | null>(null);
+  const [emailChannels, setEmailChannels] = useState<NotificationChannel[]>([]);
 
   const isValidEmail = (email: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -133,8 +136,12 @@ export default function UsersPage() {
   const loadInvites = useCallback(async () => {
     try {
       setLoadingInvites(true);
-      const data = await inviteApi.list();
+      const [data, channels] = await Promise.all([
+        inviteApi.list(),
+        notificationChannelApi.list().catch(() => [] as NotificationChannel[]),
+      ]);
       setInvites(data);
+      setEmailChannels(channels.filter((c) => c.type === 'email' && c.enabled));
     } catch (error) {
       console.error('Failed to load invites:', error);
     } finally {
@@ -166,9 +173,10 @@ export default function UsersPage() {
       const invite = await inviteApi.create({
         email: inviteForm.email,
         role: inviteForm.role,
+        channel_id: inviteForm.channelId || null,
       });
       await loadInvites();
-      setInviteForm({ email: '', role: 'user' });
+      setInviteForm({ email: '', role: 'user', channelId: '' });
       setInviteSuccess('Invite created.');
 
       let link: string | null = null;
@@ -441,6 +449,7 @@ export default function UsersPage() {
               if (!open) {
                 setInviteError(null);
                 setInviteSuccess(null);
+                setInviteForm({ email: '', role: 'user', channelId: '' });
               }
             }}
           >
@@ -452,9 +461,9 @@ export default function UsersPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create Invitation</DialogTitle>
+                <DialogTitle>Add Invitation</DialogTitle>
                 <DialogDescription>
-                  Send an invitation link to a new user
+                  Invite a new user
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -468,19 +477,20 @@ export default function UsersPage() {
                     {inviteSuccess}
                   </div>
                 )}
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="invite-email">Email</Label>
                   <Input
                     id="invite-email"
                     type="email"
-                    placeholder="user@example.com"
+                    placeholder="email@example.com"
                     value={inviteForm.email}
                     onChange={(e) =>
                       setInviteForm({ ...inviteForm, email: e.target.value })
                     }
                   />
+                  <p className="text-xs text-muted-foreground">This will be the email of the new user</p>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="invite-role">Role</Label>
                   <Select
                     value={inviteForm.role}
@@ -488,14 +498,37 @@ export default function UsersPage() {
                       setInviteForm({ ...inviteForm, role: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="invite-role">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="user">Member</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">Select the role for the new user</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Email Provider</Label>
+                  <Select
+                    value={inviteForm.channelId}
+                    onValueChange={(value) =>
+                      setInviteForm({ ...inviteForm, channelId: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an email provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto (default)</SelectItem>
+                      {emailChannels.map((ch) => (
+                        <SelectItem key={ch.id} value={ch.id}>
+                          {ch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Select the email provider to send the invitation</p>
                 </div>
               </div>
               <DialogFooter>
@@ -506,7 +539,7 @@ export default function UsersPage() {
                   {creatingInvite && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  Create & Copy Link
+                  Create
                 </Button>
               </DialogFooter>
             </DialogContent>

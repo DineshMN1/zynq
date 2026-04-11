@@ -56,7 +56,7 @@ export default function DashboardLayout() {
 
   return (
     <UploadProvider>
-      <SidebarProvider className="min-h-0! h-screen overflow-hidden">
+      <SidebarProvider defaultOpen={true} className="min-h-0! h-screen overflow-hidden">
         <AppSidebar user={user} />
         <SidebarInset className="overflow-hidden">
           <DashboardHeader />

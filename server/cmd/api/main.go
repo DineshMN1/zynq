@@ -119,6 +119,7 @@ func main() {
 	storageStatsH := handlers.NewStorageStatsHandler(localBackend, db)
 	shareH := handlers.NewShareHandler(db, cfg, cryptoSvc, localBackend)
 	spacesH := handlers.NewSpacesHandler(db, cfg, cryptoSvc, localBackend)
+	notifChannelsH := handlers.NewNotificationChannelsHandler(db, cfg)
 
 	authMiddleware := mw.Auth(cfg.JWTSecret)
 	adminMiddleware := mw.RequireRole("admin", "owner")
@@ -224,6 +225,18 @@ func main() {
 					r.Put("/smtp", settingsH.UpdateSMTPSettings)
 					r.Post("/smtp/test", settingsH.TestSMTPConnection)
 				})
+			})
+
+			// Notification channels (admin only)
+			r.Route("/notifications", func(r chi.Router) {
+				r.Use(adminMiddleware)
+				r.Get("/", notifChannelsH.List)
+				r.Post("/", notifChannelsH.Create)
+				r.Get("/email-source", notifChannelsH.EmailSource)
+				r.Get("/{id}", notifChannelsH.Get)
+				r.Put("/{id}", notifChannelsH.Update)
+				r.Delete("/{id}", notifChannelsH.Delete)
+				r.Post("/{id}/test", notifChannelsH.Test)
 			})
 
 			// Storage

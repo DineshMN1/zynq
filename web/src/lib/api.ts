@@ -548,7 +548,7 @@ export const fileApi = {
 
 /** Invitation API: create, list, revoke (admin), accept (public) */
 export const inviteApi = {
-  create: (data: { email: string; role: string }) =>
+  create: (data: { email: string; role: string; channel_id?: string | null }) =>
     fetchApi<
       Invitation & { link: string; email_sent: boolean; email_message?: string }
     >('/invites', {
@@ -680,6 +680,79 @@ export const storageApi = {
     }>(`/storage/users/${userId}/quota`, {
       method: 'PATCH',
       body: JSON.stringify({ storage_quota: quotaBytes }),
+    }),
+};
+
+// ── Notification channels ─────────────────────────────────────────────────────
+
+export type NotificationChannelType = 'email' | 'teams' | 'resend';
+
+export interface NotificationChannel {
+  id: string;
+  name: string;
+  type: NotificationChannelType;
+  config: Record<string, unknown>;
+  actions: string[];
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const ALL_NOTIFICATION_ACTIONS = [
+  { id: 'file_uploaded',    label: 'File Uploaded',    description: 'Triggered when a file is uploaded' },
+  { id: 'file_shared',      label: 'File Shared',      description: 'Triggered when a file is shared' },
+  { id: 'user_invited',     label: 'User Invited',     description: 'Triggered when an invitation is sent' },
+  { id: 'user_registered',  label: 'User Registered',  description: 'Triggered when a new user registers' },
+  { id: 'storage_warning',  label: 'Storage Warning',  description: 'Triggered when user storage exceeds 75%' },
+] as const;
+
+export interface EmailSourceStatus {
+  source: 'global_smtp' | 'notification_channel' | 'none';
+  label: string;
+  from: string | null;
+  channel_id: string | null;
+  channel_name: string | null;
+}
+
+/** Notification Channels API (admin only) */
+export const notificationChannelApi = {
+  list: () => fetchApi<NotificationChannel[]>('/notifications'),
+  emailSource: () => fetchApi<EmailSourceStatus>('/notifications/email-source'),
+
+  get: (id: string) => fetchApi<NotificationChannel>(`/notifications/${id}`),
+
+  create: (data: {
+    name: string;
+    type: NotificationChannelType;
+    config: Record<string, unknown>;
+    actions: string[];
+    enabled?: boolean;
+  }) =>
+    fetchApi<NotificationChannel>('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (
+    id: string,
+    data: Partial<{
+      name: string;
+      config: Record<string, unknown>;
+      actions: string[];
+      enabled: boolean;
+    }>,
+  ) =>
+    fetchApi<NotificationChannel>(`/notifications/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    fetchApi<{ success: boolean }>(`/notifications/${id}`, { method: 'DELETE' }),
+
+  test: (id: string) =>
+    fetchApi<{ success: boolean; message: string }>(`/notifications/${id}/test`, {
+      method: 'POST',
     }),
 };
 

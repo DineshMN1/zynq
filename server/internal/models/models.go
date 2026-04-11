@@ -197,3 +197,45 @@ type SpaceActivity struct {
 }
 
 func (SpaceActivity) TableName() string { return "space_activity" }
+
+// StringArray is a JSON-backed []string for PostgreSQL text columns.
+type StringArray []string
+
+func (s StringArray) Value() (driver.Value, error) {
+	if s == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(s)
+	return string(b), err
+}
+
+func (s *StringArray) Scan(value interface{}) error {
+	if value == nil {
+		*s = StringArray{}
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case string:
+		bytes = []byte(v)
+	case []byte:
+		bytes = v
+	default:
+		return fmt.Errorf("cannot scan type %T into StringArray", value)
+	}
+	return json.Unmarshal(bytes, s)
+}
+
+// NotificationChannel stores a configured notification provider.
+type NotificationChannel struct {
+	ID        uuid.UUID   `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	CreatedAt time.Time   `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time   `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	Name      string      `gorm:"not null" json:"name"`
+	Type      string      `gorm:"not null" json:"type"` // email | teams | resend
+	Config    JSONB       `gorm:"type:jsonb" json:"config"`
+	Actions   StringArray `gorm:"type:text" json:"actions"`
+	Enabled   bool        `gorm:"default:true" json:"enabled"`
+}
+
+func (NotificationChannel) TableName() string { return "notification_channels" }

@@ -820,6 +820,22 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	h.db.Model(&models.User{}).Where("id = ?", userID).
 		UpdateColumn("storage_used", gorm.Expr("storage_used + ?", plainSize))
 
+	// Fire storage_warning notification when upload crosses the 75% threshold.
+	if user.StorageLimit > 0 {
+		prevPct := float64(user.StorageUsed) / float64(user.StorageLimit) * 100
+		newPct := float64(user.StorageUsed+plainSize) / float64(user.StorageLimit) * 100
+		if prevPct < 75 && newPct >= 75 {
+			go SendNotification(h.db, h.cfg, "storage_warning",
+				"Storage Warning — 75% Used",
+				fmt.Sprintf("User %s has used %.0f%% of their storage quota (%s / %s).",
+					user.Email, newPct,
+					formatStorageBytes(user.StorageUsed+plainSize),
+					formatStorageBytes(user.StorageLimit),
+				),
+			)
+		}
+	}
+
 	file.Size = plainSize
 	mimeStr := mimeType
 	file.MimeType = &mimeStr
