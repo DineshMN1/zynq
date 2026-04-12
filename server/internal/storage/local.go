@@ -109,7 +109,7 @@ func (l *Local) Write(path string, r io.Reader) (int64, error) {
 	}
 
 	// Normalise permissions before rename — os.CreateTemp uses 0600.
-	if err := os.Chmod(tmp, 0o640); err != nil {
+	if err := os.Chmod(tmp, 0o600); err != nil {
 		os.Remove(tmp) //nolint:errcheck
 		return 0, fmt.Errorf("chmod tmp: %w", err)
 	}
@@ -127,7 +127,7 @@ func (l *Local) Read(path string) (io.ReadCloser, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	f, err := os.Open(abs)
+	f, err := os.Open(abs) // #nosec G304 -- abs is sanitised by l.abs() which rejects path traversal
 	if err != nil {
 		return nil, 0, err
 	}

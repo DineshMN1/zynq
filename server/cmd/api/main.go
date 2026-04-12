@@ -59,6 +59,30 @@ func main() {
 	}
 	slog.Info("schema verified")
 
+	// Auto-create audit_logs table if it doesn't exist yet.
+	if err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS audit_logs (
+			id            UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			user_id       UUID,
+			user_name     TEXT        NOT NULL DEFAULT '',
+			user_email    TEXT        NOT NULL DEFAULT '',
+			action        TEXT        NOT NULL,
+			resource_type TEXT        NOT NULL DEFAULT '',
+			resource_name TEXT        NOT NULL DEFAULT '',
+			resource_id   TEXT        NOT NULL DEFAULT '',
+			ip_address    TEXT        NOT NULL DEFAULT '',
+			metadata      JSONB
+		);
+		CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id    ON audit_logs (user_id);
+		CREATE INDEX IF NOT EXISTS idx_audit_logs_action     ON audit_logs (action);
+	`).Error; err != nil {
+		slog.Error("failed to create audit_logs table", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("audit_logs table ready")
+
 	// Load persisted SMTP settings from DB (overrides env vars if present)
 	handlers.LoadSMTPFromDB(db, cfg)
 	slog.Info("SMTP settings loaded from DB")
@@ -92,7 +116,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uploadsDir := cfg.StoragePath + "/.uploads"
-	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
+	if err := os.MkdirAll(uploadsDir, 0o750); err != nil {
 		slog.Error("failed to create uploads directory", "dir", uploadsDir, "error", err)
 		os.Exit(1)
 	}
@@ -104,6 +128,7 @@ func main() {
 	// Global middleware
 	r.Use(chimw.Recoverer)
 	r.Use(mw.Logger)
+	r.Use(mw.SecurityHeaders)
 	r.Use(mw.CORS(cfg.CORSOrigins))
 
 	// Bootstrap default Team space (idempotent — no-op if spaces already exist)
@@ -120,9 +145,16 @@ func main() {
 	shareH := handlers.NewShareHandler(db, cfg, cryptoSvc, localBackend)
 	spacesH := handlers.NewSpacesHandler(db, cfg, cryptoSvc, localBackend)
 	notifChannelsH := handlers.NewNotificationChannelsHandler(db, cfg)
+	auditH := handlers.NewAuditHandler(db)
 
 	authMiddleware := mw.Auth(cfg.JWTSecret)
 	adminMiddleware := mw.RequireRole("admin", "owner")
+
+	// Rate limiters (in-memory, per IP, sliding window)
+	loginLimiter    := mw.NewRateLimiter(10, 15*time.Minute) // 10 attempts / 15 min
+	registerLimiter := mw.NewRateLimiter(5, time.Hour)       // 5 attempts / hour
+	forgotLimiter   := mw.NewRateLimiter(5, time.Hour)       // 5 attempts / hour
+	shareLimiter    := mw.NewRateLimiter(30, time.Minute)    // 30 requests / min for public shares
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// Health
@@ -131,10 +163,10 @@ func main() {
 		// Auth routes
 		r.Route("/auth", func(r chi.Router) {
 			r.Get("/setup-status", authH.SetupStatus)
-			r.Post("/register", authH.Register)
-			r.Post("/login", authH.Login)
+			r.With(registerLimiter.Middleware).Post("/register", authH.Register)
+			r.With(loginLimiter.Middleware).Post("/login", authH.Login)
 			r.Post("/logout", authH.Logout)
-			r.Post("/forgot-password", authH.ForgotPassword)
+			r.With(forgotLimiter.Middleware).Post("/forgot-password", authH.ForgotPassword)
 			r.Post("/reset-password", authH.ResetPassword)
 
 			// Protected auth routes
@@ -146,16 +178,16 @@ func main() {
 			})
 		})
 
-		// Public share routes (no auth required)
+		// Public share routes (no auth required) — rate limited
 		r.Route("/shares", func(r chi.Router) {
-			r.Get("/{token}", shareH.GetByToken)
-			r.Post("/{token}/download", shareH.Download)
+			r.With(shareLimiter.Middleware).Get("/{token}", shareH.GetByToken)
+			r.With(shareLimiter.Middleware).Post("/{token}/download", shareH.Download)
 		})
 
-		// Public share routes (new format for publicApi)
+		// Public share routes (new format for publicApi) — rate limited
 		r.Route("/public/share", func(r chi.Router) {
-			r.Get("/{token}", shareH.GetPublicShare)
-			r.Get("/{token}/download", shareH.DownloadPublicShare)
+			r.With(shareLimiter.Middleware).Get("/{token}", shareH.GetPublicShare)
+			r.With(shareLimiter.Middleware).Get("/{token}/download", shareH.DownloadPublicShare)
 		})
 
 		// Invite validation/accept (no auth required)
@@ -272,6 +304,12 @@ func main() {
 				r.Post("/", invitationsH.Create)
 				r.Get("/", invitationsH.List)
 				r.Post("/{id}/revoke", invitationsH.Revoke)
+			})
+
+			// Audit log (admin/owner only)
+			r.Route("/admin/audit", func(r chi.Router) {
+				r.Use(adminMiddleware)
+				r.Get("/", auditH.List)
 			})
 		})
 	})

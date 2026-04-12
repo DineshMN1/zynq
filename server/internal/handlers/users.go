@@ -107,6 +107,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updates := map[string]interface{}{}
+	oldRole := user.Role
 	if req.Role != nil {
 		updates["role"] = *req.Role
 		// Promoting to admin/owner grants unlimited storage unless caller explicitly sets a limit
@@ -123,6 +124,24 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if len(updates) > 0 {
 		h.db.Model(&user).Updates(updates)
+	}
+
+	claims := mw.GetClaims(r)
+	callerID, _ := uuid.Parse(claims.Sub)
+	if req.Role != nil && *req.Role != oldRole {
+		var caller models.User
+		h.db.Select("name, email").First(&caller, "id = ?", callerID)
+		LogAudit(h.db, AuditEntry{
+			UserID:       &callerID,
+			UserName:     caller.Name,
+			UserEmail:    caller.Email,
+			Action:       "user.role_change",
+			ResourceType: "user",
+			ResourceName: user.Name,
+			ResourceID:   user.ID.String(),
+			IPAddress:    auditIP(r),
+			Metadata:     models.JSONB{"old_role": oldRole, "new_role": *req.Role},
+		})
 	}
 
 	writeJSON(w, http.StatusOK, user)
@@ -157,6 +176,20 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	h.db.Where("grantee_user_id = ?", userID).Delete(&models.Share{})
 	h.db.Where("owner_id = ?", userID).Delete(&models.File{})
 	h.db.Delete(&user)
+
+	var caller models.User
+	h.db.Select("name, email").First(&caller, "id = ?", callerID)
+	LogAudit(h.db, AuditEntry{
+		UserID:       &callerID,
+		UserName:     caller.Name,
+		UserEmail:    caller.Email,
+		Action:       "user.delete",
+		ResourceType: "user",
+		ResourceName: user.Name,
+		ResourceID:   userID.String(),
+		IPAddress:    auditIP(r),
+		Metadata:     models.JSONB{"deleted_email": user.Email},
+	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "User deleted"})
 }

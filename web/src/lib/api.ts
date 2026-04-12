@@ -135,6 +135,7 @@ export interface PaginatedResponse<T> {
     total: number;
     page: number;
     limit: number;
+    pages?: number;
   };
 }
 
@@ -927,4 +928,45 @@ export const systemApi = {
 
   triggerUpdate: (): Promise<{ started: boolean }> =>
     fetchApi<{ started: boolean }>('/system/update', { method: 'POST' }),
+};
+
+// ── Audit Logs ──────────────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  id: string;
+  created_at: string;
+  user_id: string | null;
+  user_name: string;
+  user_email: string;
+  action: string;
+  resource_type: string;
+  resource_name: string;
+  resource_id: string;
+  ip_address: string;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface AuditListParams {
+  page?: number;
+  limit?: number;
+  action?: string;
+  user_id?: string;
+  from?: string;
+  to?: string;
+  search?: string;
+}
+
+export const auditApi = {
+  list: (params?: AuditListParams): Promise<PaginatedResponse<AuditLogEntry>> => {
+    const q = new URLSearchParams();
+    if (params?.page)   q.set('page',    String(params.page));
+    if (params?.limit)  q.set('limit',   String(params.limit));
+    if (params?.action) q.set('action',  params.action);
+    if (params?.user_id)q.set('user_id', params.user_id);
+    if (params?.from)   q.set('from',    params.from);
+    if (params?.to)     q.set('to',      params.to);
+    if (params?.search) q.set('search',  params.search);
+    const qs = q.toString();
+    return fetchApi<PaginatedResponse<AuditLogEntry>>(`/admin/audit${qs ? `?${qs}` : ''}`);
+  },
 };

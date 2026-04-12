@@ -49,9 +49,9 @@ export function PublicShareView({ token }: PublicShareViewProps) {
       setFile(data);
     } catch (err) {
       setFile(null);
-      if (err instanceof ApiError && err.statusCode === 403) {
+      if (err instanceof ApiError && (err.statusCode === 401 || err.statusCode === 403)) {
         setNeedsPassword(true);
-        setError('This share is password protected.');
+        setError(sharePassword ? 'Incorrect password. Please try again.' : 'This share is password protected.');
       } else if (err instanceof ApiError && err.statusCode === 429) {
         setNeedsPassword(true);
         setError(
@@ -87,7 +87,7 @@ export function PublicShareView({ token }: PublicShareViewProps) {
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      if (err instanceof ApiError && err.statusCode === 403) {
+      if (err instanceof ApiError && (err.statusCode === 401 || err.statusCode === 403)) {
         setNeedsPassword(true);
         setError('Password required to download this file.');
       } else if (err instanceof ApiError && err.statusCode === 429) {

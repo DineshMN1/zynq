@@ -122,7 +122,7 @@ func (c *CAS) Put(r io.Reader) (PutResult, error) {
 		os.Remove(tmpPath) //nolint:errcheck
 		return PutResult{}, fmt.Errorf("cas: mkdir blob dir: %w", err)
 	}
-	if err := os.Chmod(tmpPath, 0o440); err != nil { // blobs are read-only
+	if err := os.Chmod(tmpPath, 0o400); err != nil { // blobs are read-only
 		os.Remove(tmpPath) //nolint:errcheck
 		return PutResult{}, fmt.Errorf("cas: chmod: %w", err)
 	}
@@ -159,7 +159,7 @@ func (c *CAS) Read(sha256hex string) (io.ReadCloser, int64, error) {
 		return nil, 0, fmt.Errorf("cas: invalid sha256 hex %q", sha256hex)
 	}
 	blobAbs := filepath.Join(c.root, "blobs", sha256hex[0:2], sha256hex[2:4], sha256hex)
-	f, err := os.Open(blobAbs)
+	f, err := os.Open(blobAbs) // #nosec G304 -- path constructed from validated sha256hex only
 	if err != nil {
 		return nil, 0, err
 	}

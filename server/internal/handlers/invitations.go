@@ -130,6 +130,19 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var inviter models.User
+	h.db.Select("name, email").First(&inviter, "id = ?", inviterID)
+	LogAudit(h.db, AuditEntry{
+		UserID:       &inviterID,
+		UserName:     inviter.Name,
+		UserEmail:    inviter.Email,
+		Action:       "user.invite",
+		ResourceType: "user",
+		ResourceName: req.Email,
+		IPAddress:    auditIP(r),
+		Metadata:     models.JSONB{"role": req.Role, "email_sent": emailSent},
+	})
+
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"id":            invitation.ID,
 		"email":         invitation.Email,

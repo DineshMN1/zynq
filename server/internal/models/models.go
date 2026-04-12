@@ -239,3 +239,20 @@ type NotificationChannel struct {
 }
 
 func (NotificationChannel) TableName() string { return "notification_channels" }
+
+// AuditLog records a significant action performed within the system.
+type AuditLog struct {
+	ID           uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	CreatedAt    time.Time  `gorm:"column:created_at;autoCreateTime;index" json:"created_at"`
+	UserID       *uuid.UUID `gorm:"column:user_id;index" json:"user_id,omitempty"`
+	UserName     string     `gorm:"column:user_name" json:"user_name"`
+	UserEmail    string     `gorm:"column:user_email" json:"user_email"`
+	Action       string     `gorm:"column:action;not null;index" json:"action"`
+	ResourceType string     `gorm:"column:resource_type" json:"resource_type"`
+	ResourceName string     `gorm:"column:resource_name" json:"resource_name"`
+	ResourceID   string     `gorm:"column:resource_id" json:"resource_id"`
+	IPAddress    string     `gorm:"column:ip_address" json:"ip_address"`
+	Metadata     JSONB      `gorm:"column:metadata;type:jsonb" json:"metadata,omitempty"`
+}
+
+func (AuditLog) TableName() string { return "audit_logs" }

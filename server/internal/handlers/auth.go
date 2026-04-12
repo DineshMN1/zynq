@@ -43,7 +43,7 @@ func (h *AuthHandler) generateToken(user *models.User) (string, error) {
 
 func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, tokenStr string) {
 	secure := h.cfg.NodeEnv == "production"
-	cookie := &http.Cookie{
+	cookie := &http.Cookie{ // #nosec G124 -- Secure is intentionally false in dev, true in prod
 		Name:     "jid",
 		Value:    tokenStr,
 		HttpOnly: true,
@@ -59,7 +59,7 @@ func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, tokenStr string) {
 }
 
 func (h *AuthHandler) clearAuthCookie(w http.ResponseWriter) {
-	cookie := &http.Cookie{
+	cookie := &http.Cookie{ // #nosec G124 -- Secure is intentionally false in dev, true in prod
 		Name:     "jid",
 		Value:    "",
 		HttpOnly: true,
@@ -184,6 +184,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setAuthCookie(w, tokenStr)
+
+	uid := user.ID
+	LogAudit(h.db, AuditEntry{
+		UserID:    &uid,
+		UserName:  user.Name,
+		UserEmail: user.Email,
+		Action:    "user.register",
+		IPAddress: auditIP(r),
+		Metadata:  models.JSONB{"role": role},
+	})
+
 	writeJSON(w, http.StatusCreated, user)
 }
 
@@ -202,11 +213,26 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	if err := h.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		LogAudit(h.db, AuditEntry{
+			Action:    "auth.login_failed",
+			UserEmail: req.Email,
+			IPAddress: auditIP(r),
+			Metadata:  models.JSONB{"reason": "user not found"},
+		})
 		writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		uid := user.ID
+		LogAudit(h.db, AuditEntry{
+			UserID:    &uid,
+			UserName:  user.Name,
+			UserEmail: user.Email,
+			Action:    "auth.login_failed",
+			IPAddress: auditIP(r),
+			Metadata:  models.JSONB{"reason": "wrong password"},
+		})
 		writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
@@ -218,12 +244,36 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setAuthCookie(w, tokenStr)
+
+	uid := user.ID
+	LogAudit(h.db, AuditEntry{
+		UserID:    &uid,
+		UserName:  user.Name,
+		UserEmail: user.Email,
+		Action:    "auth.login",
+		IPAddress: auditIP(r),
+	})
+
 	writeJSON(w, http.StatusOK, user)
 }
 
 // POST /api/v1/auth/logout
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	claims := mw.GetClaims(r)
 	h.clearAuthCookie(w)
+	if claims != nil {
+		var user models.User
+		if err := h.db.Select("id, name, email").First(&user, "email = ?", claims.Email).Error; err == nil {
+			uid := user.ID
+			LogAudit(h.db, AuditEntry{
+				UserID:    &uid,
+				UserName:  user.Name,
+				UserEmail: user.Email,
+				Action:    "auth.logout",
+				IPAddress: auditIP(r),
+			})
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
@@ -342,6 +392,15 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	uid := user.ID
+	LogAudit(h.db, AuditEntry{
+		UserID:    &uid,
+		UserName:  user.Name,
+		UserEmail: user.Email,
+		Action:    "auth.password_change",
+		IPAddress: auditIP(r),
+	})
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Password changed successfully"})
 }
 
@@ -366,7 +425,11 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Generate token
 	tokenBytes := make([]byte, 32)
-	rand.Read(tokenBytes)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		slog.Error("failed to generate password reset token", "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to generate reset token")
+		return
+	}
 	token := hex.EncodeToString(tokenBytes)
 
 	// Delete any existing reset tokens for this user
@@ -376,7 +439,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		ID:        uuid.New(),
 		UserID:    user.ID,
 		Token:     token,
-		ExpiresAt: time.Now().Add(time.Duration(h.cfg.InviteTokenTTLHours) * time.Hour),
+		ExpiresAt: time.Now().Add(1 * time.Hour), // short window — 1 hour
 	}
 
 	if err := h.db.Create(reset).Error; err != nil {
@@ -390,7 +453,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		resetURL := fmt.Sprintf("%s/reset-password?token=%s", h.cfg.FrontendURL, token)
 		go h.sendPasswordResetEmail(user.Email, user.Name, resetURL)
 	} else {
-		slog.Info("password reset token generated (email disabled)", "token", token, "user", user.Email)
+		slog.Info("password reset token generated (email disabled — configure SMTP to send emails)", "user", user.Email)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "If that email exists, a reset link has been sent"})

@@ -14,7 +14,6 @@ import {
   AlertCircle,
   ChevronsUpDown,
   Building2,
-  Bell,
   HardDrive,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -44,10 +43,11 @@ import {
   useSidebar,
 } from './ui/sidebar';
 import { cn } from '@/lib/utils';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { User, UpdateCheckResult } from '@/lib/api';
-import { authApi, systemApi } from '@/lib/api';
+import { authApi, systemApi, storageApi } from '@/lib/api';
+import { STORAGE_REFRESH_EVENT } from '@/lib/storage-events';
 import { getInitials } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
 
@@ -58,13 +58,24 @@ interface AppSidebarProps {
 }
 
 type UpdateStep = 'idle' | 'pulling' | 'restarting' | 'done' | 'error';
-
 type NavItem = { href: string; label: string; icon: React.ElementType };
-type NavGroup = {
-  id: string;
-  label: string;
-  items: NavItem[];
-};
+type NavGroup = { id: string; label: string; items: NavItem[] };
+
+// ── ZynqCloud Logo ─────────────────────────────────────────────────────────────
+function ZynqLogo({ size = 32 }: { size?: number }) {
+  return (
+    <div
+      style={{ width: size, height: size }}
+      className="shrink-0 rounded-lg bg-white flex items-center justify-center p-0.5"
+    >
+      <img
+        src="/favicon.ico"
+        alt="ZynqCloud"
+        className="w-full h-full object-contain rounded-md"
+      />
+    </div>
+  );
+}
 
 export function AppSidebar({ user }: AppSidebarProps) {
   const { pathname } = useLocation();
@@ -76,52 +87,63 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updateStep, setUpdateStep] = useState<UpdateStep>('idle');
+  const [diskTotal, setDiskTotal] = useState<number>(0);
+  const [diskUsed, setDiskUsed] = useState<number>(0);
+  const [localStorageUsed, setLocalStorageUsed] = useState<number>(user?.storage_used ?? 0);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
   const isOwner = user?.role === 'owner';
   const updateAvailable = !!updateInfo?.hasUpdate;
   const latestVersion = updateInfo?.latest;
 
-  const homeItems: NavItem[] = useMemo(
-    () => [
-      { href: '/dashboard/files', label: 'My Files', icon: Files },
-      { href: '/dashboard/shared', label: 'Shared', icon: Share2 },
-      { href: '/dashboard/trash', label: 'Trash', icon: Trash2 },
-      { href: '/team/files', label: 'Team', icon: Building2 },
-    ],
-    [],
-  );
+  const homeItems: NavItem[] = useMemo(() => [
+    { href: '/dashboard/files', label: 'My Files',  icon: Files     },
+    { href: '/dashboard/shared', label: 'Shared',   icon: Share2    },
+    { href: '/dashboard/trash',  label: 'Trash',    icon: Trash2    },
+    { href: '/team/files',       label: 'Team',     icon: Building2 },
+  ], []);
 
-  const settingsItems: NavItem[] = useMemo(
-    () => [
-      { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
-      ...(isAdmin
-        ? [{ href: '/admin', label: 'Admin', icon: Hammer } as NavItem]
-        : []),
-    ],
-    [isAdmin],
-  );
+  const settingsItems: NavItem[] = useMemo(() => [
+    { href: '/dashboard/profile', label: 'Profile', icon: UserIcon },
+    ...(isAdmin ? [{ href: '/admin', label: 'Admin', icon: Hammer } as NavItem] : []),
+  ], [isAdmin]);
 
-  const navGroups: NavGroup[] = useMemo(
-    () => [
-      { id: 'home', label: 'Home', items: homeItems },
-      { id: 'settings', label: 'Settings', items: settingsItems },
-    ],
-    [homeItems, settingsItems],
-  );
+  const navGroups: NavGroup[] = useMemo(() => [
+    { id: 'home',     label: 'Home',     items: homeItems     },
+    { id: 'settings', label: 'Settings', items: settingsItems },
+  ], [homeItems, settingsItems]);
 
   useEffect(() => {
     systemApi.checkUpdate().then(setUpdateInfo).catch(() => {});
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      /* ignore */
-    } finally {
-      navigate('/login');
+  const refreshStorage = useCallback(() => {
+    const unlimited = !user?.storage_limit || user.storage_limit === 0;
+    if (unlimited) {
+      storageApi.getOverview().then((overview) => {
+        setDiskTotal(overview.system.totalBytes);
+        setDiskUsed(overview.system.usedBytes);
+      }).catch(() => {});
+    } else {
+      authApi.me().then((u) => setLocalStorageUsed(u.storage_used ?? 0)).catch(() => {});
     }
+  }, [user?.storage_limit]);
+
+  // Initial fetch
+  useEffect(() => { refreshStorage(); }, [refreshStorage]);
+
+  // Update local storage used when user prop changes (e.g. after login)
+  useEffect(() => { setLocalStorageUsed(user?.storage_used ?? 0); }, [user?.storage_used]);
+
+  // Listen for upload/delete events to refresh storage display
+  useEffect(() => {
+    window.addEventListener(STORAGE_REFRESH_EVENT, refreshStorage);
+    return () => window.removeEventListener(STORAGE_REFRESH_EVENT, refreshStorage);
+  }, [refreshStorage]);
+
+  const handleLogout = async () => {
+    try { await authApi.logout(); } catch { /* ignore */ }
+    finally { navigate('/login'); }
   };
 
   const handleUpdate = async () => {
@@ -131,56 +153,35 @@ export function AppSidebar({ user }: AppSidebarProps) {
       setUpdateStep('restarting');
       const start = Date.now();
       const pollHealth = async (): Promise<void> => {
-        if (Date.now() - start > 120_000) {
-          setUpdateStep('error');
-          return;
-        }
+        if (Date.now() - start > 120_000) { setUpdateStep('error'); return; }
         try {
           const res = await fetch('/health', { cache: 'no-store' });
-          if (res.ok) {
-            setUpdateStep('done');
-            setTimeout(() => window.location.reload(), 2000);
-            return;
-          }
-        } catch {
-          // still restarting
-        }
+          if (res.ok) { setUpdateStep('done'); setTimeout(() => window.location.reload(), 2000); return; }
+        } catch { /* still restarting */ }
         setTimeout(pollHealth, 2000);
       };
       setTimeout(pollHealth, 3000);
-    } catch {
-      setUpdateStep('error');
-    }
+    } catch { setUpdateStep('error'); }
   };
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + '/');
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
   return (
     <>
-      {/* Update modal */}
+      {/* ── Update modal ── */}
       <AnimatePresence>
         {updateModalOpen && (
           <>
             <motion.div
               key="bd"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               className="fixed inset-0 z-50 bg-black/50"
-              onClick={() => {
-                if (updateStep === 'idle' || updateStep === 'done' || updateStep === 'error') {
-                  setUpdateModalOpen(false);
-                  setUpdateStep('idle');
-                }
-              }}
+              onClick={() => { if (['idle','done','error'].includes(updateStep)) { setUpdateModalOpen(false); setUpdateStep('idle'); } }}
             />
             <motion.div
               key="panel"
-              initial={{ opacity: 0, scale: 0.96, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
             >
@@ -188,83 +189,57 @@ export function AppSidebar({ user }: AppSidebarProps) {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h2 className="text-[15px] font-semibold">Update Available</h2>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      v{APP_VERSION} → v{latestVersion}
-                    </p>
+                    <p className="text-sm text-muted-foreground mt-0.5">v{APP_VERSION} → v{latestVersion}</p>
                   </div>
-                  {(updateStep === 'idle' || updateStep === 'error') && (
-                    <button
-                      onClick={() => {
-                        setUpdateModalOpen(false);
-                        setUpdateStep('idle');
-                      }}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
+                  {['idle','error'].includes(updateStep) && (
+                    <button onClick={() => { setUpdateModalOpen(false); setUpdateStep('idle'); }} className="text-muted-foreground hover:text-foreground transition-colors">
                       <X className="h-4 w-4" />
                     </button>
                   )}
                 </div>
                 <div className="space-y-1">
-                  <div
-                    className={cn(
-                      'flex items-center gap-3 text-sm px-3 py-2.5 rounded-lg transition-colors',
-                      updateStep === 'pulling' && 'bg-blue-500/10 text-blue-500',
-                      (updateStep === 'restarting' || updateStep === 'done') && 'text-muted-foreground',
-                      updateStep === 'idle' && 'text-muted-foreground/50',
-                    )}
-                  >
-                    {updateStep === 'pulling' ? (
-                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
-                        <RefreshCw className="h-4 w-4" />
-                      </motion.div>
-                    ) : updateStep === 'restarting' || updateStep === 'done' ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <div className="h-4 w-4 rounded-full border border-current" />
-                    )}
-                    <span>Pull latest image</span>
-                  </div>
-                  <div
-                    className={cn(
-                      'flex items-center gap-3 text-sm px-3 py-2.5 rounded-lg transition-colors',
-                      updateStep === 'restarting' && 'bg-blue-500/10 text-blue-500',
-                      updateStep === 'done' && 'text-muted-foreground',
-                      (updateStep === 'idle' || updateStep === 'pulling') && 'text-muted-foreground/35',
-                    )}
-                  >
-                    {updateStep === 'restarting' ? (
-                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
-                        <RefreshCw className="h-4 w-4" />
-                      </motion.div>
-                    ) : updateStep === 'done' ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <div className="h-4 w-4 rounded-full border border-current" />
-                    )}
-                    <span>Restart container</span>
-                  </div>
+                  {[
+                    { step: 'pulling',    label: 'Pull latest image',   next: ['restarting','done'] },
+                    { step: 'restarting', label: 'Restart container',   next: ['done'] },
+                  ].map(({ step, label, next }) => {
+                    const active = updateStep === step;
+                    const done   = next.includes(updateStep) || updateStep === 'done';
+                    return (
+                      <div key={step} className={cn(
+                        'flex items-center gap-3 text-sm px-3 py-2.5 rounded-lg transition-colors',
+                        active && 'bg-blue-500/10 text-blue-500',
+                        !active && done && 'text-muted-foreground',
+                        !active && !done && 'text-muted-foreground/35',
+                      )}>
+                        {active ? (
+                          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+                            <RefreshCw className="h-4 w-4" />
+                          </motion.div>
+                        ) : done ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border border-current" />
+                        )}
+                        <span>{label}</span>
+                      </div>
+                    );
+                  })}
                 </div>
                 {updateStep === 'done' && (
-                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-green-500 text-center">
-                    Done — reloading page…
-                  </motion.p>
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-green-500 text-center">Done — reloading page…</motion.p>
                 )}
                 {updateStep === 'error' && (
                   <div className="flex items-center gap-2 text-sm text-red-500">
-                    <AlertCircle className="h-4 w-4 shrink-0" />
-                    Update failed. Check server logs.
+                    <AlertCircle className="h-4 w-4 shrink-0" />Update failed. Check server logs.
                   </div>
                 )}
                 {updateStep === 'idle' && (
                   <Button className="w-full" onClick={handleUpdate}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Update Now
+                    <RefreshCw className="mr-2 h-4 w-4" />Update Now
                   </Button>
                 )}
                 {updateStep === 'error' && (
-                  <Button variant="outline" className="w-full" onClick={() => setUpdateStep('idle')}>
-                    Retry
-                  </Button>
+                  <Button variant="outline" className="w-full" onClick={() => setUpdateStep('idle')}>Retry</Button>
                 )}
               </div>
             </motion.div>
@@ -272,44 +247,30 @@ export function AppSidebar({ user }: AppSidebarProps) {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <UISidebar collapsible="icon">
-        {/* Header: Workspace selector */}
+
+        {/* Header: Logo + workspace name */}
         <SidebarHeader className="border-b border-sidebar-border">
           <SidebarMenu>
             <SidebarMenuItem>
-              <div className="flex items-center gap-1 px-1 py-1.5">
-                <SidebarMenuButton
-                  size="lg"
-                  className="flex-1 data-[state=open]:bg-sidebar-accent"
-                  tooltip="ZynqCloud"
-                  asChild
-                >
-                  <Link to="/dashboard/files">
-                    <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary/10">
-                      <HardDrive className="size-4 text-sidebar-primary" />
-                    </div>
-                    <div className="flex flex-1 flex-col gap-0 leading-none min-w-0">
-                      <span className="font-semibold text-[14px] truncate">ZynqCloud</span>
-                      <span className="text-[11px] text-sidebar-foreground/50 truncate">
-                        {user?.role ?? 'user'}
-                      </span>
-                    </div>
-                    <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/40" />
-                  </Link>
-                </SidebarMenuButton>
-                {!collapsed && (
-                  <button
-                    className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-                    aria-label="Notifications"
-                  >
-                    <Bell className="size-4" />
-                    {updateAvailable && (
-                      <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-blue-500" />
-                    )}
-                  </button>
-                )}
-              </div>
+              <SidebarMenuButton
+                size="lg"
+                asChild
+                tooltip="ZynqCloud"
+                className="hover:bg-sidebar-accent/50"
+              >
+                <Link to="/dashboard/files">
+                  <ZynqLogo size={32} />
+                  <div className="flex flex-col min-w-0 flex-1 leading-none">
+                    <span className="font-semibold text-[13.5px] truncate">ZynqCloud</span>
+                    <span className="text-[11px] text-sidebar-foreground/50 capitalize truncate">
+                      {user?.role ?? 'user'}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/40" />
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
@@ -343,7 +304,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
         {/* Footer: Account */}
         <SidebarFooter className="border-t border-sidebar-border">
-          {/* Update button */}
+          {/* Update notice */}
           {!collapsed && isOwner && updateAvailable && latestVersion && (
             <button
               onClick={() => setUpdateModalOpen(true)}
@@ -374,24 +335,19 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                     tooltip={user?.name ?? 'Account'}
                   >
-                    <Avatar className="h-8 w-8 shrink-0 rounded-lg">
+                    <Avatar className="h-7 w-7 shrink-0 rounded-lg">
                       <AvatarFallback className="rounded-lg bg-sidebar-primary/20 text-sidebar-foreground text-xs font-semibold">
                         {getInitials(user?.name ?? '')}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
-                      <span className="truncate font-semibold">{user?.name}</span>
-                      <span className="truncate text-xs text-sidebar-foreground/50">{user?.email}</span>
+                      <span className="truncate font-semibold text-[13px]">{user?.name}</span>
+                      <span className="truncate text-[11px] text-sidebar-foreground/50">{user?.email}</span>
                     </div>
-                    <ChevronsUpDown className="ml-auto size-4 shrink-0 text-sidebar-foreground/40" />
+                    <ChevronsUpDown className="ml-auto size-3.5 shrink-0 text-sidebar-foreground/40" />
                   </SidebarMenuButton>
                 </PopoverTrigger>
-                <PopoverContent
-                  align="start"
-                  side="top"
-                  sideOffset={8}
-                  className="w-64 p-0"
-                >
+                <PopoverContent align="start" side="top" sideOffset={8} className="w-64 p-0">
                   <PopoverHeader>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9 rounded-lg shrink-0">
@@ -400,50 +356,32 @@ export function AppSidebar({ user }: AppSidebarProps) {
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
-                        <PopoverTitle className="text-[13.5px] truncate">
-                          {user?.name}
-                        </PopoverTitle>
-                        <PopoverDescription className="text-[11px] truncate">
-                          {user?.email}
-                        </PopoverDescription>
+                        <PopoverTitle className="text-[13.5px] truncate">{user?.name}</PopoverTitle>
+                        <PopoverDescription className="text-[11px] truncate">{user?.email}</PopoverDescription>
                       </div>
                     </div>
                   </PopoverHeader>
                   <PopoverBody className="space-y-0.5 px-2 py-1.5">
                     <Button variant="ghost" size="sm" className="w-full justify-start" asChild>
                       <Link to="/dashboard/profile">
-                        <UserIcon className="mr-2 h-4 w-4" />
-                        Profile
+                        <UserIcon className="mr-2 h-4 w-4" />Profile
                       </Link>
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start"
-                      onClick={toggleTheme}
-                    >
+                    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={toggleTheme}>
                       {theme === 'dark' ? (
-                        <>
-                          <Sun className="mr-2 h-4 w-4" />
-                          Light Mode
-                        </>
+                        <><Sun className="mr-2 h-4 w-4" />Light Mode</>
                       ) : (
-                        <>
-                          <Moon className="mr-2 h-4 w-4" />
-                          Dark Mode
-                        </>
+                        <><Moon className="mr-2 h-4 w-4" />Dark Mode</>
                       )}
                     </Button>
                   </PopoverBody>
                   <PopoverFooter>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="outline" size="sm"
                       className="w-full bg-transparent text-red-500 hover:text-red-500 border-red-500/20 hover:bg-red-500/10"
                       onClick={handleLogout}
                     >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sign Out
+                      <LogOut className="mr-2 h-4 w-4" />Sign Out
                     </Button>
                   </PopoverFooter>
                 </PopoverContent>
@@ -451,10 +389,40 @@ export function AppSidebar({ user }: AppSidebarProps) {
             </SidebarMenuItem>
           </SidebarMenu>
 
-          {/* Version */}
+          {/* Storage usage */}
+          {!collapsed && user != null && (
+            <div className="px-2 pb-1 space-y-1">
+              {(() => {
+                const limit = user.storage_limit ?? 0;
+                const unlimited = limit === 0;
+                const displayUsed = unlimited ? diskUsed : localStorageUsed;
+                const displayTotal = unlimited ? diskTotal : limit;
+                const pct = displayTotal > 0 ? Math.min(100, (displayUsed / displayTotal) * 100) : 0;
+                const fmt = (b: number) => {
+                  if (b >= 1073741824) return `${(b / 1073741824).toFixed(1)} GB`;
+                  if (b >= 1048576) return `${(b / 1048576).toFixed(1)} MB`;
+                  if (b >= 1024) return `${(b / 1024).toFixed(0)} KB`;
+                  return `${b} B`;
+                };
+                const color = pct >= 90 ? 'bg-red-500' : pct >= 75 ? 'bg-yellow-500' : 'bg-blue-500';
+                return (
+                  <>
+                    <div className="flex items-center justify-between text-[10.5px] text-sidebar-foreground/50">
+                      <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" />Storage</span>
+                      <span>{displayTotal > 0 ? `${fmt(displayUsed)} / ${fmt(displayTotal)}` : `${fmt(displayUsed)} used`}</span>
+                    </div>
+                    <div className="h-1 w-full rounded-full bg-sidebar-accent overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
           {!collapsed && (
             <p className="px-2 pb-1 text-[11px] text-sidebar-foreground/30 text-center">
-              Version v{APP_VERSION}
+              v{APP_VERSION}
             </p>
           )}
         </SidebarFooter>

@@ -483,7 +483,7 @@ func (h *SpacesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mimeType == "application/octet-stream" {
-		if tf, err := os.Open(tmpPath); err == nil {
+		if tf, err := os.Open(tmpPath); err == nil { // #nosec G304 -- tmpPath from os.CreateTemp
 			sniff := make([]byte, 512)
 			n, _ := tf.Read(sniff)
 			tf.Close()
@@ -557,7 +557,7 @@ func (h *SpacesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	// Space files use a distinct storage path to avoid collisions with personal files
 	storagePath := fmt.Sprintf("spaces/%s/%s.enc", spaceID.String(), fileID.String())
 
-	plainReader, err := os.Open(tmpPath)
+	plainReader, err := os.Open(tmpPath) // #nosec G304 -- tmpPath from os.CreateTemp
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to open temp file")
 		return

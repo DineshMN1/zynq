@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label';
 import {
   Loader2,
   CheckCircle2,
-  HardDrive,
   Eye,
   EyeOff,
   XCircle,
@@ -14,6 +13,7 @@ import {
 import { authApi, inviteApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
+import { FloatingPaths } from '@/components/ui/background-paths';
 
 function getErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) {
@@ -158,9 +158,7 @@ export default function RegisterForm() {
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <div className="w-full max-w-sm space-y-6">
           <div className="flex items-center justify-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-              <HardDrive className="h-5 w-5 text-primary-foreground" />
-            </div>
+            <img src="/favicon.ico" alt="ZynqCloud" className="h-10 w-10 rounded-lg bg-white p-0.5 object-contain" />
             <span className="text-xl font-bold">ZynqCloud</span>
           </div>
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -192,15 +190,16 @@ export default function RegisterForm() {
 
   return (
     <div className="min-h-screen flex bg-background">
-      <div className="hidden lg:flex lg:w-1/2 bg-card border-r border-border flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-            <HardDrive className="h-5 w-5 text-primary-foreground" />
-          </div>
+      <div className="hidden lg:flex lg:w-1/2 bg-card border-r border-border flex-col justify-between p-12 relative overflow-hidden">
+        <FloatingPaths position={1} />
+        <FloatingPaths position={-1} />
+
+        <div className="relative z-10 flex items-center gap-3">
+          <img src="/favicon.ico" alt="ZynqCloud" className="h-10 w-10 rounded-lg bg-white p-0.5 object-contain" />
           <span className="text-xl font-bold">ZynqCloud</span>
         </div>
 
-        <div className="space-y-6">
+        <div className="relative z-10 space-y-6">
           <h1 className="text-4xl font-bold leading-tight">
             Secure, self-hosted
             <br />
@@ -212,7 +211,7 @@ export default function RegisterForm() {
           </p>
         </div>
 
-        <p className="text-sm text-muted-foreground">
+        <p className="relative z-10 text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} ZynqCloud. All rights reserved.
         </p>
       </div>
@@ -225,9 +224,7 @@ export default function RegisterForm() {
           className="w-full max-w-sm space-y-6 sm:space-y-8"
         >
           <div className="lg:hidden flex items-center justify-center gap-3 mb-2 sm:mb-6">
-            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-              <HardDrive className="h-5 w-5 text-primary-foreground" />
-            </div>
+            <img src="/favicon.ico" alt="ZynqCloud" className="h-10 w-10 rounded-lg bg-white p-0.5 object-contain" />
             <span className="text-xl font-bold">ZynqCloud</span>
           </div>
 

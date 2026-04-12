@@ -175,6 +175,21 @@ func (h *FilesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if file.IsFolder {
+		var auditUser models.User
+		h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+		LogAudit(h.db, AuditEntry{
+			UserID:       &userID,
+			UserName:     auditUser.Name,
+			UserEmail:    auditUser.Email,
+			Action:       "folder.create",
+			ResourceType: "folder",
+			ResourceName: file.Name,
+			ResourceID:   file.ID.String(),
+			IPAddress:    auditIP(r),
+		})
+	}
+
 	// Return uploadUrl so the frontend knows to PUT the file content.
 	// Folders have no content — uploadUrl is omitted for them.
 	resp := map[string]interface{}{
@@ -411,7 +426,25 @@ func (h *FilesHandler) RevokeShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch file name for audit before deleting
+	var sharedFile models.File
+	h.db.Select("name").First(&sharedFile, "id = ?", share.FileID)
+
 	h.db.Delete(&share)
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       "share.revoke",
+		ResourceType: "file",
+		ResourceName: sharedFile.Name,
+		ResourceID:   share.FileID.String(),
+		IPAddress:    auditIP(r),
+	})
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Share revoked"})
 }
 
@@ -478,9 +511,36 @@ func (h *FilesHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
+
+	// Fetch names before soft-deleting for audit
+	var filesToDelete []models.File
+	h.db.Select("id, name, is_folder").
+		Where("id IN ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", req.IDs, userID).
+		Find(&filesToDelete)
+
 	h.db.Model(&models.File{}).
 		Where("id IN ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", req.IDs, userID).
 		Update("deleted_at", now)
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	for _, f := range filesToDelete {
+		fID := f.ID
+		resourceType := "file"
+		if f.IsFolder {
+			resourceType = "folder"
+		}
+		LogAudit(h.db, AuditEntry{
+			UserID:       &userID,
+			UserName:     auditUser.Name,
+			UserEmail:    auditUser.Email,
+			Action:       "file.delete",
+			ResourceType: resourceType,
+			ResourceName: f.Name,
+			ResourceID:   fID.String(),
+			IPAddress:    auditIP(r),
+		})
+	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Files moved to trash"})
 }
@@ -613,6 +673,25 @@ func (h *FilesHandler) Rename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.db.Where("id = ?", fileID).First(&file)
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	action := "file.rename"
+	resourceType := "file"
+	if file.IsFolder {
+		resourceType = "folder"
+	}
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       action,
+		ResourceType: resourceType,
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+	})
+
 	writeJSON(w, http.StatusOK, file)
 }
 
@@ -699,7 +778,7 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mimeType == "application/octet-stream" {
-		if tf, err := os.Open(tmpPath); err == nil {
+		if tf, err := os.Open(tmpPath); err == nil { // #nosec G304 -- tmpPath from os.CreateTemp
 			sniff := make([]byte, 512)
 			n, _ := tf.Read(sniff)
 			tf.Close()
@@ -759,6 +838,17 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if dedupDone {
+			LogAudit(h.db, AuditEntry{
+				UserID:       &userID,
+				UserName:     user.Name,
+				UserEmail:    user.Email,
+				Action:       "file.upload",
+				ResourceType: "file",
+				ResourceName: file.Name,
+				ResourceID:   file.ID.String(),
+				IPAddress:    auditIP(r),
+				Metadata:     models.JSONB{"size": plainSize, "mime_type": mimeType, "dedup": true},
+			})
 			writeJSON(w, http.StatusOK, file)
 			return
 		}
@@ -774,7 +864,7 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	// ── Stream-encrypt temp file to storage ───────────────────────────────────
 	storagePath := fmt.Sprintf("%s/%s.enc", userID.String(), fileID.String())
 
-	plainReader, err := os.Open(tmpPath)
+	plainReader, err := os.Open(tmpPath) // #nosec G304 -- tmpPath from os.CreateTemp
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to open temp file")
 		return
@@ -843,6 +933,18 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if computedHash != "" {
 		file.FileHash = &computedHash
 	}
+
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     user.Name,
+		UserEmail:    user.Email,
+		Action:       "file.upload",
+		ResourceType: "file",
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+		Metadata:     models.JSONB{"size": plainSize, "mime_type": mimeType},
+	})
 
 	writeJSON(w, http.StatusOK, file)
 }
@@ -1044,6 +1146,23 @@ func (h *FilesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	h.db.Model(&file).Update("deleted_at", now)
 
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	resourceType := "file"
+	if file.IsFolder {
+		resourceType = "folder"
+	}
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       "file.delete",
+		ResourceType: resourceType,
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+	})
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "File moved to trash"})
 }
 
@@ -1066,6 +1185,19 @@ func (h *FilesHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.db.Model(&file).Update("deleted_at", nil)
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       "file.restore",
+		ResourceType: "file",
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "File restored"})
 }
@@ -1198,5 +1330,24 @@ func (h *FilesHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
 	if req.IsPublic && share.ShareToken != nil {
 		resp.PublicLink = h.cfg.FrontendURL + "/share/" + *share.ShareToken
 	}
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	shareType := "private"
+	if req.IsPublic {
+		shareType = "public"
+	}
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       "share.create",
+		ResourceType: "file",
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+		Metadata:     models.JSONB{"share_type": shareType, "permission": req.Permission},
+	})
+
 	writeJSON(w, http.StatusCreated, resp)
 }

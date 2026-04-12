@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ func Load() *Config {
 		dbURL = "postgresql://" + user + ":" + pass + "@" + host + ":" + port + "/" + name + "?sslmode=disable"
 	}
 
-	return &Config{
+	cfg := &Config{
 		Port:                    getEnv("PORT", "4000"),
 		DatabaseURL:             dbURL,
 		DatabaseHost:            getEnv("DATABASE_HOST", "localhost"),
@@ -99,6 +100,22 @@ func Load() *Config {
 		StaticDir:               getEnv("STATIC_DIR", ""),
 		NodeEnv:                 getEnv("NODE_ENV", "development"),
 	}
+
+	// Warn loudly about missing critical secrets at startup.
+	if cfg.JWTSecret == "" {
+		slog.Warn("JWT_SECRET is not set — tokens will fail to verify on restart; set a strong random secret")
+	}
+	if cfg.FileEncryptionMasterKey == "" {
+		slog.Warn("FILE_ENCRYPTION_MASTER_KEY is not set — file encryption is disabled")
+	}
+	if cfg.EmailEnabled && cfg.SMTPHost == "" {
+		slog.Warn("EMAIL_ENABLED=true but SMTP_HOST is not set — emails will not be delivered")
+	}
+	if len(cfg.CORSOrigins) == 0 {
+		slog.Warn("no CORS origins configured (CORS_ORIGIN) — cross-origin requests will be blocked")
+	}
+
+	return cfg
 }
 
 func getEnv(key, fallback string) string {

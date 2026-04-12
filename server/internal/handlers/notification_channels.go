@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -14,6 +16,58 @@ import (
 	"github.com/zynqcloud/api/internal/models"
 	"gorm.io/gorm"
 )
+
+// validateWebhookURL rejects non-HTTP(S) schemes and private/loopback targets
+// to prevent SSRF attacks from admin-configured webhook URLs.
+func validateWebhookURL(rawURL string) error {
+	u, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("webhook URL must use http or https scheme")
+	}
+	host := u.Hostname()
+	ip := net.ParseIP(host)
+	if ip == nil {
+		// Resolve hostname to check for internal addresses
+		addrs, err := net.LookupHost(host)
+		if err != nil {
+			return nil // can't resolve — let the request fail naturally
+		}
+		for _, addr := range addrs {
+			if isPrivateIP(net.ParseIP(addr)) {
+				return fmt.Errorf("webhook URL must not resolve to a private/internal address")
+			}
+		}
+		return nil
+	}
+	if isPrivateIP(ip) {
+		return fmt.Errorf("webhook URL must not target a private/internal address")
+	}
+	return nil
+}
+
+func isPrivateIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	private := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"::1/128",
+		"fc00::/7",
+	}
+	for _, cidr := range private {
+		_, block, _ := net.ParseCIDR(cidr)
+		if block != nil && block.Contains(ip) {
+			return true
+		}
+	}
+	return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
+}
 
 type NotificationChannelsHandler struct {
 	db  *gorm.DB
@@ -413,6 +467,9 @@ func testTeams(ch models.NotificationChannel) error {
 	if webhookURL == "" {
 		return fmt.Errorf("no webhook URL configured")
 	}
+	if err := validateWebhookURL(webhookURL); err != nil {
+		return err
+	}
 
 	payload := map[string]interface{}{
 		"@type":      "MessageCard",
@@ -425,7 +482,7 @@ func testTeams(ch models.NotificationChannel) error {
 		}},
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := http.Post(webhookURL, "application/json", bytes.NewReader(body))
+	resp, err := http.Post(webhookURL, "application/json", bytes.NewReader(body)) // #nosec G107 -- URL validated by validateWebhookURL above
 	if err != nil {
 		return fmt.Errorf("webhook request failed: %w", err)
 	}
@@ -514,6 +571,9 @@ func sendTeamsNotification(ch models.NotificationChannel, subject, body string) 
 	if webhookURL == "" {
 		return fmt.Errorf("no webhook URL")
 	}
+	if err := validateWebhookURL(webhookURL); err != nil {
+		return err
+	}
 	payload := map[string]interface{}{
 		"@type":      "MessageCard",
 		"@context":   "http://schema.org/extensions",
@@ -525,7 +585,7 @@ func sendTeamsNotification(ch models.NotificationChannel, subject, body string) 
 		}},
 	}
 	b, _ := json.Marshal(payload)
-	resp, err := http.Post(webhookURL, "application/json", bytes.NewReader(b))
+	resp, err := http.Post(webhookURL, "application/json", bytes.NewReader(b)) // #nosec G107 -- URL validated by validateWebhookURL above
 	if err != nil {
 		return err
 	}

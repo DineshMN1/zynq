@@ -175,7 +175,7 @@ func EncryptStream(r io.Reader, w io.Writer, dek, baseIV []byte) (int64, error) 
 
 			// Write 4-byte plain size header
 			var hdr [4]byte
-			binary.BigEndian.PutUint32(hdr[:], uint32(n))
+			binary.BigEndian.PutUint32(hdr[:], uint32(n)) // #nosec G115 -- n ≤ ChunkSize (64 MiB) << MaxUint32
 			if _, err := w.Write(hdr[:]); err != nil {
 				return total, err
 			}

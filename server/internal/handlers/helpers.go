@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -27,7 +28,9 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 
 func readJSON(r *http.Request, v interface{}) error {
-	return json.NewDecoder(r.Body).Decode(v)
+	// Limit request bodies to 1 MB to prevent memory exhaustion attacks.
+	limited := io.LimitReader(r.Body, 1<<20)
+	return json.NewDecoder(limited).Decode(v)
 }
 
 // dialSMTP connects to the SMTP server. When SMTPSecure is true it
