@@ -30,22 +30,6 @@ export interface UploadProgress {
 
 type ProgressCallback = (updates: UploadProgress[]) => void;
 
-// Text-based file extensions for content normalization
-const TEXT_EXTENSIONS = new Set([
-  'txt',
-  'json',
-  'xml',
-  'csv',
-  'html',
-  'htm',
-  'md',
-  'css',
-  'js',
-  'ts',
-  'rtf',
-  'log',
-]);
-
 // Extensions that support duplicate detection (must match backend dedup.go)
 const DEDUP_EXTENSIONS = new Set([
   // Standard Text & Data
@@ -153,11 +137,6 @@ class UploadManager {
     return DEDUP_EXTENSIONS.has(ext);
   }
 
-  private isTextFile(fileName: string): boolean {
-    const ext = fileName.split('.').pop()?.toLowerCase() || '';
-    return TEXT_EXTENSIONS.has(ext);
-  }
-
   async calculateHash(file: File): Promise<string> {
     // Skip hashing for large files to prevent OOM in the browser.
     // Archives, videos, and ISO images are never checked for duplicates
@@ -165,33 +144,16 @@ class UploadManager {
     const MAX_HASH_BYTES = 200 * 1024 * 1024; // 200 MB
     if (file.size > MAX_HASH_BYTES) return '';
 
+    // Only hash file types the backend deduplicates — skip everything else.
+    if (!this.shouldCheckDuplicates(file.name)) return '';
+
     const id = `hash-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    // Read file content
+    // Hash raw bytes — must match the backend's SHA-256 of the upload body.
+    // No text normalization: normalizing CRLF→LF would produce a different
+    // hash than the backend stores, breaking duplicate detection.
     const arrayBuffer = await file.arrayBuffer();
 
-    // For text files, normalize content before hashing
-    if (this.isTextFile(file.name)) {
-      const text = new TextDecoder().decode(arrayBuffer);
-      const normalized = text.trim().replace(/\r\n/g, '\n');
-
-      if (this.worker) {
-        return new Promise((resolve, reject) => {
-          this.pendingHashes.set(id, resolve);
-          this.hashRejects.set(id, reject);
-          this.worker!.postMessage({ id, type: 'text', data: normalized });
-        });
-      }
-
-      // Fallback: calculate on main thread
-      const encoder = new TextEncoder();
-      const data = encoder.encode(normalized);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    // Binary file hashing
     if (this.worker) {
       return new Promise((resolve, reject) => {
         this.pendingHashes.set(id, resolve);

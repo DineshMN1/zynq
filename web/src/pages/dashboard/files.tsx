@@ -1771,6 +1771,8 @@ export default function FilesPage() {
                 onChange={handleFolderInputChange}
                 className="hidden"
                 multiple
+                // @ts-expect-error — webkitdirectory is non-standard but widely supported
+                webkitdirectory=""
               />
             </div>
           </div>
