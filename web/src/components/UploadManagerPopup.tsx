@@ -255,16 +255,16 @@ export function UploadManagerPopup() {
     if (uploadQueue.length > 0) setIsVisible(true);
   }, [uploadQueue.length]);
 
-  // Auto-dismiss 2s after all done (don't dismiss if paused uploads exist)
+  // Auto-dismiss 3s after all uploads finish or queue is empty
   useEffect(() => {
-    if (!hasActive && !hasPaused && uploadQueue.length > 0) {
+    if (!hasActive && !hasPaused) {
       const t = setTimeout(() => {
         dismissCompleted();
         setIsVisible(false);
-      }, 2000);
+      }, 3000);
       return () => clearTimeout(t);
     }
-  }, [hasActive, hasPaused, uploadQueue, dismissCompleted]);
+  }, [hasActive, hasPaused, dismissCompleted]);
 
   const handleClose = () => {
     cancelAll();
