@@ -8,13 +8,13 @@ import {
   ReactNode,
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { authApi, type User } from '@/lib/api';
+import { authApi, saveAuthToken, clearAuthToken, type User } from '@/lib/api';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   needsSetup: boolean | null;
-  login: (user: User) => void;
+  login: (user: User & { token?: string }) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   needsSetup: null,
-  login: () => {},
+  login: (_user) => {},
   logout: () => {},
   refreshUser: async () => {},
 });
@@ -36,6 +36,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { pathname } = useLocation();
 
   const logout = useCallback(() => {
+    clearAuthToken();
+    authApi.logout().catch(() => {});
     setUser(null);
     navigate('/login');
   }, [navigate]);
@@ -97,8 +99,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [needsSetup, pathname, navigate]);
 
-  const login = (user: User) => {
-    setUser(user);
+  const login = (userData: User & { token?: string }) => {
+    if (userData.token) {
+      saveAuthToken(userData.token);
+    }
+    // Strip the token field before storing in state
+    const { token: _token, ...user } = userData;
+    setUser(user as User);
     setNeedsSetup(false);
   };
 

@@ -45,7 +45,7 @@ import {
   Code2,
   Loader2,
 } from 'lucide-react';
-import { spaceApi, type FileMetadata, type Space, getApiBaseUrl, ApiError } from '@/lib/api';
+import { spaceApi, type FileMetadata, type Space, getApiBaseUrl, getAuthToken, ApiError } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
 import { FilePreviewDialog } from '@/features/file/components/file-preview-dialog';
@@ -241,6 +241,8 @@ export default function TeamFilesPage() {
           const xhr = new XMLHttpRequest();
           xhr.open('PUT', `${getApiBaseUrl()}/spaces/${spaceId}/files/${created.id}/upload`);
           xhr.withCredentials = true;
+          const token = getAuthToken();
+          if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
           xhr.upload.onprogress = (ev) => {
             if (ev.lengthComputable) {
               const pct = Math.round((ev.loaded / ev.total) * 100);

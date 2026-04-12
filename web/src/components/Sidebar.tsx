@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Files,
   Share2,
@@ -41,7 +41,8 @@ import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { User, UpdateCheckResult } from '@/lib/api';
-import { authApi, systemApi, storageApi } from '@/lib/api';
+import { systemApi, storageApi, authApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { STORAGE_REFRESH_EVENT } from '@/lib/storage-events';
 import { getInitials } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
@@ -74,8 +75,8 @@ function ZynqLogo({ size = 32 }: { size?: number }) {
 
 export function AppSidebar({ user }: AppSidebarProps) {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { logout } = useAuth();
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
 
@@ -122,7 +123,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
     } else {
       authApi.me().then((u) => setLocalStorageUsed(u.storage_used ?? 0)).catch(() => {});
     }
-  }, [user?.storage_limit]);
+  }, [user]);
 
   // Initial fetch
   useEffect(() => { refreshStorage(); }, [refreshStorage]);
@@ -136,9 +137,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
     return () => window.removeEventListener(STORAGE_REFRESH_EVENT, refreshStorage);
   }, [refreshStorage]);
 
-  const handleLogout = async () => {
-    try { await authApi.logout(); } catch { /* ignore */ }
-    finally { navigate('/login'); }
+  const handleLogout = () => {
+    logout();
   };
 
   const handleUpdate = async () => {

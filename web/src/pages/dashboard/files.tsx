@@ -49,6 +49,7 @@ import {
   fileApi,
   userApi,
   getApiBaseUrl,
+  getAuthToken,
   type FileMetadata,
   type ShareableUser,
   ApiError,
@@ -877,10 +878,9 @@ export default function FilesPage() {
 
       xhr.open('PUT', fullUrl);
       xhr.withCredentials = true;
-      xhr.setRequestHeader(
-        'Content-Type',
-        contentType || 'application/octet-stream',
-      );
+      xhr.setRequestHeader('Content-Type', contentType || 'application/octet-stream');
+      const token = getAuthToken();
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       // Register cancel and pause handlers
       updateUpload(progressId, {
         cancel: () => {

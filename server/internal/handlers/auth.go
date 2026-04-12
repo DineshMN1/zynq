@@ -203,7 +203,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Metadata:  models.JSONB{"role": role},
 	})
 
-	writeJSON(w, http.StatusCreated, user)
+	writeJSON(w, http.StatusCreated, struct {
+		*models.User
+		Token string `json:"token"`
+	}{User: user, Token: tokenStr})
 }
 
 // POST /api/v1/auth/login
@@ -268,7 +271,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		user.StorageLimit = 0
 	}
 
-	writeJSON(w, http.StatusOK, user)
+	writeJSON(w, http.StatusOK, struct {
+		*models.User
+		Token string `json:"token"`
+	}{User: &user, Token: tokenStr})
 }
 
 // POST /api/v1/auth/logout

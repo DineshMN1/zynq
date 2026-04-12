@@ -4,6 +4,26 @@
  * @module api
  */
 
+// ── Token storage ─────────────────────────────────────────────────────────────
+// We store the JWT in localStorage as a fallback for environments where the
+// HttpOnly cookie is dropped (e.g. plain-HTTP LAN / Tailscale access when
+// COOKIE_SECURE=true). The middleware checks Authorization: Bearer first,
+// then falls back to the cookie, so both paths are always supported.
+
+const TOKEN_KEY = 'zynq_token';
+
+export function saveAuthToken(token: string): void {
+  try { localStorage.setItem(TOKEN_KEY, token); } catch { /* incognito / storage full */ }
+}
+
+export function getAuthToken(): string | null {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
+
+export function clearAuthToken(): void {
+  try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+}
+
 function trimTrailingSlash(value: string): string {
   return value.endsWith('/') ? value.slice(0, -1) : value;
 }
@@ -75,6 +95,7 @@ export interface User {
   storage_limit?: number;
   created_at?: string;
   avatar?: string;
+  token?: string; // present only in login/register responses; not stored in state
 }
 
 export interface ShareableUser {
@@ -275,14 +296,20 @@ async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   let response: Response;
   try {
     response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       credentials: 'include',
     });
   } catch {
@@ -327,10 +354,10 @@ export const authApi = {
       body: JSON.stringify(data),
     }),
 
-  logout: () =>
-    fetchApi<{ success: boolean }>('/auth/logout', {
-      method: 'POST',
-    }),
+  logout: () => {
+    clearAuthToken();
+    return fetchApi<{ success: boolean }>('/auth/logout', { method: 'POST' });
+  },
 
   me: () => fetchApi<User>('/auth/me'),
 
@@ -405,10 +432,15 @@ export const fileApi = {
     }),
 
   upload: async (fileId: string, file: File): Promise<FileMetadata> => {
+    const token = getAuthToken();
+    const uploadHeaders: Record<string, string> = {
+      'Content-Type': file.type || 'application/octet-stream',
+    };
+    if (token) uploadHeaders['Authorization'] = `Bearer ${token}`;
     const response = await fetch(`${getApiBaseUrl()}/files/${fileId}/upload`, {
       method: 'PUT',
       body: file,
-      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      headers: uploadHeaders,
       credentials: 'include',
     });
 
@@ -536,7 +568,11 @@ export const fileApi = {
 
   /** Fetch file content as a blob — only for in-browser previews of small files. */
   downloadBlob: async (id: string) => {
+    const token = getAuthToken();
+    const blobHeaders: Record<string, string> = {};
+    if (token) blobHeaders['Authorization'] = `Bearer ${token}`;
     const response = await fetch(`${getApiBaseUrl()}/files/${id}/download`, {
+      headers: blobHeaders,
       credentials: 'include',
     });
     if (!response.ok) {
@@ -882,9 +918,12 @@ export const spaceApi = {
     fileId: string,
     body: ReadableStream | Blob | ArrayBuffer,
   ): Promise<FileMetadata> => {
+    const token = getAuthToken();
+    const spaceUploadHeaders: Record<string, string> = {};
+    if (token) spaceUploadHeaders['Authorization'] = `Bearer ${token}`;
     const response = await fetch(
       `${getApiBaseUrl()}/spaces/${spaceId}/files/${fileId}/upload`,
-      { method: 'PUT', body, credentials: 'include' },
+      { method: 'PUT', body, headers: spaceUploadHeaders, credentials: 'include' },
     );
     if (!response.ok) throw await toApiError(response);
     return response.json() as Promise<FileMetadata>;

@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { LogOut, User as UserIcon, Moon, Sun } from 'lucide-react';
-import { authApi, type User } from '@/lib/api';
+import { type User } from '@/lib/api';
 import { getInitials } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
 import { useAuth } from '@/context/AuthContext';
@@ -26,16 +26,9 @@ export function Header({ user }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const { logout } = useAuth();
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     setLoading(true);
-    try {
-      await authApi.logout();
-    } catch (error) {
-      console.error('Logout failed:', error);
-    } finally {
-      setLoading(false);
-      logout();
-    }
+    logout();
   };
 
   if (!user) return null;

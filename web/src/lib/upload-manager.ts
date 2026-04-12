@@ -2,7 +2,7 @@
  * High-performance upload manager
  * Decouples upload logic from UI rendering for maximum throughput
  */
-import { getApiBaseUrl } from './api';
+import { getApiBaseUrl, getAuthToken } from './api';
 
 export interface UploadTask {
   id: string;
@@ -207,11 +207,11 @@ class UploadManager {
       formData.append('file', file);
 
       xhr.open('PUT', fullUrl);
-      const isSameOrigin =
-        typeof window === 'undefined' ||
-        new URL(fullUrl, window.location.href).origin ===
-          window.location.origin;
-      xhr.withCredentials = isSameOrigin;
+      xhr.withCredentials = true;
+      const token = getAuthToken();
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
       xhr.send(formData);
     });
   }
