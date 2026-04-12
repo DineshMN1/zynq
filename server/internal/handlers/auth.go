@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -498,6 +499,67 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	h.db.Model(&reset).Update("used_at", now)
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Password reset successfully"})
+}
+
+// PATCH /api/v1/auth/avatar
+func (h *AuthHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
+	claims := mw.GetClaims(r)
+	if claims == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	userID, err := uuid.Parse(claims.Sub)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Allow up to 2 MiB body (covers a base64-encoded ~1.5 MiB image).
+	// We decode directly here instead of using readJSON so we can set our own limit.
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+	var req struct {
+		Avatar string `json:"avatar"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body or image too large (max 2 MB)")
+		return
+	}
+
+	if !strings.HasPrefix(req.Avatar, "data:image/") {
+		writeError(w, http.StatusBadRequest, "Avatar must be a valid image data URL")
+		return
+	}
+
+	var user models.User
+	if err := h.db.First(&user, "id = ?", userID).Error; err != nil {
+		writeError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	if err := h.db.Model(&user).Update("avatar", req.Avatar).Error; err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to save avatar")
+		return
+	}
+
+	user.Avatar = &req.Avatar
+	writeJSON(w, http.StatusOK, user)
+}
+
+// DELETE /api/v1/auth/avatar
+func (h *AuthHandler) DeleteAvatar(w http.ResponseWriter, r *http.Request) {
+	claims := mw.GetClaims(r)
+	if claims == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	userID, err := uuid.Parse(claims.Sub)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	h.db.Model(&models.User{}).Where("id = ?", userID).Update("avatar", nil)
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Avatar removed"})
 }
 
 func (h *AuthHandler) sendPasswordResetEmail(to, name, resetURL string) {

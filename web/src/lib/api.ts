@@ -74,6 +74,7 @@ export interface User {
   storage_used?: number;
   storage_limit?: number;
   created_at?: string;
+  avatar?: string;
 }
 
 export interface ShareableUser {
@@ -356,6 +357,15 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  uploadAvatar: (avatar: string) =>
+    fetchApi<User>('/auth/avatar', {
+      method: 'PATCH',
+      body: JSON.stringify({ avatar }),
+    }),
+
+  deleteAvatar: () =>
+    fetchApi<{ message: string }>('/auth/avatar', { method: 'DELETE' }),
 };
 
 /** File API: CRUD, upload, download, share, trash operations */

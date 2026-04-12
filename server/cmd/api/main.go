@@ -83,6 +83,13 @@ func main() {
 	}
 	slog.Info("audit_logs table ready")
 
+	// Add avatar column to users if it doesn't exist yet (idempotent).
+	if err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;`).Error; err != nil {
+		slog.Error("failed to add avatar column", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("avatar column ready")
+
 	// Load persisted SMTP settings from DB (overrides env vars if present)
 	handlers.LoadSMTPFromDB(db, cfg)
 	slog.Info("SMTP settings loaded from DB")
@@ -175,6 +182,8 @@ func main() {
 				r.Get("/me", authH.Me)
 				r.Patch("/profile", authH.UpdateProfile)
 				r.Post("/change-password", authH.ChangePassword)
+				r.Patch("/avatar", authH.UploadAvatar)
+				r.Delete("/avatar", authH.DeleteAvatar)
 			})
 		})
 

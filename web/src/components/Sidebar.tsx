@@ -16,7 +16,7 @@ import {
   Building2,
   HardDrive,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from './ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import {
   Popover,
   PopoverContent,
@@ -336,6 +336,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     tooltip={user?.name ?? 'Account'}
                   >
                     <Avatar className="h-7 w-7 shrink-0 rounded-lg">
+                      <AvatarImage src={user?.avatar ?? undefined} alt={user?.name} className="rounded-lg object-cover" />
                       <AvatarFallback className="rounded-lg bg-sidebar-primary/20 text-sidebar-foreground text-xs font-semibold">
                         {getInitials(user?.name ?? '')}
                       </AvatarFallback>
@@ -351,6 +352,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   <PopoverHeader>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9 rounded-lg shrink-0">
+                        <AvatarImage src={user?.avatar ?? undefined} alt={user?.name} className="rounded-lg object-cover" />
                         <AvatarFallback className="rounded-lg bg-muted text-foreground text-sm font-semibold">
                           {getInitials(user?.name ?? '')}
                         </AvatarFallback>

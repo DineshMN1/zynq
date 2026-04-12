@@ -47,6 +47,7 @@ type User struct {
 	Role         string    `gorm:"default:'user'" json:"role"`
 	StorageUsed  int64     `gorm:"column:storage_used;default:0" json:"storage_used"`
 	StorageLimit int64     `gorm:"column:storage_limit;default:10737418240" json:"storage_limit"`
+	Avatar       *string   `gorm:"column:avatar" json:"avatar,omitempty"`
 }
 
 func (User) TableName() string { return "users" }
