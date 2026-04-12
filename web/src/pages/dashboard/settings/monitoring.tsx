@@ -24,6 +24,7 @@ import {
   Activity,
   Server,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -82,6 +83,7 @@ interface SystemStats {
   users: User[];
   usersStorage: UserStorageInfo[];
   loading: boolean;
+  error: boolean;
 }
 
 export default function MonitoringPage() {
@@ -90,6 +92,7 @@ export default function MonitoringPage() {
     users: [],
     usersStorage: [],
     loading: true,
+    error: false,
   });
   const [refreshing, setRefreshing] = useState(false);
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
@@ -111,10 +114,11 @@ export default function MonitoringPage() {
         users: usersData?.items || [],
         usersStorage: usersStorageData,
         loading: false,
+        error: false,
       });
     } catch (error) {
       console.error('Failed to load monitoring stats:', error);
-      setStats((prev) => ({ ...prev, loading: false }));
+      setStats((prev) => ({ ...prev, loading: false, error: true }));
     }
   }, []);
 
@@ -247,6 +251,19 @@ export default function MonitoringPage() {
           Refresh
         </Button>
       </div>
+
+      {/* Error banner */}
+      {stats.error && !stats.loading && (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Failed to load monitoring data</p>
+            <p className="text-destructive/80 text-xs mt-0.5">
+              Check your connection and make sure you are signed in, then click Refresh.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">

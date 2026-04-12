@@ -23,7 +23,7 @@ export default function LoginPage() {
   // If still checking auth status, show loading
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -32,7 +32,7 @@ export default function LoginPage() {
   // If setup is needed, redirect will happen from AuthContext
   if (needsSetup) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -70,14 +70,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-background relative overflow-hidden">
+    <div className="min-h-[100dvh] flex bg-background relative overflow-hidden">
       {/* Animated background */}
       <FloatingPaths position={1} />
       <FloatingPaths position={-1} />
 
       {/* Login Form */}
-      <div className="relative z-10 flex-1 flex items-start sm:items-center justify-center px-6 py-8 sm:p-8 overflow-y-auto">
-        <div className="w-full max-w-sm space-y-6 sm:space-y-8 bg-card/80 backdrop-blur-md border border-border rounded-2xl p-8 shadow-xl">
+      <div className="relative z-10 flex-1 flex items-center justify-center px-4 py-8 sm:p-8 overflow-y-auto">
+        <div className="w-full max-w-sm space-y-6 bg-card/80 backdrop-blur-md border border-border rounded-2xl p-6 sm:p-8 shadow-xl my-auto">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-2 sm:mb-6">
             <img src="/favicon.ico" alt="ZynqCloud" className="h-10 w-10 rounded-lg bg-white p-0.5 object-contain" />
