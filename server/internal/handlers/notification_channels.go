@@ -90,10 +90,10 @@ func (h *NotificationChannelsHandler) EmailSource(w http.ResponseWriter, r *http
 
 	if globalEnabled {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"source":      "global_smtp",
-			"label":       "Global SMTP (" + globalHost + ")",
-			"from":        globalFrom,
-			"channel_id":  nil,
+			"source":       "global_smtp",
+			"label":        "Global SMTP (" + globalHost + ")",
+			"from":         globalFrom,
+			"channel_id":   nil,
 			"channel_name": nil,
 		})
 		return

@@ -64,10 +64,10 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"items": logs,
 		"meta": map[string]interface{}{
-			"total":  total,
-			"page":   page,
-			"limit":  limit,
-			"pages":  (total + int64(limit) - 1) / int64(limit),
+			"total": total,
+			"page":  page,
+			"limit": limit,
+			"pages": (total + int64(limit) - 1) / int64(limit),
 		},
 	})
 }

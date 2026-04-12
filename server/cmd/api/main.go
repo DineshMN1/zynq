@@ -158,10 +158,10 @@ func main() {
 	adminMiddleware := mw.RequireRole("admin", "owner")
 
 	// Rate limiters (in-memory, per IP, sliding window)
-	loginLimiter    := mw.NewRateLimiter(10, 15*time.Minute) // 10 attempts / 15 min
-	registerLimiter := mw.NewRateLimiter(5, time.Hour)       // 5 attempts / hour
-	forgotLimiter   := mw.NewRateLimiter(5, time.Hour)       // 5 attempts / hour
-	shareLimiter    := mw.NewRateLimiter(30, time.Minute)    // 30 requests / min for public shares
+	loginLimiter := mw.NewRateLimiter(10, 15*time.Minute) // 10 attempts / 15 min
+	registerLimiter := mw.NewRateLimiter(5, time.Hour)    // 5 attempts / hour
+	forgotLimiter := mw.NewRateLimiter(5, time.Hour)      // 5 attempts / hour
+	shareLimiter := mw.NewRateLimiter(30, time.Minute)    // 30 requests / min for public shares
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// Health
