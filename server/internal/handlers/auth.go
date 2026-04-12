@@ -175,6 +175,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// GORM skips zero int64 values even with Select(), so explicitly set storage_limit=0
+	// for admin/owner via a raw UPDATE to guarantee unlimited storage from the start.
+	if role == "admin" || role == "owner" {
+		h.db.Model(user).UpdateColumn("storage_limit", 0)
+		user.StorageLimit = 0
+	}
+
 	// Enroll new user in all existing spaces
 	AutoEnrollUserInSpaces(h.db, user.ID, user.Role)
 
@@ -254,6 +261,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Action:    "auth.login",
 		IPAddress: auditIP(r),
 	})
+
+	// Admin/owner always have unlimited storage — fix stale DB records on login
+	if (user.Role == "admin" || user.Role == "owner") && user.StorageLimit != 0 {
+		h.db.Model(&user).UpdateColumn("storage_limit", 0)
+		user.StorageLimit = 0
+	}
 
 	writeJSON(w, http.StatusOK, user)
 }

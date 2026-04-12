@@ -285,6 +285,12 @@ func (h *InvitationsHandler) Accept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// GORM skips zero int64 values — explicitly enforce unlimited storage for admin/owner
+	if invitation.Role == "admin" || invitation.Role == "owner" {
+		h.db.Model(user).UpdateColumn("storage_limit", 0)
+		user.StorageLimit = 0
+	}
+
 	h.db.Model(&invitation).Update("status", "accepted")
 
 	writeJSON(w, http.StatusCreated, user)
