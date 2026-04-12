@@ -7,7 +7,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { AlertTriangle, X, Upload } from 'lucide-react';
+import { AlertTriangle, X, Upload, FolderOpen } from 'lucide-react';
 import { formatBytes } from '@/lib/auth';
 import type { FileMetadata } from '@/lib/api';
 
@@ -15,6 +15,7 @@ export interface DuplicateItem {
   file: File;
   hash: string;
   existingFile: FileMetadata;
+  location?: string;
   parentId?: string;
 }
 
@@ -78,6 +79,12 @@ export function DuplicateWarningDialog({
                           {dup.existingFile.name}
                         </span>
                       </p>
+                      {dup.location && (
+                        <p className="flex items-center gap-1">
+                          <FolderOpen className="h-3 w-3 shrink-0" />
+                          <span>{dup.location}</span>
+                        </p>
+                      )}
                       <p>Uploaded: {formatDate(dup.existingFile.created_at)}</p>
                       <p>
                         Size: {formatBytes(Number(dup.existingFile.size || 0))}

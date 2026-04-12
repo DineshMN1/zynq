@@ -956,7 +956,7 @@ export default function FilesPage() {
           return;
         }
         try {
-          const { isDuplicate, existingFile } = await fileApi.checkDuplicate(
+          const { isDuplicate, existingFile, location } = await fileApi.checkDuplicate(
             fileHash,
             entry.file.name,
           );
@@ -965,6 +965,7 @@ export default function FilesPage() {
               file: entry.file,
               hash: fileHash,
               existingFile,
+              location,
               parentId: entry.parentId,
             });
           } else {
@@ -1096,13 +1097,13 @@ export default function FilesPage() {
 
       if (fileHash) {
         // Check for duplicates before uploading (only for documents and images)
-        const { isDuplicate, existingFile } = await fileApi.checkDuplicate(
+        const { isDuplicate, existingFile, location } = await fileApi.checkDuplicate(
           fileHash,
           file.name,
         );
 
         if (isDuplicate && existingFile) {
-          setPendingDuplicates([{ file, hash: fileHash, existingFile }]);
+          setPendingDuplicates([{ file, hash: fileHash, existingFile, location }]);
           setShowDuplicateDialog(true);
           removeUploadProgress(progressId);
           e.target.value = '';

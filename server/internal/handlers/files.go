@@ -573,7 +573,10 @@ func (h *FilesHandler) CheckDuplicate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"isDuplicate": true, "existingFile": file})
+	// Resolve the human-readable location (full ancestor path).
+	location := resolveFilePath(h.db, file.ParentID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"isDuplicate": true, "existingFile": file, "location": location})
 }
 
 // GET /api/v1/files/{id}
@@ -1350,4 +1353,26 @@ func (h *FilesHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// resolveFilePath walks parentID up the folder tree and returns a slash-joined
+// path string (e.g. "Home / Notes / Work"). Returns "Home" when parentID is nil.
+func resolveFilePath(db *gorm.DB, parentID *uuid.UUID) string {
+	if parentID == nil {
+		return "Home"
+	}
+	var parts []string
+	id := parentID
+	for id != nil {
+		var folder models.File
+		if err := db.Select("id, name, parent_id").First(&folder, "id = ?", id).Error; err != nil {
+			break
+		}
+		parts = append([]string{folder.Name}, parts...)
+		id = folder.ParentID
+	}
+	if len(parts) == 0 {
+		return "Home"
+	}
+	return "Home / " + strings.Join(parts, " / ")
 }

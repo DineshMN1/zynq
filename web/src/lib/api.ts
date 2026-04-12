@@ -420,7 +420,7 @@ export const fileApi = {
   },
 
   checkDuplicate: (fileHash: string, fileName?: string) =>
-    fetchApi<{ isDuplicate: boolean; existingFile?: FileMetadata }>(
+    fetchApi<{ isDuplicate: boolean; existingFile?: FileMetadata; location?: string }>(
       '/files/check-duplicate',
       {
         method: 'POST',
