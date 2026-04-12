@@ -289,7 +289,7 @@ export function UploadManagerPopup() {
               exit={{ y: 16, opacity: 0, scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 340, damping: 28 }}
               className={cn(
-                'fixed right-4 z-50 flex flex-col',
+                'fixed right-4 z-40 flex flex-col',
                 'bg-card border border-border shadow-2xl rounded-2xl overflow-hidden',
                 widthClass,
                 bottomClass,
