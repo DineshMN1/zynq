@@ -21,11 +21,6 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverDescription,
-  PopoverBody,
-  PopoverFooter,
 } from './ui/popover';
 import { Button } from './ui/button';
 import {
@@ -326,7 +321,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
           )}
 
           {/* Account row */}
-          <SidebarMenu>
+          <SidebarMenu className="mb-1">
             <SidebarMenuItem>
               <Popover>
                 <PopoverTrigger asChild>
@@ -341,51 +336,60 @@ export function AppSidebar({ user }: AppSidebarProps) {
                         {getInitials(user?.name ?? '')}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
-                      <span className="truncate font-semibold text-[13px]">{user?.name}</span>
-                      <span className="truncate text-[11px] text-sidebar-foreground/50">{user?.email}</span>
+                    <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+                      <span className="block truncate font-semibold text-[13px] leading-tight">{user?.name}</span>
+                      <span className="block truncate text-[11px] text-sidebar-foreground/50 leading-tight pb-px" title={user?.email}>{user?.email}</span>
                     </div>
                     <ChevronsUpDown className="ml-auto size-3.5 shrink-0 text-sidebar-foreground/40" />
                   </SidebarMenuButton>
                 </PopoverTrigger>
-                <PopoverContent align="start" side="top" sideOffset={8} className="w-64 p-0">
-                  <PopoverHeader>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9 rounded-lg shrink-0">
-                        <AvatarImage src={user?.avatar ?? undefined} alt={user?.name} className="rounded-lg object-cover" />
-                        <AvatarFallback className="rounded-lg bg-muted text-foreground text-sm font-semibold">
-                          {getInitials(user?.name ?? '')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <PopoverTitle className="text-[13.5px] truncate">{user?.name}</PopoverTitle>
-                        <PopoverDescription className="text-[11px] truncate">{user?.email}</PopoverDescription>
-                      </div>
+                <PopoverContent
+                  align="start"
+                  side="top"
+                  sideOffset={6}
+                  className="w-[--radix-popover-trigger-width] p-1.5 overflow-hidden
+                    data-[state=open]:animate-in data-[state=closed]:animate-out
+                    data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0
+                    data-[state=open]:slide-in-from-bottom-2 data-[state=closed]:slide-out-to-bottom-2
+                    data-[state=open]:duration-200 data-[state=closed]:duration-150"
+                >
+                  {/* User identity */}
+                  <div className="flex items-center gap-2.5 px-2.5 py-2.5 mb-1 rounded-lg bg-muted/50">
+                    <Avatar className="h-9 w-9 rounded-lg shrink-0">
+                      <AvatarImage src={user?.avatar ?? undefined} alt={user?.name} className="rounded-lg object-cover" />
+                      <AvatarFallback className="rounded-lg bg-sidebar-primary/20 text-foreground text-sm font-semibold">
+                        {getInitials(user?.name ?? '')}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold leading-tight truncate">{user?.name}</p>
+                      <p className="text-[11px] text-muted-foreground leading-tight truncate pb-px" title={user?.email}>{user?.email}</p>
                     </div>
-                  </PopoverHeader>
-                  <PopoverBody className="space-y-0.5 px-2 py-1.5">
-                    <Button variant="ghost" size="sm" className="w-full justify-start" asChild>
-                      <Link to="/dashboard/profile">
-                        <UserIcon className="mr-2 h-4 w-4" />Profile
-                      </Link>
-                    </Button>
-                    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={toggleTheme}>
-                      {theme === 'dark' ? (
-                        <><Sun className="mr-2 h-4 w-4" />Light Mode</>
-                      ) : (
-                        <><Moon className="mr-2 h-4 w-4" />Dark Mode</>
-                      )}
-                    </Button>
-                  </PopoverBody>
-                  <PopoverFooter>
-                    <Button
-                      variant="outline" size="sm"
-                      className="w-full bg-transparent text-red-500 hover:text-red-500 border-red-500/20 hover:bg-red-500/10"
-                      onClick={handleLogout}
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />Sign Out
-                    </Button>
-                  </PopoverFooter>
+                  </div>
+
+                  {/* Actions */}
+                  <Button variant="ghost" size="sm" className="w-full justify-start h-8 text-[13px] rounded-lg mb-0.5" asChild>
+                    <Link to="/dashboard/profile">
+                      <UserIcon className="mr-2 h-3.5 w-3.5" />Profile
+                    </Link>
+                  </Button>
+                  <Button variant="ghost" size="sm" className="w-full justify-start h-8 text-[13px] rounded-lg" onClick={toggleTheme}>
+                    {theme === 'dark' ? (
+                      <><Sun className="mr-2 h-3.5 w-3.5" />Light Mode</>
+                    ) : (
+                      <><Moon className="mr-2 h-3.5 w-3.5" />Dark Mode</>
+                    )}
+                  </Button>
+
+                  {/* Divider + Sign out */}
+                  <div className="my-1 h-px bg-border/60" />
+                  <Button
+                    variant="ghost" size="sm"
+                    className="w-full justify-start h-8 text-[13px] rounded-lg text-red-500 hover:text-red-500 hover:bg-red-500/10"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="mr-2 h-3.5 w-3.5" />Sign Out
+                  </Button>
                 </PopoverContent>
               </Popover>
             </SidebarMenuItem>
@@ -393,7 +397,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
           {/* Storage usage */}
           {!collapsed && user != null && (
-            <div className="px-2 pb-1 space-y-1">
+            <div className="px-2 pt-2 pb-2 space-y-2 border-t border-sidebar-border/50">
               {(() => {
                 const limit = user.storage_limit ?? 0;
                 const unlimited = limit === 0;
@@ -413,8 +417,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" />Storage</span>
                       <span>{displayTotal > 0 ? `${fmt(displayUsed)} / ${fmt(displayTotal)}` : `${fmt(displayUsed)} used`}</span>
                     </div>
-                    <div className="h-1 w-full rounded-full bg-sidebar-accent overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+                    <div className="h-1.5 w-full rounded-full bg-sidebar-accent overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
                     </div>
                   </>
                 );
@@ -423,7 +427,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
           )}
 
           {!collapsed && (
-            <p className="px-2 pb-1 text-[11px] text-sidebar-foreground/30 text-center">
+            <p className="px-2 pb-1 mt-1 text-[10px] uppercase tracking-wider text-sidebar-foreground/30 text-center">
               v{APP_VERSION}
             </p>
           )}
