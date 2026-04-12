@@ -101,7 +101,7 @@ func (rl *RateLimiter) cleanup() {
 // Middleware returns an http.Handler middleware that enforces this limiter.
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := realIP(r)
+		ip := RealIP(r)
 		if !rl.Allow(ip) {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Retry-After", "60")
@@ -116,18 +116,18 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// realIP extracts the real client IP.
+// RealIP extracts the real client IP.
 //
 // Priority order (most trustworthy first):
 //  1. CF-Connecting-IP — set exclusively by Cloudflare; cannot be spoofed
 //     when the server is only reachable via Cloudflare Tunnel.
-//  2. X-Real-IP / X-Forwarded-For — only trusted when TRUST_PROXY=true,
-//     i.e. a known reverse-proxy sits in front of the Go process.
+//  2. X-Real-IP / X-Forwarded-For — only trusted when the remote address is
+//     a loopback/private IP (i.e. a local reverse-proxy the operator controls).
 //  3. r.RemoteAddr — always used as fallback.
 //
-// WARNING: Never trust X-Forwarded-For without TRUST_PROXY=true — it can be
-// trivially spoofed by clients, completely bypassing rate limiting.
-func realIP(r *http.Request) string {
+// WARNING: Never trust X-Forwarded-For unconditionally — it can be trivially
+// spoofed by clients, completely bypassing rate limiting.
+func RealIP(r *http.Request) string {
 	// Cloudflare Tunnel sets CF-Connecting-IP to the original visitor IP.
 	// This header is injected by Cloudflare and cannot be set by end-users.
 	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {

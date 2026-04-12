@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"log/slog"
-	"net"
 	"net/http"
 
 	"github.com/google/uuid"
+	mw "github.com/zynqcloud/api/internal/middleware"
 	"github.com/zynqcloud/api/internal/models"
 	"gorm.io/gorm"
 )
@@ -44,17 +44,9 @@ func LogAudit(db *gorm.DB, e AuditEntry) {
 	}()
 }
 
-// auditIP extracts the client IP for audit logging.
-// Mirrors the logic in middleware/ratelimit.go.
+// auditIP extracts the real client IP for audit logging.
+// Uses the same logic as the rate-limit middleware (CF-Connecting-IP →
+// X-Real-IP/X-Forwarded-For when behind a trusted proxy → RemoteAddr).
 func auditIP(r *http.Request) string {
-	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
-		if ip := net.ParseIP(cfIP); ip != nil {
-			return ip.String()
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return mw.RealIP(r)
 }

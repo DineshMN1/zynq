@@ -43,6 +43,7 @@ type Config struct {
 	DiskStatsPath           string // override path for disk stats (useful in Docker to point at a host mount)
 	StaticDir               string // directory to serve the React SPA from (empty = disabled)
 	NodeEnv                 string
+	CookieSecure            bool   // set Secure flag on auth cookie (default: true when NODE_ENV=production)
 }
 
 func Load() *Config {
@@ -96,10 +97,19 @@ func Load() *Config {
 		MaxAssemblyWorkers:      getEnvInt("MAX_ASSEMBLY_WORKERS", 32),
 		SessionTTLHours:         getEnvInt("SESSION_TTL_HOURS", 24),
 		MinFreeBytes:            getEnvInt64("MIN_FREE_BYTES", 536870912),
-		DiskStatsPath:           getEnv("DISK_STATS_PATH", ""),
-		StaticDir:               getEnv("STATIC_DIR", ""),
-		NodeEnv:                 getEnv("NODE_ENV", "development"),
+		DiskStatsPath: getEnv("DISK_STATS_PATH", ""),
+		StaticDir:     getEnv("STATIC_DIR", ""),
+		NodeEnv:       getEnv("NODE_ENV", "development"),
 	}
+
+	// COOKIE_SECURE defaults to true when NODE_ENV=production, but can be
+	// overridden to false for local/Tailscale HTTP access without HTTPS.
+	nodeEnv := cfg.NodeEnv
+	cookieSecureDefault := "false"
+	if nodeEnv == "production" {
+		cookieSecureDefault = "true"
+	}
+	cfg.CookieSecure = getEnv("COOKIE_SECURE", cookieSecureDefault) == "true"
 
 	// Warn loudly about missing critical secrets at startup.
 	if cfg.JWTSecret == "" {

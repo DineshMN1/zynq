@@ -43,8 +43,8 @@ func (h *AuthHandler) generateToken(user *models.User) (string, error) {
 }
 
 func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, tokenStr string) {
-	secure := h.cfg.NodeEnv == "production"
-	cookie := &http.Cookie{ // #nosec G124 -- Secure is intentionally false in dev, true in prod
+	secure := h.cfg.CookieSecure
+	cookie := &http.Cookie{ // #nosec G124 -- Secure flag controlled by COOKIE_SECURE env var
 		Name:     "jid",
 		Value:    tokenStr,
 		HttpOnly: true,
@@ -60,11 +60,11 @@ func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, tokenStr string) {
 }
 
 func (h *AuthHandler) clearAuthCookie(w http.ResponseWriter) {
-	cookie := &http.Cookie{ // #nosec G124 -- Secure is intentionally false in dev, true in prod
+	cookie := &http.Cookie{ // #nosec G124 -- Secure flag controlled by COOKIE_SECURE env var
 		Name:     "jid",
 		Value:    "",
 		HttpOnly: true,
-		Secure:   h.cfg.NodeEnv == "production",
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 		Path:     "/",
