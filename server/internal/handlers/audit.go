@@ -51,8 +51,8 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if search := q.Get("search"); search != "" {
-		like := "%" + search + "%"
-		db = db.Where("user_name ILIKE ? OR user_email ILIKE ? OR resource_name ILIKE ?", like, like, like)
+		like := likeSafe(search)
+		db = db.Where("user_name ILIKE ? ESCAPE '\\' OR user_email ILIKE ? ESCAPE '\\' OR resource_name ILIKE ? ESCAPE '\\'", like, like, like)
 	}
 
 	var total int64

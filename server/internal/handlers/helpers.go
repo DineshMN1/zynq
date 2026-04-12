@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/smtp"
+	"strings"
 	"time"
 
 	"github.com/zynqcloud/api/internal/config"
@@ -111,6 +112,15 @@ func formatStorageBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// likeSafe escapes PostgreSQL LIKE/ILIKE wildcard characters in user-supplied
+// search strings so that '%', '_', and '\' are treated as literals.
+func likeSafe(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return "%" + s + "%"
 }
 
 // sendEmail sends a plain-text email via the configured SMTP server.

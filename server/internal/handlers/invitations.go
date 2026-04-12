@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -43,6 +44,10 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if req.Email == "" {
 		writeError(w, http.StatusBadRequest, "email is required")
+		return
+	}
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid email address")
 		return
 	}
 	if req.Role == "" {

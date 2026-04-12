@@ -74,7 +74,7 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if search != "" {
-		query = query.Where("name ILIKE ?", "%"+search+"%")
+		query = query.Where("name ILIKE ? ESCAPE '\\'", likeSafe(search))
 	}
 
 	var total int64
@@ -662,6 +662,11 @@ func (h *FilesHandler) Rename(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "Target folder not found")
 			return
 		}
+		// Prevent moving a folder into one of its own descendants (cycle).
+		if file.IsFolder && isDescendantOf(h.db, *req.ParentID, fileID) {
+			writeError(w, http.StatusBadRequest, "Cannot move a folder into its own subfolder")
+			return
+		}
 		updates["parent_id"] = *req.ParentID
 	}
 
@@ -875,19 +880,32 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	defer plainReader.Close()
 
 	// Write encrypted output via a pipe so we don't buffer the whole ciphertext.
+	// encErrCh carries the goroutine's result so the main goroutine can inspect it
+	// after Write() returns (Write blocks until the pipe is closed).
 	pr, pw := io.Pipe()
-	var encErr error
+	encErrCh := make(chan error, 1)
 	go func() {
-		_, encErr = crypto.EncryptStream(plainReader, pw, dek, iv)
-		if encErr != nil {
-			pw.CloseWithError(encErr)
+		_, err := crypto.EncryptStream(plainReader, pw, dek, iv)
+		if err != nil {
+			pw.CloseWithError(err)
 		} else {
 			pw.Close()
 		}
+		encErrCh <- err
 	}()
 
-	if _, err := h.backend.Write(storagePath, pr); err != nil {
-		slog.Error("failed to write encrypted file", "error", err, "path", storagePath)
+	_, writeErr := h.backend.Write(storagePath, pr)
+	encErr := <-encErrCh // always wait for the goroutine to finish
+
+	if encErr != nil {
+		slog.Error("failed to encrypt file", "error", encErr, "path", storagePath)
+		// Clean up the partially-written blob.
+		_ = h.backend.Delete(storagePath)
+		writeError(w, http.StatusInternalServerError, "Failed to encrypt file")
+		return
+	}
+	if writeErr != nil {
+		slog.Error("failed to write encrypted file", "error", writeErr, "path", storagePath)
 		writeError(w, http.StatusInternalServerError, "Failed to store file")
 		return
 	}
@@ -1116,7 +1134,9 @@ func (h *FilesHandler) streamFolderAsZip(w http.ResponseWriter, r *http.Request,
 			if err == nil {
 				plaintext, err := crypto.DecryptBuffer(ciphertext, dek, e.file.EncryptionIV)
 				if err == nil {
-					zf.Write(plaintext)
+					if _, err := zf.Write(plaintext); err != nil {
+						slog.Error("zip: write failed", "file_id", e.file.ID, "err", err)
+					}
 				} else {
 					slog.Error("zip: buffer decrypt failed", "file_id", e.file.ID, "err", err)
 				}
@@ -1357,6 +1377,24 @@ func (h *FilesHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
 
 // resolveFilePath walks parentID up the folder tree and returns a slash-joined
 // path string (e.g. "Home / Notes / Work"). Returns "Home" when parentID is nil.
+// isDescendantOf returns true when candidateID is equal to ancestorID or is
+// nested inside it.  It walks up the parent chain so it detects moves that
+// would create a cycle (e.g. moving a folder into one of its own sub-folders).
+func isDescendantOf(db *gorm.DB, candidateID, ancestorID uuid.UUID) bool {
+	id := &candidateID
+	for id != nil {
+		if *id == ancestorID {
+			return true
+		}
+		var f models.File
+		if err := db.Select("id, parent_id").First(&f, "id = ?", id).Error; err != nil {
+			break
+		}
+		id = f.ParentID
+	}
+	return false
+}
+
 func resolveFilePath(db *gorm.DB, parentID *uuid.UUID) string {
 	if parentID == nil {
 		return "Home"

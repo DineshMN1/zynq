@@ -234,7 +234,7 @@ func (h *SpacesHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if search != "" {
-		query = query.Where("name ILIKE ?", "%"+search+"%")
+		query = query.Where("name ILIKE ? ESCAPE '\\'", likeSafe(search))
 	}
 
 	switch category {

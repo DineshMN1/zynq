@@ -920,6 +920,18 @@ export default function FilesPage() {
       skipDuplicateCheck: skipDuplicateCheck || undefined,
     });
 
+    // Optimistically insert the file into the grid immediately after the DB
+    // record is created, so it appears during the upload rather than only
+    // after the server responds (which can lag 5-30s for large files).
+    const createdParent = created.parent_id ?? null;
+    const currentFolder = currentFolderId ?? null;
+    if (createdParent === currentFolder) {
+      setFiles((prev) =>
+        prev.some((f) => f.id === created.id) ? prev : [...prev, created],
+      );
+      setTotal((prev) => prev + 1);
+    }
+
     if (created.uploadUrl) {
       await uploadFileWithProgress(
         created.uploadUrl,

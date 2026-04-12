@@ -35,7 +35,8 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	query := h.db.Model(&models.User{})
 	if search != "" {
-		query = query.Where("name ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
+		like := likeSafe(search)
+		query = query.Where("name ILIKE ? ESCAPE '\\' OR email ILIKE ? ESCAPE '\\'", like, like)
 	}
 
 	var total int64
@@ -203,7 +204,8 @@ func (h *UsersHandler) ListShareable(w http.ResponseWriter, r *http.Request) {
 
 	query := h.db.Model(&models.User{}).Where("id != ?", callerID)
 	if q != "" {
-		query = query.Where("name ILIKE ? OR email ILIKE ?", "%"+q+"%", "%"+q+"%")
+		like := likeSafe(q)
+		query = query.Where("name ILIKE ? ESCAPE '\\' OR email ILIKE ? ESCAPE '\\'", like, like)
 	}
 
 	var users []models.User

@@ -452,9 +452,6 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	token := hex.EncodeToString(tokenBytes)
 
-	// Delete any existing reset tokens for this user
-	h.db.Where("user_id = ?", user.ID).Delete(&models.PasswordReset{})
-
 	reset := &models.PasswordReset{
 		ID:        uuid.New(),
 		UserID:    user.ID,
@@ -462,8 +459,15 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: time.Now().Add(1 * time.Hour), // short window — 1 hour
 	}
 
-	if err := h.db.Create(reset).Error; err != nil {
-		slog.Error("failed to create password reset", "error", err)
+	// Delete old tokens and create the new one atomically so we can never
+	// end up with a stale token after a partial failure.
+	if txErr := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", user.ID).Delete(&models.PasswordReset{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(reset).Error
+	}); txErr != nil {
+		slog.Error("failed to create password reset", "error", txErr)
 		writeJSON(w, http.StatusOK, map[string]string{"message": "If that email exists, a reset link has been sent"})
 		return
 	}

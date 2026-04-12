@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"time"
 
@@ -75,7 +76,8 @@ func (h *ShareHandler) Download(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Password string `json:"password"`
 		}
-		if err := readJSON(r, &req); err != nil || req.Password != *share.Password {
+		if err := readJSON(r, &req); err != nil ||
+			subtle.ConstantTimeCompare([]byte(req.Password), []byte(*share.Password)) != 1 {
 			writeError(w, http.StatusUnauthorized, "Incorrect password")
 			return
 		}
@@ -125,7 +127,7 @@ func (h *ShareHandler) GetPublicShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if share.Password != nil && *share.Password != "" {
-		if password == "" || password != *share.Password {
+		if password == "" || subtle.ConstantTimeCompare([]byte(password), []byte(*share.Password)) != 1 {
 			writeError(w, http.StatusUnauthorized, "Password required")
 			return
 		}
@@ -195,7 +197,7 @@ func (h *ShareHandler) DownloadPublicShare(w http.ResponseWriter, r *http.Reques
 	}
 
 	if share.Password != nil && *share.Password != "" {
-		if password == "" || password != *share.Password {
+		if password == "" || subtle.ConstantTimeCompare([]byte(password), []byte(*share.Password)) != 1 {
 			writeError(w, http.StatusUnauthorized, "Password required")
 			return
 		}
