@@ -298,6 +298,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Admin/owner always have unlimited storage — fix stale DB records on the fly
+	if (user.Role == "admin" || user.Role == "owner") && user.StorageLimit != 0 {
+		h.db.Model(&user).UpdateColumn("storage_limit", 0)
+		user.StorageLimit = 0
+	}
+
 	writeJSON(w, http.StatusOK, user)
 }
 
