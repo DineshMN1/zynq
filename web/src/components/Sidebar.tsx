@@ -341,9 +341,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
                         {getInitials(user?.name ?? '')}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
-                      <span className="truncate font-semibold text-[13px]">{user?.name}</span>
-                      <span className="truncate text-[11px] text-sidebar-foreground/50">{user?.email}</span>
+                    <div className="flex flex-col flex-1 text-left min-w-0 gap-0.5">
+                      <span className="truncate font-semibold text-[13px] leading-none">{user?.name}</span>
+                      <span className="truncate text-[11px] leading-none text-sidebar-foreground/50">{user?.email}</span>
                     </div>
                     <ChevronsUpDown className="ml-auto size-3.5 shrink-0 text-sidebar-foreground/40" />
                   </SidebarMenuButton>
