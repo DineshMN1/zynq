@@ -129,9 +129,11 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	claims := mw.GetClaims(r)
 	callerID, _ := uuid.Parse(claims.Sub)
-	if req.Role != nil && *req.Role != oldRole {
-		var caller models.User
+	var caller models.User
+	if req.Role != nil && *req.Role != oldRole || req.StorageLimit != nil {
 		h.db.Select("name, email").First(&caller, "id = ?", callerID)
+	}
+	if req.Role != nil && *req.Role != oldRole {
 		LogAudit(h.db, AuditEntry{
 			UserID:       &callerID,
 			UserName:     caller.Name,
@@ -142,6 +144,19 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			ResourceID:   user.ID.String(),
 			IPAddress:    auditIP(r),
 			Metadata:     models.JSONB{"old_role": oldRole, "new_role": *req.Role},
+		})
+	}
+	if req.StorageLimit != nil {
+		LogAudit(h.db, AuditEntry{
+			UserID:       &callerID,
+			UserName:     caller.Name,
+			UserEmail:    caller.Email,
+			Action:       "user.quota_change",
+			ResourceType: "user",
+			ResourceName: user.Name,
+			ResourceID:   user.ID.String(),
+			IPAddress:    auditIP(r),
+			Metadata:     models.JSONB{"storage_limit": *req.StorageLimit},
 		})
 	}
 

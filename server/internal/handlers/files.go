@@ -684,7 +684,11 @@ func (h *FilesHandler) Rename(w http.ResponseWriter, r *http.Request) {
 
 	var auditUser models.User
 	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	isMoveOp := req.MoveToRoot || req.ParentID != nil
 	action := "file.rename"
+	if isMoveOp {
+		action = "file.move"
+	}
 	resourceType := "file"
 	if file.IsFolder {
 		resourceType = "folder"

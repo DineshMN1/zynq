@@ -42,24 +42,29 @@ interface ActionMeta {
 }
 
 const ACTION_META: Record<string, ActionMeta> = {
-  'auth.login':          { label: 'Login',           icon: LogIn,      color: 'text-green-500',  bg: 'bg-green-500/10' },
-  'auth.login_failed':   { label: 'Login Failed',    icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-500/10' },
-  'auth.logout':         { label: 'Logout',          icon: LogOut,     color: 'text-slate-400',  bg: 'bg-slate-500/10' },
-  'auth.password_change':{ label: 'Password Change', icon: KeyRound,   color: 'text-amber-500',  bg: 'bg-amber-500/10' },
-  'auth.password_reset': { label: 'Password Reset',  icon: KeyRound,   color: 'text-amber-500',  bg: 'bg-amber-500/10' },
-  'file.upload':         { label: 'Upload',          icon: Upload,     color: 'text-blue-500',   bg: 'bg-blue-500/10' },
-  'file.delete':         { label: 'Delete',          icon: Trash2,     color: 'text-red-500',    bg: 'bg-red-500/10' },
-  'file.restore':        { label: 'Restore',         icon: RotateCcw,  color: 'text-teal-500',   bg: 'bg-teal-500/10' },
-  'file.rename':         { label: 'Rename',          icon: RefreshCw,  color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-  'folder.create':       { label: 'New Folder',      icon: FolderPlus, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-  'share.create':        { label: 'Share Created',   icon: Share2,     color: 'text-cyan-500',   bg: 'bg-cyan-500/10' },
-  'share.revoke':        { label: 'Share Revoked',   icon: ShieldOff,  color: 'text-orange-500', bg: 'bg-orange-500/10' },
-  'share.access':        { label: 'Share Accessed',  icon: Eye,        color: 'text-slate-400',  bg: 'bg-slate-500/10' },
-  'user.register':       { label: 'Registered',      icon: UserPlus,   color: 'text-green-500',  bg: 'bg-green-500/10' },
-  'user.invite':         { label: 'Invited',         icon: UserPlus,   color: 'text-blue-400',   bg: 'bg-blue-400/10' },
-  'user.delete':         { label: 'User Deleted',    icon: UserX,      color: 'text-red-500',    bg: 'bg-red-500/10' },
-  'user.role_change':    { label: 'Role Changed',    icon: UserCog,    color: 'text-amber-500',  bg: 'bg-amber-500/10' },
-  'user.quota_change':   { label: 'Quota Changed',   icon: UserCog,    color: 'text-amber-500',  bg: 'bg-amber-500/10' },
+  // Auth
+  'auth.login':           { label: 'Login',           icon: LogIn,      color: 'text-green-500',  bg: 'bg-green-500/10' },
+  'auth.login_failed':    { label: 'Login Failed',    icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-500/10' },
+  'auth.logout':          { label: 'Logout',          icon: LogOut,     color: 'text-slate-400',  bg: 'bg-slate-500/10' },
+  'auth.password_change': { label: 'Password Change', icon: KeyRound,   color: 'text-amber-500',  bg: 'bg-amber-500/10' },
+  'auth.password_reset':  { label: 'Password Reset',  icon: KeyRound,   color: 'text-amber-500',  bg: 'bg-amber-500/10' },
+  // Files
+  'file.upload':          { label: 'Upload',          icon: Upload,     color: 'text-blue-500',   bg: 'bg-blue-500/10' },
+  'file.delete':          { label: 'Delete',          icon: Trash2,     color: 'text-red-500',    bg: 'bg-red-500/10' },
+  'file.restore':         { label: 'Restore',         icon: RotateCcw,  color: 'text-teal-500',   bg: 'bg-teal-500/10' },
+  'file.rename':          { label: 'Rename',          icon: RefreshCw,  color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
+  'file.move':            { label: 'Move',            icon: RefreshCw,  color: 'text-violet-400', bg: 'bg-violet-500/10' },
+  'folder.create':        { label: 'New Folder',      icon: FolderPlus, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+  // Shares
+  'share.create':         { label: 'Share Created',   icon: Share2,     color: 'text-cyan-500',   bg: 'bg-cyan-500/10' },
+  'share.revoke':         { label: 'Share Revoked',   icon: ShieldOff,  color: 'text-orange-500', bg: 'bg-orange-500/10' },
+  'share.access':         { label: 'Share Accessed',  icon: Eye,        color: 'text-slate-400',  bg: 'bg-slate-500/10' },
+  // Users
+  'user.register':        { label: 'Registered',      icon: UserPlus,   color: 'text-green-500',  bg: 'bg-green-500/10' },
+  'user.invite':          { label: 'Invited',         icon: UserPlus,   color: 'text-blue-400',   bg: 'bg-blue-400/10' },
+  'user.delete':          { label: 'User Deleted',    icon: UserX,      color: 'text-red-500',    bg: 'bg-red-500/10' },
+  'user.role_change':     { label: 'Role Changed',    icon: UserCog,    color: 'text-amber-500',  bg: 'bg-amber-500/10' },
+  'user.quota_change':    { label: 'Quota Changed',   icon: UserCog,    color: 'text-amber-500',  bg: 'bg-amber-500/10' },
 };
 
 const ALL_ACTIONS = Object.keys(ACTION_META);

@@ -521,6 +521,19 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	h.db.Model(&reset).Update("used_at", now)
 
+	// Fetch user for audit log.
+	var resetUser models.User
+	if err := h.db.Select("id, name, email").First(&resetUser, "id = ?", reset.UserID).Error; err == nil {
+		uid := resetUser.ID
+		LogAudit(h.db, AuditEntry{
+			UserID:    &uid,
+			UserName:  resetUser.Name,
+			UserEmail: resetUser.Email,
+			Action:    "auth.password_reset",
+			IPAddress: auditIP(r),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Password reset successfully"})
 }
 

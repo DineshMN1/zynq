@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/zynqcloud/api/internal/config"
 	"github.com/zynqcloud/api/internal/crypto"
+	mw "github.com/zynqcloud/api/internal/middleware"
 	"github.com/zynqcloud/api/internal/models"
 	"github.com/zynqcloud/api/internal/storage"
 	"gorm.io/gorm"
@@ -164,6 +166,25 @@ func (h *ShareHandler) GetPublicShare(w http.ResponseWriter, r *http.Request) {
 		`, share.File.ID).Scan(&folderSize)
 	}
 
+	// Log share access (viewer may or may not be authenticated).
+	claims := mw.GetClaims(r)
+	accessEntry := AuditEntry{
+		Action:       "share.access",
+		ResourceType: "file",
+		ResourceName: share.File.Name,
+		ResourceID:   share.File.ID.String(),
+		IPAddress:    auditIP(r),
+		Metadata:     models.JSONB{"share_token": token, "is_folder": share.File.IsFolder},
+	}
+	if claims != nil {
+		if uid, err := uuid.Parse(claims.Sub); err == nil {
+			accessEntry.UserID = &uid
+		}
+		accessEntry.UserName = claims.Email
+		accessEntry.UserEmail = claims.Email
+	}
+	LogAudit(h.db, accessEntry)
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"id":          share.ID,
 		"name":        share.File.Name,
@@ -207,6 +228,25 @@ func (h *ShareHandler) DownloadPublicShare(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusNotFound, "File not found")
 		return
 	}
+
+	// Log the download as a share access event.
+	dlClaims := mw.GetClaims(r)
+	dlEntry := AuditEntry{
+		Action:       "share.access",
+		ResourceType: "file",
+		ResourceName: share.File.Name,
+		ResourceID:   share.File.ID.String(),
+		IPAddress:    auditIP(r),
+		Metadata:     models.JSONB{"share_token": token, "type": "download", "is_folder": share.File.IsFolder},
+	}
+	if dlClaims != nil {
+		if uid, err := uuid.Parse(dlClaims.Sub); err == nil {
+			dlEntry.UserID = &uid
+		}
+		dlEntry.UserName = dlClaims.Email
+		dlEntry.UserEmail = dlClaims.Email
+	}
+	LogAudit(h.db, dlEntry)
 
 	fh := &FilesHandler{
 		db:      h.db,
