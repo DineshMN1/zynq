@@ -36,6 +36,7 @@ coverage/
 # ===============================
 .env
 .env.*
+!.env.example
 *.local
 
 # ===============================
@@ -69,6 +70,7 @@ pnpm-debug.log*
 *.key
 *.crt
 cookies.txt
+cloudflared/
 
 # ===============================
 # Next.js / Platform

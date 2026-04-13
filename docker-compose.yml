@@ -69,6 +69,47 @@ services:
     networks:
       - zynqcloud-network
 
+  # ── Cloudflare Tunnel (optional) ─────────────────────────────────────────────
+  # Exposes ZynqCloud on a public domain without opening any inbound ports.
+  # Enable with:  docker compose --profile cloudflare up -d
+  #
+  # Quick setup (token — no credentials file needed):
+  #   1. Cloudflare Zero Trust → Networks → Tunnels → Create tunnel → Docker
+  #   2. Copy the tunnel token shown on screen
+  #   3. Pass it at runtime (never store in .env):
+  #        CLOUDFLARE_TUNNEL_TOKEN=<token> docker compose --profile cloudflare up -d
+  #   4. In the dashboard set the public hostname target to  http://zynqcloud:80
+  #   5. Update CORS_ORIGIN, FRONTEND_URL and COOKIE_DOMAIN to your tunnel domain
+  #
+  # Alternative (credentials file — token never touches Docker env):
+  #   1. Run on the host:
+  #        cloudflared login
+  #        cloudflared tunnel create zynqcloud
+  #        cloudflared tunnel route dns zynqcloud <your-domain>
+  #   2. Copy ~/.cloudflared/<tunnel-id>.json → ./cloudflared/credentials.json
+  #      Copy ~/.cloudflared/cert.pem         → ./cloudflared/cert.pem
+  #   3. Create ./cloudflared/config.yml:
+  #        tunnel: <tunnel-id>
+  #        credentials-file: /etc/cloudflared/credentials.json
+  #        ingress:
+  #          - service: http://zynqcloud:80
+  #   4. Uncomment the volumes block below and remove the environment block
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: zynqcloud-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    # volumes:                                      # ← credentials-file method
+    #   - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - zynqcloud
+    networks:
+      - zynqcloud-network
+    profiles:
+      - cloudflare
+
 volumes:
   postgres_data:
     driver: local

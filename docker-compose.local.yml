@@ -69,6 +69,27 @@ services:
     networks:
       - zynqcloud-localbuild-network
 
+  # ── Cloudflare Tunnel (optional) ─────────────────────────────────────────────
+  # Enable with:
+  #   CLOUDFLARE_TUNNEL_TOKEN=<token> docker compose -f docker-compose.local.yml --profile cloudflare up -d
+  # Public hostname target in CF dashboard: http://zynqcloud:80
+  # See docker-compose.yml for full setup instructions and credentials-file alternative.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: zynqcloud-cloudflared-local
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    # volumes:                                      # ← credentials-file method
+    #   - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - zynqcloud
+    networks:
+      - zynqcloud-localbuild-network
+    profiles:
+      - cloudflare
+
 volumes:
   postgres_localbuild_data:
     driver: local
