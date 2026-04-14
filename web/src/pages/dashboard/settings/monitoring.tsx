@@ -40,15 +40,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { getInitials } from '@/lib/auth';
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
+import { getInitials, formatBytes } from '@/lib/auth';
 
 function parseQuotaInput(value: string): number {
   const match = value.match(/^([\d.]+)\s*(B|KB|MB|GB|TB)?$/i);

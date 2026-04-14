@@ -265,13 +265,33 @@ export function FileCard({
         <div className="absolute top-2 right-8 z-10 h-2 w-2 rounded-full bg-blue-400" />
       )}
 
-      {/* Icon — bounces when drag target */}
+      {/* Thumbnail / icon — bounces when drag target */}
       <motion.div
-        className="mb-2 transition-transform duration-150 group-hover:scale-105"
+        className="mb-2 w-full flex items-center justify-center transition-transform duration-150 group-hover:scale-105"
         animate={isDragTarget ? { y: [0, -4, 0, -4, 0] } : { y: 0 }}
         transition={isDragTarget ? { duration: 0.5, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
       >
-        <FileTypeIcon name={file.name} mimeType={file.mime_type} isFolder={file.is_folder} size={48} />
+        {!file.is_folder && file.mime_type?.startsWith('image/') ? (
+          <div className="w-full h-16 overflow-hidden rounded-md">
+            <img
+              src={fileApi.getDownloadUrl(file.id)}
+              alt={file.name}
+              loading="lazy"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const img = e.currentTarget;
+                img.style.display = 'none';
+                const fallback = img.nextElementSibling as HTMLElement | null;
+                if (fallback) fallback.style.display = 'flex';
+              }}
+            />
+            <div style={{ display: 'none' }} className="w-full h-full items-center justify-center">
+              <FileTypeIcon name={file.name} mimeType={file.mime_type} isFolder={file.is_folder} size={48} />
+            </div>
+          </div>
+        ) : (
+          <FileTypeIcon name={file.name} mimeType={file.mime_type} isFolder={file.is_folder} size={48} />
+        )}
       </motion.div>
 
       {/* File name */}

@@ -72,35 +72,10 @@ import { formatBytes } from '@/lib/auth';
 import { emitStorageRefresh } from '@/lib/storage-events';
 import { useUploadContext } from '@/context/UploadContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { cn } from '@/lib/utils';
-
-
+import { cn, getSafeMimeType } from '@/lib/utils';
 
 // Maximum allowed upload size (15 GB)
 const MAX_FILE_BYTES = 15 * 1024 * 1024 * 1024;
-
-const KNOWN_MIME_PREFIXES = [
-  'image/',
-  'video/',
-  'audio/',
-  'text/',
-  'application/',
-  'font/',
-  'model/',
-  'chemical/',
-  'x-conference/',
-  'message/',
-  'multipart/',
-  'inode/',
-];
-
-function getSafeMimeType(file: File): string {
-  const type = file.type;
-  if (!type) return 'application/octet-stream';
-  if (KNOWN_MIME_PREFIXES.some((prefix) => type.startsWith(prefix)))
-    return type;
-  return 'application/octet-stream';
-}
 
 function getXhrErrorMessage(xhr: XMLHttpRequest): string {
   const status = xhr.status;

@@ -551,6 +551,10 @@ export const fileApi = {
       method: 'DELETE',
     }),
 
+  /** Returns the raw download URL (for use in <img src>, <a href>, etc.) */
+  getDownloadUrl: (id: string): string =>
+    `${getApiBaseUrl()}/files/${id}/download`,
+
   download: (id: string) => {
     // Navigate to the download URL directly so the browser handles
     // streaming, progress, and disk writes natively. Avoids loading

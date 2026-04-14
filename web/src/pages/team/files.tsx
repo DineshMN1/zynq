@@ -56,7 +56,7 @@ import { DropZoneOverlay } from '@/features/file/components/drop-zone-overlay';
 import { FileBreadcrumb } from '@/features/file/components/file-breadcrumb';
 import { formatBytes } from '@/lib/auth';
 import { getInitials } from '@/lib/auth';
-import { cn } from '@/lib/utils';
+import { cn, getSafeMimeType } from '@/lib/utils';
 import { useUploadContext } from '@/context/UploadContext';
 
 const CATEGORY_MAP: Record<string, string> = {
@@ -89,14 +89,6 @@ const CATEGORY_ICONS: Record<string, React.ElementType> = {
 };
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024 * 1024;
-
-function getSafeMimeType(file: File): string {
-  const type = file.type;
-  if (!type) return 'application/octet-stream';
-  const known = ['image/', 'video/', 'audio/', 'text/', 'application/', 'font/'];
-  if (known.some((p) => type.startsWith(p))) return type;
-  return 'application/octet-stream';
-}
 
 export default function TeamFilesPage() {
   const { pathname } = useLocation();
