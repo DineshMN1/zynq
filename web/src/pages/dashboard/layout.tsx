@@ -4,9 +4,7 @@ import { AppSidebar } from '@/components/Sidebar';
 import {
   SidebarProvider,
   SidebarInset,
-  SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { UploadProvider } from '@/context/UploadContext';
@@ -44,8 +42,6 @@ function DashboardHeader() {
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-      <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mr-1 h-4" />
       <span className="text-sm font-medium text-foreground/80">{pageName}</span>
     </header>
   );

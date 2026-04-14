@@ -7,36 +7,175 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
+  useSidebar,
 } from '@/components/ui/sidebar';
-import { Users, Bell, Activity, ArrowLeft, Hammer, ClipboardList } from 'lucide-react';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import {
+  Users,
+  Bell,
+  Activity,
+  ArrowLeft,
+  Hammer,
+  ClipboardList,
+  LogOut,
+  Moon,
+  Sun,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { useTheme } from '@/components/ThemeProvider';
+import { getInitials } from '@/lib/auth';
+import { cn } from '@/lib/utils';
+import { NavItem, SectionLabel, IconAction, RoleBadge, NavTooltip } from '@/components/sidebar-primitives';
 
-const NAV_ITEMS = [
-  { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-  { href: '/admin/monitoring', label: 'Monitoring', icon: Activity },
-  { href: '/admin/audit', label: 'Audit', icon: ClipboardList },
+const ADMIN_NAV = [
+  { href: '/admin/users',         label: 'Users',         icon: Users         },
+  { href: '/admin/notifications', label: 'Notifications', icon: Bell          },
+  { href: '/admin/monitoring',    label: 'Monitoring',    icon: Activity      },
+  { href: '/admin/audit',         label: 'Audit Log',     icon: ClipboardList },
 ];
+
+function AdminSidebarInner({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
+  const { pathname } = useLocation();
+  const { theme, toggleTheme } = useTheme();
+  const { logout } = useAuth();
+  const { state, toggleSidebar } = useSidebar();
+  const collapsed = state === 'collapsed';
+
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
+  return (
+    <UISidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
+
+      {/* ── Header ── */}
+      <SidebarHeader className="border-b border-sidebar-border/60 px-3 py-3">
+        <div className={cn('flex items-center gap-2', collapsed && 'flex-col gap-2')}>
+          <Link
+            to="/admin"
+            className={cn(
+              'flex flex-1 min-w-0 items-center gap-3 rounded-lg px-1 py-1 transition-colors hover:bg-sidebar-accent/40',
+              collapsed && 'justify-center flex-none',
+            )}
+          >
+            <div className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+              <Hammer className="h-4 w-4 text-primary" />
+            </div>
+            {!collapsed && (
+              <span className="text-[13.5px] font-bold tracking-tight text-sidebar-foreground truncate">
+                Admin
+              </span>
+            )}
+          </Link>
+
+          <button
+            onClick={toggleSidebar}
+            className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed
+              ? <PanelLeftOpen className="h-4 w-4" />
+              : <PanelLeftClose className="h-4 w-4" />
+            }
+          </button>
+        </div>
+      </SidebarHeader>
+
+      {/* ── Nav ── */}
+      <SidebarContent className="px-2 py-1 overflow-y-auto">
+        <SectionLabel label="Management" collapsed={collapsed} />
+        <nav className="space-y-0.5">
+          {ADMIN_NAV.map((item) => (
+            <NavItem key={item.href} {...item} active={isActive(item.href)} collapsed={collapsed} />
+          ))}
+        </nav>
+      </SidebarContent>
+
+      {/* ── Footer ── */}
+      <SidebarFooter className="border-t border-sidebar-border/60 p-0">
+
+        {/* Back to home */}
+        <div className="p-2">
+          <NavTooltip label="Back to Home" collapsed={collapsed}>
+            <Link
+              to="/dashboard/files"
+              className={cn(
+                'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] font-medium text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground transition-colors',
+                collapsed && 'justify-center px-2',
+              )}
+            >
+              <ArrowLeft className={cn('shrink-0', collapsed ? 'h-4.5 w-4.5' : 'h-4 w-4')} strokeWidth={1.8} />
+              {!collapsed && <span>Back to Home</span>}
+            </Link>
+          </NavTooltip>
+        </div>
+
+        {/* User row */}
+        <div className={cn(
+          'flex items-center gap-2.5 border-t border-sidebar-border/60 p-3',
+          collapsed && 'flex-col gap-2 items-center',
+        )}>
+          <NavTooltip label={user.name ?? 'Account'} collapsed={collapsed}>
+            <Link to="/dashboard/profile" className="shrink-0">
+              <Avatar className="h-8 w-8 rounded-lg ring-2 ring-sidebar-border hover:ring-primary/40 transition-all">
+                <AvatarImage src={user.avatar ?? undefined} alt={user.name} className="rounded-lg object-cover" />
+                <AvatarFallback className="rounded-lg bg-primary/15 text-primary text-[11px] font-bold">
+                  {getInitials(user.name ?? '')}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
+          </NavTooltip>
+
+          {!collapsed && (
+            <>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="truncate text-[12.5px] font-semibold text-sidebar-foreground leading-tight">
+                    {user.name}
+                  </p>
+                  <RoleBadge role={user.role ?? 'user'} />
+                </div>
+                <p className="truncate text-[11px] text-sidebar-foreground/40 leading-tight mt-0.5" title={user.email}>
+                  {user.email}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <IconAction
+                  icon={theme === 'dark' ? Sun : Moon}
+                  label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                  onClick={toggleTheme}
+                />
+                <IconAction icon={LogOut} label="Sign out" onClick={logout} danger />
+              </div>
+            </>
+          )}
+
+          {collapsed && (
+            <>
+              <IconAction
+                icon={theme === 'dark' ? Sun : Moon}
+                label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                onClick={toggleTheme}
+              />
+              <IconAction icon={LogOut} label="Sign out" onClick={logout} danger />
+            </>
+          )}
+        </div>
+      </SidebarFooter>
+    </UISidebar>
+  );
+}
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
   const { user, loading } = useAuth();
-
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate('/login');
-    } else if (!loading && user && !isAdmin) {
-      navigate('/dashboard/files');
-    }
+    if (!loading && !user) navigate('/login');
+    else if (!loading && user && !isAdmin) navigate('/dashboard/files');
   }, [loading, user, isAdmin, navigate]);
 
   if (loading) {
@@ -47,63 +186,18 @@ export default function AdminLayout() {
     );
   }
 
-  if (!user || !isAdmin) {
-    return null;
-  }
+  if (!user || !isAdmin) return null;
 
   return (
-    <SidebarProvider className="min-h-0! h-screen overflow-hidden">
-      <UISidebar collapsible="none" className="border-r">
-        <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Hammer className="size-4 text-primary" />
-            </div>
-            <span className="font-semibold text-[15px]">Admin</span>
-          </div>
-        </SidebarHeader>
-
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {NAV_ITEMS.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.href}
-                    >
-                      <Link to={item.href}>
-                        <item.icon />
-                        <span>{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-
-        <SidebarFooter className="border-t border-sidebar-border">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link to="/dashboard/files">
-                  <ArrowLeft />
-                  <span>Back to Home</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-      </UISidebar>
-
-      <SidebarInset className="overflow-hidden">
-        <main className="flex-1 overflow-auto h-full">
-          <Outlet />
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <TooltipProvider delayDuration={0}>
+      <SidebarProvider className="min-h-0! h-screen overflow-hidden">
+        <AdminSidebarInner user={user} />
+        <SidebarInset className="overflow-hidden">
+          <main className="flex-1 overflow-auto h-full">
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }
