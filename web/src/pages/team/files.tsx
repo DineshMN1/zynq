@@ -45,7 +45,7 @@ import {
   Code2,
   Loader2,
 } from 'lucide-react';
-import { spaceApi, type FileMetadata, type Space, getApiBaseUrl, ApiError } from '@/lib/api';
+import { spaceApi, type FileMetadata, type Space, getApiBaseUrl, getAuthToken, ApiError } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
 import { FilePreviewDialog } from '@/features/file/components/file-preview-dialog';
@@ -241,6 +241,8 @@ export default function TeamFilesPage() {
           const xhr = new XMLHttpRequest();
           xhr.open('PUT', `${getApiBaseUrl()}/spaces/${spaceId}/files/${created.id}/upload`);
           xhr.withCredentials = true;
+          const token = getAuthToken();
+          if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
           xhr.upload.onprogress = (ev) => {
             if (ev.lengthComputable) {
               const pct = Math.round((ev.loaded / ev.total) * 100);
@@ -498,6 +500,7 @@ export default function TeamFilesPage() {
               <FileCard
                 key={file.id}
                 file={file}
+                spaceId={spaceId!}
                 canWrite={canWrite}
                 onOpen={() => file.is_folder ? handleOpenFolder(file) : setPreviewFile(file)}
                 onDownload={() => handleDownload(file)}
@@ -604,6 +607,7 @@ export default function TeamFilesPage() {
 
 interface FileCardProps {
   file: FileMetadata & { owner?: { id: string; name: string; email: string } };
+  spaceId: string;
   canWrite: boolean;
   onOpen: () => void;
   onDownload: () => void;
@@ -621,6 +625,7 @@ interface FileCardProps {
 
 function FileCard({
   file,
+  spaceId,
   canWrite,
   onOpen,
   onDownload,
@@ -634,6 +639,8 @@ function FileCard({
   onDragLeaveFolder,
   onDropOnFolder,
 }: FileCardProps) {
+  const isImage = !file.is_folder && file.mime_type?.startsWith('image/');
+  const thumbnailUrl = isImage ? spaceApi.downloadFile(spaceId, file.id) : null;
   const [dropSuccess, setDropSuccess] = useState(false);
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -724,12 +731,27 @@ function FileCard({
 
       {/* Thumbnail */}
       <motion.div
-        className="flex items-center justify-center h-24 bg-muted/40 relative z-10"
+        className="flex items-center justify-center h-24 bg-muted/40 relative z-10 overflow-hidden"
         onClick={onOpen}
         animate={isDragTarget ? { y: [0, -4, 0, -4, 0] } : { y: 0 }}
         transition={isDragTarget ? { duration: 0.5, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
       >
-        <FileTypeIcon name={file.name} isFolder={file.is_folder} className="h-10 w-10 opacity-70" />
+        {thumbnailUrl ? (
+          <img
+            src={thumbnailUrl}
+            alt={file.name}
+            loading="lazy"
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              // Fall back to icon if image fails to load
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+              (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.setProperty('display', 'flex');
+            }}
+          />
+        ) : null}
+        <div className={cn('items-center justify-center w-full h-full', thumbnailUrl ? 'hidden' : 'flex')}>
+          <FileTypeIcon name={file.name} isFolder={file.is_folder} className="h-10 w-10 opacity-70" />
+        </div>
       </motion.div>
 
       {/* Info */}
@@ -739,7 +761,7 @@ function FileCard({
         </p>
         <div className="flex items-center justify-between">
           <span className="text-[10.5px] text-muted-foreground">
-            {file.is_folder ? 'Folder' : formatBytes(file.size)}
+            {file.is_folder ? formatBytes(file.folder_size || 0) : formatBytes(file.size)}
           </span>
           {file.owner && (
             <Avatar className="h-4 w-4 shrink-0">

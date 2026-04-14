@@ -4,6 +4,26 @@
  * @module api
  */
 
+// ── Token storage ─────────────────────────────────────────────────────────────
+// We store the JWT in localStorage as a fallback for environments where the
+// HttpOnly cookie is dropped (e.g. plain-HTTP LAN / Tailscale access when
+// COOKIE_SECURE=true). The middleware checks Authorization: Bearer first,
+// then falls back to the cookie, so both paths are always supported.
+
+const TOKEN_KEY = 'zynq_token';
+
+export function saveAuthToken(token: string): void {
+  try { localStorage.setItem(TOKEN_KEY, token); } catch { /* incognito / storage full */ }
+}
+
+export function getAuthToken(): string | null {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
+
+export function clearAuthToken(): void {
+  try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+}
+
 function trimTrailingSlash(value: string): string {
   return value.endsWith('/') ? value.slice(0, -1) : value;
 }
@@ -74,6 +94,8 @@ export interface User {
   storage_used?: number;
   storage_limit?: number;
   created_at?: string;
+  avatar?: string;
+  token?: string; // present only in login/register responses; not stored in state
 }
 
 export interface ShareableUser {
@@ -89,6 +111,7 @@ export interface FileMetadata {
   name: string;
   mime_type: string;
   size: number;
+  folder_size?: number;
   storage_path?: string;
   parent_id?: string | null;
   is_folder: boolean;
@@ -134,6 +157,7 @@ export interface PaginatedResponse<T> {
     total: number;
     page: number;
     limit: number;
+    pages?: number;
   };
 }
 
@@ -272,14 +296,20 @@ async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   let response: Response;
   try {
     response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       credentials: 'include',
     });
   } catch {
@@ -324,10 +354,10 @@ export const authApi = {
       body: JSON.stringify(data),
     }),
 
-  logout: () =>
-    fetchApi<{ success: boolean }>('/auth/logout', {
-      method: 'POST',
-    }),
+  logout: () => {
+    clearAuthToken();
+    return fetchApi<{ success: boolean }>('/auth/logout', { method: 'POST' });
+  },
 
   me: () => fetchApi<User>('/auth/me'),
 
@@ -354,6 +384,15 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  uploadAvatar: (avatar: string) =>
+    fetchApi<User>('/auth/avatar', {
+      method: 'PATCH',
+      body: JSON.stringify({ avatar }),
+    }),
+
+  deleteAvatar: () =>
+    fetchApi<{ message: string }>('/auth/avatar', { method: 'DELETE' }),
 };
 
 /** File API: CRUD, upload, download, share, trash operations */
@@ -393,10 +432,15 @@ export const fileApi = {
     }),
 
   upload: async (fileId: string, file: File): Promise<FileMetadata> => {
+    const token = getAuthToken();
+    const uploadHeaders: Record<string, string> = {
+      'Content-Type': file.type || 'application/octet-stream',
+    };
+    if (token) uploadHeaders['Authorization'] = `Bearer ${token}`;
     const response = await fetch(`${getApiBaseUrl()}/files/${fileId}/upload`, {
       method: 'PUT',
       body: file,
-      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      headers: uploadHeaders,
       credentials: 'include',
     });
 
@@ -408,7 +452,7 @@ export const fileApi = {
   },
 
   checkDuplicate: (fileHash: string, fileName?: string) =>
-    fetchApi<{ isDuplicate: boolean; existingFile?: FileMetadata }>(
+    fetchApi<{ isDuplicate: boolean; existingFile?: FileMetadata; location?: string }>(
       '/files/check-duplicate',
       {
         method: 'POST',
@@ -524,7 +568,11 @@ export const fileApi = {
 
   /** Fetch file content as a blob — only for in-browser previews of small files. */
   downloadBlob: async (id: string) => {
+    const token = getAuthToken();
+    const blobHeaders: Record<string, string> = {};
+    if (token) blobHeaders['Authorization'] = `Bearer ${token}`;
     const response = await fetch(`${getApiBaseUrl()}/files/${id}/download`, {
+      headers: blobHeaders,
       credentials: 'include',
     });
     if (!response.ok) {
@@ -547,7 +595,7 @@ export const fileApi = {
 
 /** Invitation API: create, list, revoke (admin), accept (public) */
 export const inviteApi = {
-  create: (data: { email: string; role: string }) =>
+  create: (data: { email: string; role: string; channel_id?: string | null }) =>
     fetchApi<
       Invitation & { link: string; email_sent: boolean; email_message?: string }
     >('/invites', {
@@ -682,6 +730,79 @@ export const storageApi = {
     }),
 };
 
+// ── Notification channels ─────────────────────────────────────────────────────
+
+export type NotificationChannelType = 'email' | 'teams' | 'resend';
+
+export interface NotificationChannel {
+  id: string;
+  name: string;
+  type: NotificationChannelType;
+  config: Record<string, unknown>;
+  actions: string[];
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const ALL_NOTIFICATION_ACTIONS = [
+  { id: 'file_uploaded',    label: 'File Uploaded',    description: 'Triggered when a file is uploaded' },
+  { id: 'file_shared',      label: 'File Shared',      description: 'Triggered when a file is shared' },
+  { id: 'user_invited',     label: 'User Invited',     description: 'Triggered when an invitation is sent' },
+  { id: 'user_registered',  label: 'User Registered',  description: 'Triggered when a new user registers' },
+  { id: 'storage_warning',  label: 'Storage Warning',  description: 'Triggered when user storage exceeds 75%' },
+] as const;
+
+export interface EmailSourceStatus {
+  source: 'global_smtp' | 'notification_channel' | 'none';
+  label: string;
+  from: string | null;
+  channel_id: string | null;
+  channel_name: string | null;
+}
+
+/** Notification Channels API (admin only) */
+export const notificationChannelApi = {
+  list: () => fetchApi<NotificationChannel[]>('/notifications'),
+  emailSource: () => fetchApi<EmailSourceStatus>('/notifications/email-source'),
+
+  get: (id: string) => fetchApi<NotificationChannel>(`/notifications/${id}`),
+
+  create: (data: {
+    name: string;
+    type: NotificationChannelType;
+    config: Record<string, unknown>;
+    actions: string[];
+    enabled?: boolean;
+  }) =>
+    fetchApi<NotificationChannel>('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (
+    id: string,
+    data: Partial<{
+      name: string;
+      config: Record<string, unknown>;
+      actions: string[];
+      enabled: boolean;
+    }>,
+  ) =>
+    fetchApi<NotificationChannel>(`/notifications/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    fetchApi<{ success: boolean }>(`/notifications/${id}`, { method: 'DELETE' }),
+
+  test: (id: string) =>
+    fetchApi<{ success: boolean; message: string }>(`/notifications/${id}/test`, {
+      method: 'POST',
+    }),
+};
+
 /** Public API: anonymous access to shared files */
 export const publicApi = {
   getShare: async (token: string, password?: string) => {
@@ -797,9 +918,12 @@ export const spaceApi = {
     fileId: string,
     body: ReadableStream | Blob | ArrayBuffer,
   ): Promise<FileMetadata> => {
+    const token = getAuthToken();
+    const spaceUploadHeaders: Record<string, string> = {};
+    if (token) spaceUploadHeaders['Authorization'] = `Bearer ${token}`;
     const response = await fetch(
       `${getApiBaseUrl()}/spaces/${spaceId}/files/${fileId}/upload`,
-      { method: 'PUT', body, credentials: 'include' },
+      { method: 'PUT', body, headers: spaceUploadHeaders, credentials: 'include' },
     );
     if (!response.ok) throw await toApiError(response);
     return response.json() as Promise<FileMetadata>;
@@ -853,4 +977,45 @@ export const systemApi = {
 
   triggerUpdate: (): Promise<{ started: boolean }> =>
     fetchApi<{ started: boolean }>('/system/update', { method: 'POST' }),
+};
+
+// ── Audit Logs ──────────────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  id: string;
+  created_at: string;
+  user_id: string | null;
+  user_name: string;
+  user_email: string;
+  action: string;
+  resource_type: string;
+  resource_name: string;
+  resource_id: string;
+  ip_address: string;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface AuditListParams {
+  page?: number;
+  limit?: number;
+  action?: string;
+  user_id?: string;
+  from?: string;
+  to?: string;
+  search?: string;
+}
+
+export const auditApi = {
+  list: (params?: AuditListParams): Promise<PaginatedResponse<AuditLogEntry>> => {
+    const q = new URLSearchParams();
+    if (params?.page)   q.set('page',    String(params.page));
+    if (params?.limit)  q.set('limit',   String(params.limit));
+    if (params?.action) q.set('action',  params.action);
+    if (params?.user_id)q.set('user_id', params.user_id);
+    if (params?.from)   q.set('from',    params.from);
+    if (params?.to)     q.set('to',      params.to);
+    if (params?.search) q.set('search',  params.search);
+    const qs = q.toString();
+    return fetchApi<PaginatedResponse<AuditLogEntry>>(`/admin/audit${qs ? `?${qs}` : ''}`);
+  },
 };

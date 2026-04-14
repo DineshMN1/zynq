@@ -60,6 +60,8 @@ function UploadRow({
     if (item.status === 'checking') return 'Checking for duplicates…';
     if (item.status === 'queued') return 'Queued';
     if (item.status === 'uploading') {
+      // All bytes sent but waiting for the server to finish writing/encrypting
+      if (item.progress >= 100) return 'Finalizing…';
       const pct = `${item.progress}%`;
       const bytes =
         item.loadedBytes !== undefined && item.totalBytes !== undefined
@@ -241,6 +243,19 @@ export function UploadManagerPopup() {
   const hasActive = activeUploads.length > 0;
   const hasPaused = uploadQueue.some((u) => u.status === 'paused');
 
+  // "Finalizing" = all in-progress uploads have sent bytes (progress >= 100)
+  // but the server hasn't responded yet — no queued/checking/paused items remain.
+  const isAllFinalizing =
+    hasActive &&
+    !hasPaused &&
+    uploadQueue.every(
+      (u) =>
+        (u.status === 'uploading' && u.progress >= 100) ||
+        u.status === 'completed' ||
+        u.status === 'duplicate' ||
+        u.status === 'error',
+    );
+
   const aggregateProgress =
     activeUploads.length > 0
       ? Math.round(
@@ -255,16 +270,26 @@ export function UploadManagerPopup() {
     if (uploadQueue.length > 0) setIsVisible(true);
   }, [uploadQueue.length]);
 
-  // Auto-dismiss 2s after all done (don't dismiss if paused uploads exist)
+  // Auto-dismiss 5s after entering finalizing state (all bytes sent, server processing)
   useEffect(() => {
-    if (!hasActive && !hasPaused && uploadQueue.length > 0) {
+    if (!isAllFinalizing) return;
+    const t = setTimeout(() => {
+      dismissCompleted();
+      setIsVisible(false);
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [isAllFinalizing, dismissCompleted]);
+
+  // Auto-dismiss 3s after all uploads finish or queue is empty
+  useEffect(() => {
+    if (!hasActive && !hasPaused) {
       const t = setTimeout(() => {
         dismissCompleted();
         setIsVisible(false);
-      }, 2000);
+      }, 3000);
       return () => clearTimeout(t);
     }
-  }, [hasActive, hasPaused, uploadQueue, dismissCompleted]);
+  }, [hasActive, hasPaused, dismissCompleted]);
 
   const handleClose = () => {
     cancelAll();
@@ -289,7 +314,7 @@ export function UploadManagerPopup() {
               exit={{ y: 16, opacity: 0, scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 340, damping: 28 }}
               className={cn(
-                'fixed right-4 z-50 flex flex-col',
+                'fixed right-4 z-40 flex flex-col',
                 'bg-card border border-border shadow-2xl rounded-2xl overflow-hidden',
                 widthClass,
                 bottomClass,

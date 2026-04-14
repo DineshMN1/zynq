@@ -3,3 +3,4 @@
 
 # Go source files always use LF (prevents gofmt failures on Windows CI)
 *.go text eol=lf
+*.sh text eol=lf

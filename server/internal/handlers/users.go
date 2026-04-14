@@ -35,7 +35,8 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	query := h.db.Model(&models.User{})
 	if search != "" {
-		query = query.Where("name ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
+		like := likeSafe(search)
+		query = query.Where("name ILIKE ? ESCAPE '\\' OR email ILIKE ? ESCAPE '\\'", like, like)
 	}
 
 	var total int64
@@ -107,6 +108,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updates := map[string]interface{}{}
+	oldRole := user.Role
 	if req.Role != nil {
 		updates["role"] = *req.Role
 		// Promoting to admin/owner grants unlimited storage unless caller explicitly sets a limit
@@ -123,6 +125,39 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if len(updates) > 0 {
 		h.db.Model(&user).Updates(updates)
+	}
+
+	claims := mw.GetClaims(r)
+	callerID, _ := uuid.Parse(claims.Sub)
+	var caller models.User
+	if req.Role != nil && *req.Role != oldRole || req.StorageLimit != nil {
+		h.db.Select("name, email").First(&caller, "id = ?", callerID)
+	}
+	if req.Role != nil && *req.Role != oldRole {
+		LogAudit(h.db, AuditEntry{
+			UserID:       &callerID,
+			UserName:     caller.Name,
+			UserEmail:    caller.Email,
+			Action:       "user.role_change",
+			ResourceType: "user",
+			ResourceName: user.Name,
+			ResourceID:   user.ID.String(),
+			IPAddress:    auditIP(r),
+			Metadata:     models.JSONB{"old_role": oldRole, "new_role": *req.Role},
+		})
+	}
+	if req.StorageLimit != nil {
+		LogAudit(h.db, AuditEntry{
+			UserID:       &callerID,
+			UserName:     caller.Name,
+			UserEmail:    caller.Email,
+			Action:       "user.quota_change",
+			ResourceType: "user",
+			ResourceName: user.Name,
+			ResourceID:   user.ID.String(),
+			IPAddress:    auditIP(r),
+			Metadata:     models.JSONB{"storage_limit": *req.StorageLimit},
+		})
 	}
 
 	writeJSON(w, http.StatusOK, user)
@@ -158,6 +193,20 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	h.db.Where("owner_id = ?", userID).Delete(&models.File{})
 	h.db.Delete(&user)
 
+	var caller models.User
+	h.db.Select("name, email").First(&caller, "id = ?", callerID)
+	LogAudit(h.db, AuditEntry{
+		UserID:       &callerID,
+		UserName:     caller.Name,
+		UserEmail:    caller.Email,
+		Action:       "user.delete",
+		ResourceType: "user",
+		ResourceName: user.Name,
+		ResourceID:   userID.String(),
+		IPAddress:    auditIP(r),
+		Metadata:     models.JSONB{"deleted_email": user.Email},
+	})
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "User deleted"})
 }
 
@@ -170,7 +219,8 @@ func (h *UsersHandler) ListShareable(w http.ResponseWriter, r *http.Request) {
 
 	query := h.db.Model(&models.User{}).Where("id != ?", callerID)
 	if q != "" {
-		query = query.Where("name ILIKE ? OR email ILIKE ?", "%"+q+"%", "%"+q+"%")
+		like := likeSafe(q)
+		query = query.Where("name ILIKE ? ESCAPE '\\' OR email ILIKE ? ESCAPE '\\'", like, like)
 	}
 
 	var users []models.User

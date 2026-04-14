@@ -49,6 +49,7 @@ import {
   fileApi,
   userApi,
   getApiBaseUrl,
+  getAuthToken,
   type FileMetadata,
   type ShareableUser,
   ApiError,
@@ -877,10 +878,9 @@ export default function FilesPage() {
 
       xhr.open('PUT', fullUrl);
       xhr.withCredentials = true;
-      xhr.setRequestHeader(
-        'Content-Type',
-        contentType || 'application/octet-stream',
-      );
+      xhr.setRequestHeader('Content-Type', contentType || 'application/octet-stream');
+      const token = getAuthToken();
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       // Register cancel and pause handlers
       updateUpload(progressId, {
         cancel: () => {
@@ -920,6 +920,18 @@ export default function FilesPage() {
       skipDuplicateCheck: skipDuplicateCheck || undefined,
     });
 
+    // Optimistically insert the file into the grid immediately after the DB
+    // record is created, so it appears during the upload rather than only
+    // after the server responds (which can lag 5-30s for large files).
+    const createdParent = created.parent_id ?? null;
+    const currentFolder = currentFolderId ?? null;
+    if (createdParent === currentFolder) {
+      setFiles((prev) =>
+        prev.some((f) => f.id === created.id) ? prev : [...prev, created],
+      );
+      setTotal((prev) => prev + 1);
+    }
+
     if (created.uploadUrl) {
       await uploadFileWithProgress(
         created.uploadUrl,
@@ -956,7 +968,7 @@ export default function FilesPage() {
           return;
         }
         try {
-          const { isDuplicate, existingFile } = await fileApi.checkDuplicate(
+          const { isDuplicate, existingFile, location } = await fileApi.checkDuplicate(
             fileHash,
             entry.file.name,
           );
@@ -965,6 +977,7 @@ export default function FilesPage() {
               file: entry.file,
               hash: fileHash,
               existingFile,
+              location,
               parentId: entry.parentId,
             });
           } else {
@@ -1096,13 +1109,13 @@ export default function FilesPage() {
 
       if (fileHash) {
         // Check for duplicates before uploading (only for documents and images)
-        const { isDuplicate, existingFile } = await fileApi.checkDuplicate(
+        const { isDuplicate, existingFile, location } = await fileApi.checkDuplicate(
           fileHash,
           file.name,
         );
 
         if (isDuplicate && existingFile) {
-          setPendingDuplicates([{ file, hash: fileHash, existingFile }]);
+          setPendingDuplicates([{ file, hash: fileHash, existingFile, location }]);
           setShowDuplicateDialog(true);
           removeUploadProgress(progressId);
           e.target.value = '';
@@ -1771,6 +1784,8 @@ export default function FilesPage() {
                 onChange={handleFolderInputChange}
                 className="hidden"
                 multiple
+                // @ts-expect-error — webkitdirectory is non-standard but widely supported
+                webkitdirectory=""
               />
             </div>
           </div>
@@ -1881,9 +1896,14 @@ export default function FilesPage() {
             </div>
             <span>
               {formatBytes(
-                files
-                  .filter((f) => !f.is_folder)
-                  .reduce((sum, f) => sum + Number(f.size || 0), 0),
+                files.reduce(
+                  (sum, f) =>
+                    sum +
+                    (f.is_folder
+                      ? Number(f.folder_size || 0)
+                      : Number(f.size || 0)),
+                  0,
+                ),
               )}
             </span>
           </div>

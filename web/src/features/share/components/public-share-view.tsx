@@ -15,6 +15,7 @@ interface SharedFile {
   name: string;
   mimeType: string;
   size: number;
+  folderSize?: number;
   owner: string;
   ownerId: string;
   createdAt: string;
@@ -48,9 +49,9 @@ export function PublicShareView({ token }: PublicShareViewProps) {
       setFile(data);
     } catch (err) {
       setFile(null);
-      if (err instanceof ApiError && err.statusCode === 403) {
+      if (err instanceof ApiError && (err.statusCode === 401 || err.statusCode === 403)) {
         setNeedsPassword(true);
-        setError('This share is password protected.');
+        setError(sharePassword ? 'Incorrect password. Please try again.' : 'This share is password protected.');
       } else if (err instanceof ApiError && err.statusCode === 429) {
         setNeedsPassword(true);
         setError(
@@ -86,7 +87,7 @@ export function PublicShareView({ token }: PublicShareViewProps) {
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      if (err instanceof ApiError && err.statusCode === 403) {
+      if (err instanceof ApiError && (err.statusCode === 401 || err.statusCode === 403)) {
         setNeedsPassword(true);
         setError('Password required to download this file.');
       } else if (err instanceof ApiError && err.statusCode === 429) {
@@ -165,7 +166,7 @@ export function PublicShareView({ token }: PublicShareViewProps) {
                 </p>
               </div>
               <p className="text-sm text-muted-foreground">
-                {formatBytes(file.size)}
+                {formatBytes(file.isFolder ? (file.folderSize || 0) : file.size)}
               </p>
               {file.owner && (
                 <p className="text-xs text-muted-foreground">
@@ -198,7 +199,11 @@ export function PublicShareView({ token }: PublicShareViewProps) {
               ) : (
                 <Download className="mr-2 h-4 w-4" />
               )}
-              {downloading ? 'Downloading...' : 'Download File'}
+              {downloading
+                ? 'Downloading...'
+                : file?.isFolder
+                  ? 'Download as ZIP'
+                  : 'Download File'}
             </Button>
           </>
         )}

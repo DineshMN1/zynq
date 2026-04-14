@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -123,14 +123,14 @@ export default function ForgotPasswordPage() {
                 </div>
               </CardContent>
 
-              <CardFooter className="flex flex-col gap-4">
-                <Button type="submit" className="w-full" disabled={loading}>
+              <CardFooter className="flex flex-col gap-3 pt-6 pb-6">
+                <Button type="submit" className="w-full h-10" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Send Reset Link
                 </Button>
 
                 <Link to="/login" className="w-full">
-                  <Button variant="ghost" className="w-full gap-2">
+                  <Button variant="ghost" className="w-full gap-2 text-muted-foreground hover:text-foreground">
                     <ArrowLeft className="h-4 w-4" />
                     Back to Login
                   </Button>

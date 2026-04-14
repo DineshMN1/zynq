@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -73,7 +74,7 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if search != "" {
-		query = query.Where("name ILIKE ?", "%"+search+"%")
+		query = query.Where("name ILIKE ? ESCAPE '\\'", likeSafe(search))
 	}
 
 	var total int64
@@ -82,7 +83,7 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 	var files []models.File
 	query.Order("is_folder DESC, name ASC").Offset(offset).Limit(limit).Find(&files)
 
-	// Compute share counts
+	// Compute share counts and folder sizes
 	for i := range files {
 		var shareCount, publicCount, privateCount int64
 		h.db.Model(&models.Share{}).Where("file_id = ?", files[i].ID).Count(&shareCount)
@@ -91,6 +92,22 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 		files[i].ShareCount = int(shareCount)
 		files[i].PublicShareCount = int(publicCount)
 		files[i].PrivateShareCount = int(privateCount)
+
+		if files[i].IsFolder {
+			var folderSize int64
+			h.db.Raw(`
+				WITH RECURSIVE descendants AS (
+					SELECT id, is_folder, size FROM files
+					WHERE parent_id = ? AND deleted_at IS NULL
+					UNION ALL
+					SELECT f.id, f.is_folder, f.size FROM files f
+					INNER JOIN descendants d ON f.parent_id = d.id
+					WHERE f.deleted_at IS NULL
+				)
+				SELECT COALESCE(SUM(size), 0) FROM descendants WHERE is_folder = false
+			`, files[i].ID).Scan(&folderSize)
+			files[i].FolderSize = folderSize
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -156,6 +173,21 @@ func (h *FilesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Create(file).Error; err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create file")
 		return
+	}
+
+	if file.IsFolder {
+		var auditUser models.User
+		h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+		LogAudit(h.db, AuditEntry{
+			UserID:       &userID,
+			UserName:     auditUser.Name,
+			UserEmail:    auditUser.Email,
+			Action:       "folder.create",
+			ResourceType: "folder",
+			ResourceName: file.Name,
+			ResourceID:   file.ID.String(),
+			IPAddress:    auditIP(r),
+		})
 	}
 
 	// Return uploadUrl so the frontend knows to PUT the file content.
@@ -394,7 +426,25 @@ func (h *FilesHandler) RevokeShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch file name for audit before deleting
+	var sharedFile models.File
+	h.db.Select("name").First(&sharedFile, "id = ?", share.FileID)
+
 	h.db.Delete(&share)
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       "share.revoke",
+		ResourceType: "file",
+		ResourceName: sharedFile.Name,
+		ResourceID:   share.FileID.String(),
+		IPAddress:    auditIP(r),
+	})
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Share revoked"})
 }
 
@@ -461,9 +511,36 @@ func (h *FilesHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
+
+	// Fetch names before soft-deleting for audit
+	var filesToDelete []models.File
+	h.db.Select("id, name, is_folder").
+		Where("id IN ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", req.IDs, userID).
+		Find(&filesToDelete)
+
 	h.db.Model(&models.File{}).
 		Where("id IN ? AND owner_id = ? AND deleted_at IS NULL AND space_id IS NULL", req.IDs, userID).
 		Update("deleted_at", now)
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	for _, f := range filesToDelete {
+		fID := f.ID
+		resourceType := "file"
+		if f.IsFolder {
+			resourceType = "folder"
+		}
+		LogAudit(h.db, AuditEntry{
+			UserID:       &userID,
+			UserName:     auditUser.Name,
+			UserEmail:    auditUser.Email,
+			Action:       "file.delete",
+			ResourceType: resourceType,
+			ResourceName: f.Name,
+			ResourceID:   fID.String(),
+			IPAddress:    auditIP(r),
+		})
+	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Files moved to trash"})
 }
@@ -496,7 +573,10 @@ func (h *FilesHandler) CheckDuplicate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"isDuplicate": true, "existingFile": file})
+	// Resolve the human-readable location (full ancestor path).
+	location := resolveFilePath(h.db, file.ParentID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"isDuplicate": true, "existingFile": file, "location": location})
 }
 
 // GET /api/v1/files/{id}
@@ -582,6 +662,11 @@ func (h *FilesHandler) Rename(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "Target folder not found")
 			return
 		}
+		// Prevent moving a folder into one of its own descendants (cycle).
+		if file.IsFolder && isDescendantOf(h.db, *req.ParentID, fileID) {
+			writeError(w, http.StatusBadRequest, "Cannot move a folder into its own subfolder")
+			return
+		}
 		updates["parent_id"] = *req.ParentID
 	}
 
@@ -596,6 +681,29 @@ func (h *FilesHandler) Rename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.db.Where("id = ?", fileID).First(&file)
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	isMoveOp := req.MoveToRoot || req.ParentID != nil
+	action := "file.rename"
+	if isMoveOp {
+		action = "file.move"
+	}
+	resourceType := "file"
+	if file.IsFolder {
+		resourceType = "folder"
+	}
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       action,
+		ResourceType: resourceType,
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+	})
+
 	writeJSON(w, http.StatusOK, file)
 }
 
@@ -682,7 +790,7 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mimeType == "application/octet-stream" {
-		if tf, err := os.Open(tmpPath); err == nil {
+		if tf, err := os.Open(tmpPath); err == nil { // #nosec G304 -- tmpPath from os.CreateTemp
 			sniff := make([]byte, 512)
 			n, _ := tf.Read(sniff)
 			tf.Close()
@@ -742,6 +850,17 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if dedupDone {
+			LogAudit(h.db, AuditEntry{
+				UserID:       &userID,
+				UserName:     user.Name,
+				UserEmail:    user.Email,
+				Action:       "file.upload",
+				ResourceType: "file",
+				ResourceName: file.Name,
+				ResourceID:   file.ID.String(),
+				IPAddress:    auditIP(r),
+				Metadata:     models.JSONB{"size": plainSize, "mime_type": mimeType, "dedup": true},
+			})
 			writeJSON(w, http.StatusOK, file)
 			return
 		}
@@ -757,7 +876,7 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	// ── Stream-encrypt temp file to storage ───────────────────────────────────
 	storagePath := fmt.Sprintf("%s/%s.enc", userID.String(), fileID.String())
 
-	plainReader, err := os.Open(tmpPath)
+	plainReader, err := os.Open(tmpPath) // #nosec G304 -- tmpPath from os.CreateTemp
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to open temp file")
 		return
@@ -765,19 +884,32 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	defer plainReader.Close()
 
 	// Write encrypted output via a pipe so we don't buffer the whole ciphertext.
+	// encErrCh carries the goroutine's result so the main goroutine can inspect it
+	// after Write() returns (Write blocks until the pipe is closed).
 	pr, pw := io.Pipe()
-	var encErr error
+	encErrCh := make(chan error, 1)
 	go func() {
-		_, encErr = crypto.EncryptStream(plainReader, pw, dek, iv)
-		if encErr != nil {
-			pw.CloseWithError(encErr)
+		_, err := crypto.EncryptStream(plainReader, pw, dek, iv)
+		if err != nil {
+			pw.CloseWithError(err)
 		} else {
 			pw.Close()
 		}
+		encErrCh <- err
 	}()
 
-	if _, err := h.backend.Write(storagePath, pr); err != nil {
-		slog.Error("failed to write encrypted file", "error", err, "path", storagePath)
+	_, writeErr := h.backend.Write(storagePath, pr)
+	encErr := <-encErrCh // always wait for the goroutine to finish
+
+	if encErr != nil {
+		slog.Error("failed to encrypt file", "error", encErr, "path", storagePath)
+		// Clean up the partially-written blob.
+		_ = h.backend.Delete(storagePath)
+		writeError(w, http.StatusInternalServerError, "Failed to encrypt file")
+		return
+	}
+	if writeErr != nil {
+		slog.Error("failed to write encrypted file", "error", writeErr, "path", storagePath)
 		writeError(w, http.StatusInternalServerError, "Failed to store file")
 		return
 	}
@@ -803,6 +935,22 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	h.db.Model(&models.User{}).Where("id = ?", userID).
 		UpdateColumn("storage_used", gorm.Expr("storage_used + ?", plainSize))
 
+	// Fire storage_warning notification when upload crosses the 75% threshold.
+	if user.StorageLimit > 0 {
+		prevPct := float64(user.StorageUsed) / float64(user.StorageLimit) * 100
+		newPct := float64(user.StorageUsed+plainSize) / float64(user.StorageLimit) * 100
+		if prevPct < 75 && newPct >= 75 {
+			go SendNotification(h.db, h.cfg, "storage_warning",
+				"Storage Warning — 75% Used",
+				fmt.Sprintf("User %s has used %.0f%% of their storage quota (%s / %s).",
+					user.Email, newPct,
+					formatStorageBytes(user.StorageUsed+plainSize),
+					formatStorageBytes(user.StorageLimit),
+				),
+			)
+		}
+	}
+
 	file.Size = plainSize
 	mimeStr := mimeType
 	file.MimeType = &mimeStr
@@ -810,6 +958,18 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if computedHash != "" {
 		file.FileHash = &computedHash
 	}
+
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     user.Name,
+		UserEmail:    user.Email,
+		Action:       "file.upload",
+		ResourceType: "file",
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+		Metadata:     models.JSONB{"size": plainSize, "mime_type": mimeType},
+	})
 
 	writeJSON(w, http.StatusOK, file)
 }
@@ -845,7 +1005,7 @@ func (h *FilesHandler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if file.IsFolder {
-		writeError(w, http.StatusBadRequest, "Cannot download a folder")
+		h.streamFolderAsZip(w, r, &file)
 		return
 	}
 
@@ -908,6 +1068,90 @@ func (h *FilesHandler) streamDecryptedFile(w http.ResponseWriter, r *http.Reques
 	w.Write(plaintext)
 }
 
+// streamFolderAsZip recursively collects all files in a folder, decrypts them,
+// and streams the result as a ZIP archive.
+func (h *FilesHandler) streamFolderAsZip(w http.ResponseWriter, r *http.Request, folder *models.File) {
+	// Recursively collect all non-folder files under this folder.
+	type entry struct {
+		file models.File
+		path string // relative path inside the ZIP
+	}
+	var entries []entry
+
+	var collect func(parentID uuid.UUID, prefix string)
+	collect = func(parentID uuid.UUID, prefix string) {
+		var children []models.File
+		h.db.Where("parent_id = ? AND deleted_at IS NULL", parentID).
+			Order("is_folder DESC, name ASC").Find(&children)
+		for _, child := range children {
+			childPath := prefix + child.Name
+			if child.IsFolder {
+				collect(child.ID, childPath+"/")
+			} else if child.StoragePath != nil {
+				entries = append(entries, entry{file: child, path: childPath})
+			}
+		}
+	}
+	collect(folder.ID, "")
+
+	if len(entries) == 0 {
+		writeError(w, http.StatusNotFound, "Folder is empty")
+		return
+	}
+
+	zipName := folder.Name + ".zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, zipName))
+	w.Header().Set("Cache-Control", "private, no-cache")
+	w.WriteHeader(http.StatusOK)
+
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	for _, e := range entries {
+		rc, _, err := h.backend.Read(*e.file.StoragePath)
+		if err != nil {
+			slog.Error("zip: failed to read file", "file_id", e.file.ID, "err", err)
+			continue
+		}
+
+		dek, err := h.crypto.DecryptFileKey(e.file.EncryptedDEK)
+		if err != nil {
+			rc.Close()
+			slog.Error("zip: failed to decrypt key", "file_id", e.file.ID, "err", err)
+			continue
+		}
+
+		zf, err := zw.Create(e.path)
+		if err != nil {
+			rc.Close()
+			slog.Error("zip: failed to create entry", "path", e.path, "err", err)
+			continue
+		}
+
+		if e.file.EncryptionAlgo == "AES-256-GCM-STREAM" {
+			if err := crypto.DecryptStream(rc, zf, dek, e.file.EncryptionIV); err != nil {
+				slog.Error("zip: stream decrypt failed", "file_id", e.file.ID, "err", err)
+			}
+		} else {
+			ciphertext, err := io.ReadAll(rc)
+			if err == nil {
+				plaintext, err := crypto.DecryptBuffer(ciphertext, dek, e.file.EncryptionIV)
+				if err == nil {
+					if _, err := zf.Write(plaintext); err != nil {
+						slog.Error("zip: write failed", "file_id", e.file.ID, "err", err)
+					}
+				} else {
+					slog.Error("zip: buffer decrypt failed", "file_id", e.file.ID, "err", err)
+				}
+			} else {
+				slog.Error("zip: read failed", "file_id", e.file.ID, "err", err)
+			}
+		}
+		rc.Close()
+	}
+}
+
 // DELETE /api/v1/files/{id}
 func (h *FilesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	claims := mw.GetClaims(r)
@@ -928,6 +1172,23 @@ func (h *FilesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	h.db.Model(&file).Update("deleted_at", now)
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	resourceType := "file"
+	if file.IsFolder {
+		resourceType = "folder"
+	}
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       "file.delete",
+		ResourceType: resourceType,
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "File moved to trash"})
 }
@@ -951,6 +1212,19 @@ func (h *FilesHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.db.Model(&file).Update("deleted_at", nil)
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       "file.restore",
+		ResourceType: "file",
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "File restored"})
 }
@@ -1083,5 +1357,64 @@ func (h *FilesHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
 	if req.IsPublic && share.ShareToken != nil {
 		resp.PublicLink = h.cfg.FrontendURL + "/share/" + *share.ShareToken
 	}
+
+	var auditUser models.User
+	h.db.Select("name, email").First(&auditUser, "id = ?", userID)
+	shareType := "private"
+	if req.IsPublic {
+		shareType = "public"
+	}
+	LogAudit(h.db, AuditEntry{
+		UserID:       &userID,
+		UserName:     auditUser.Name,
+		UserEmail:    auditUser.Email,
+		Action:       "share.create",
+		ResourceType: "file",
+		ResourceName: file.Name,
+		ResourceID:   file.ID.String(),
+		IPAddress:    auditIP(r),
+		Metadata:     models.JSONB{"share_type": shareType, "permission": req.Permission},
+	})
+
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// resolveFilePath walks parentID up the folder tree and returns a slash-joined
+// path string (e.g. "Home / Notes / Work"). Returns "Home" when parentID is nil.
+// isDescendantOf returns true when candidateID is equal to ancestorID or is
+// nested inside it.  It walks up the parent chain so it detects moves that
+// would create a cycle (e.g. moving a folder into one of its own sub-folders).
+func isDescendantOf(db *gorm.DB, candidateID, ancestorID uuid.UUID) bool {
+	id := &candidateID
+	for id != nil {
+		if *id == ancestorID {
+			return true
+		}
+		var f models.File
+		if err := db.Select("id, parent_id").First(&f, "id = ?", id).Error; err != nil {
+			break
+		}
+		id = f.ParentID
+	}
+	return false
+}
+
+func resolveFilePath(db *gorm.DB, parentID *uuid.UUID) string {
+	if parentID == nil {
+		return "Home"
+	}
+	var parts []string
+	id := parentID
+	for id != nil {
+		var folder models.File
+		if err := db.Select("id, name, parent_id").First(&folder, "id = ?", id).Error; err != nil {
+			break
+		}
+		parts = append([]string{folder.Name}, parts...)
+		id = folder.ParentID
+	}
+	if len(parts) == 0 {
+		return "Home"
+	}
+	return "Home / " + strings.Join(parts, " / ")
 }

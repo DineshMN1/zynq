@@ -4,10 +4,12 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/smtp"
+	"strings"
 	"time"
 
 	"github.com/zynqcloud/api/internal/config"
@@ -27,7 +29,9 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 
 func readJSON(r *http.Request, v interface{}) error {
-	return json.NewDecoder(r.Body).Decode(v)
+	// Limit request bodies to 1 MB to prevent memory exhaustion attacks.
+	limited := io.LimitReader(r.Body, 1<<20)
+	return json.NewDecoder(limited).Decode(v)
 }
 
 // dialSMTP connects to the SMTP server. When SMTPSecure is true it
@@ -94,6 +98,29 @@ func smtpSend(cfg *config.Config, from string, to []string, msg []byte) error {
 		return fmt.Errorf("close data: %w", err)
 	}
 	return c.Quit()
+}
+
+// formatStorageBytes formats a byte count as a human-readable string (e.g. "1.5 GB").
+func formatStorageBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// likeSafe escapes PostgreSQL LIKE/ILIKE wildcard characters in user-supplied
+// search strings so that '%', '_', and '\' are treated as literals.
+func likeSafe(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return "%" + s + "%"
 }
 
 // sendEmail sends a plain-text email via the configured SMTP server.

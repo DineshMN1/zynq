@@ -46,7 +46,8 @@ type User struct {
 	PasswordHash string    `gorm:"column:password_hash;not null" json:"-"`
 	Role         string    `gorm:"default:'user'" json:"role"`
 	StorageUsed  int64     `gorm:"column:storage_used;default:0" json:"storage_used"`
-	StorageLimit int64     `gorm:"column:storage_limit;default:10737418240" json:"storage_limit"`
+	StorageLimit int64     `gorm:"column:storage_limit;default:0" json:"storage_limit"`
+	Avatar       *string   `gorm:"column:avatar" json:"avatar,omitempty"`
 }
 
 func (User) TableName() string { return "users" }
@@ -70,9 +71,10 @@ type File struct {
 	EncryptionAlgo string     `gorm:"column:encryption_algo;default:'AES-256-GCM'" json:"encryption_algo,omitempty"`
 	DeletedAt      *time.Time `gorm:"column:deleted_at" json:"deleted_at,omitempty"`
 	// computed fields (not in DB)
-	ShareCount        int `gorm:"-" json:"shareCount,omitempty"`
-	PublicShareCount  int `gorm:"-" json:"publicShareCount,omitempty"`
-	PrivateShareCount int `gorm:"-" json:"privateShareCount,omitempty"`
+	FolderSize        int64 `gorm:"-" json:"folder_size"`
+	ShareCount        int   `gorm:"-" json:"shareCount,omitempty"`
+	PublicShareCount  int   `gorm:"-" json:"publicShareCount,omitempty"`
+	PrivateShareCount int   `gorm:"-" json:"privateShareCount,omitempty"`
 }
 
 func (File) TableName() string { return "files" }
@@ -196,3 +198,62 @@ type SpaceActivity struct {
 }
 
 func (SpaceActivity) TableName() string { return "space_activity" }
+
+// StringArray is a JSON-backed []string for PostgreSQL text columns.
+type StringArray []string
+
+func (s StringArray) Value() (driver.Value, error) {
+	if s == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(s)
+	return string(b), err
+}
+
+func (s *StringArray) Scan(value interface{}) error {
+	if value == nil {
+		*s = StringArray{}
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case string:
+		bytes = []byte(v)
+	case []byte:
+		bytes = v
+	default:
+		return fmt.Errorf("cannot scan type %T into StringArray", value)
+	}
+	return json.Unmarshal(bytes, s)
+}
+
+// NotificationChannel stores a configured notification provider.
+type NotificationChannel struct {
+	ID        uuid.UUID   `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	CreatedAt time.Time   `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time   `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	Name      string      `gorm:"not null" json:"name"`
+	Type      string      `gorm:"not null" json:"type"` // email | teams | resend
+	Config    JSONB       `gorm:"type:jsonb" json:"config"`
+	Actions   StringArray `gorm:"type:text" json:"actions"`
+	Enabled   bool        `gorm:"default:true" json:"enabled"`
+}
+
+func (NotificationChannel) TableName() string { return "notification_channels" }
+
+// AuditLog records a significant action performed within the system.
+type AuditLog struct {
+	ID           uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	CreatedAt    time.Time  `gorm:"column:created_at;autoCreateTime;index" json:"created_at"`
+	UserID       *uuid.UUID `gorm:"column:user_id;index" json:"user_id,omitempty"`
+	UserName     string     `gorm:"column:user_name" json:"user_name"`
+	UserEmail    string     `gorm:"column:user_email" json:"user_email"`
+	Action       string     `gorm:"column:action;not null;index" json:"action"`
+	ResourceType string     `gorm:"column:resource_type" json:"resource_type"`
+	ResourceName string     `gorm:"column:resource_name" json:"resource_name"`
+	ResourceID   string     `gorm:"column:resource_id" json:"resource_id"`
+	IPAddress    string     `gorm:"column:ip_address" json:"ip_address"`
+	Metadata     JSONB      `gorm:"column:metadata;type:jsonb" json:"metadata,omitempty"`
+}
+
+func (AuditLog) TableName() string { return "audit_logs" }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -42,8 +43,8 @@ func (h *AuthHandler) generateToken(user *models.User) (string, error) {
 }
 
 func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, tokenStr string) {
-	secure := h.cfg.NodeEnv == "production"
-	cookie := &http.Cookie{
+	secure := h.cfg.CookieSecure
+	cookie := &http.Cookie{ // #nosec G124 -- Secure flag controlled by COOKIE_SECURE env var
 		Name:     "jid",
 		Value:    tokenStr,
 		HttpOnly: true,
@@ -59,11 +60,11 @@ func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, tokenStr string) {
 }
 
 func (h *AuthHandler) clearAuthCookie(w http.ResponseWriter) {
-	cookie := &http.Cookie{
+	cookie := &http.Cookie{ // #nosec G124 -- Secure flag controlled by COOKIE_SECURE env var
 		Name:     "jid",
 		Value:    "",
 		HttpOnly: true,
-		Secure:   h.cfg.NodeEnv == "production",
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 		Path:     "/",
@@ -174,6 +175,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// GORM skips zero int64 values even with Select(), so explicitly set storage_limit=0
+	// for admin/owner via a raw UPDATE to guarantee unlimited storage from the start.
+	if role == "admin" || role == "owner" {
+		h.db.Model(user).UpdateColumn("storage_limit", 0)
+		user.StorageLimit = 0
+	}
+
 	// Enroll new user in all existing spaces
 	AutoEnrollUserInSpaces(h.db, user.ID, user.Role)
 
@@ -184,7 +192,21 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setAuthCookie(w, tokenStr)
-	writeJSON(w, http.StatusCreated, user)
+
+	uid := user.ID
+	LogAudit(h.db, AuditEntry{
+		UserID:    &uid,
+		UserName:  user.Name,
+		UserEmail: user.Email,
+		Action:    "user.register",
+		IPAddress: auditIP(r),
+		Metadata:  models.JSONB{"role": role},
+	})
+
+	writeJSON(w, http.StatusCreated, struct {
+		*models.User
+		Token string `json:"token"`
+	}{User: user, Token: tokenStr})
 }
 
 // POST /api/v1/auth/login
@@ -202,11 +224,26 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	if err := h.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		LogAudit(h.db, AuditEntry{
+			Action:    "auth.login_failed",
+			UserEmail: req.Email,
+			IPAddress: auditIP(r),
+			Metadata:  models.JSONB{"reason": "user not found"},
+		})
 		writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		uid := user.ID
+		LogAudit(h.db, AuditEntry{
+			UserID:    &uid,
+			UserName:  user.Name,
+			UserEmail: user.Email,
+			Action:    "auth.login_failed",
+			IPAddress: auditIP(r),
+			Metadata:  models.JSONB{"reason": "wrong password"},
+		})
 		writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
@@ -218,12 +255,45 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setAuthCookie(w, tokenStr)
-	writeJSON(w, http.StatusOK, user)
+
+	uid := user.ID
+	LogAudit(h.db, AuditEntry{
+		UserID:    &uid,
+		UserName:  user.Name,
+		UserEmail: user.Email,
+		Action:    "auth.login",
+		IPAddress: auditIP(r),
+	})
+
+	// Admin/owner always have unlimited storage — fix stale DB records on login
+	if (user.Role == "admin" || user.Role == "owner") && user.StorageLimit != 0 {
+		h.db.Model(&user).UpdateColumn("storage_limit", 0)
+		user.StorageLimit = 0
+	}
+
+	writeJSON(w, http.StatusOK, struct {
+		*models.User
+		Token string `json:"token"`
+	}{User: &user, Token: tokenStr})
 }
 
 // POST /api/v1/auth/logout
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	claims := mw.GetClaims(r)
 	h.clearAuthCookie(w)
+	if claims != nil {
+		var user models.User
+		if err := h.db.Select("id, name, email").First(&user, "email = ?", claims.Email).Error; err == nil {
+			uid := user.ID
+			LogAudit(h.db, AuditEntry{
+				UserID:    &uid,
+				UserName:  user.Name,
+				UserEmail: user.Email,
+				Action:    "auth.logout",
+				IPAddress: auditIP(r),
+			})
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
@@ -245,6 +315,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.First(&user, "id = ?", userID).Error; err != nil {
 		writeError(w, http.StatusUnauthorized, "User not found")
 		return
+	}
+
+	// Admin/owner always have unlimited storage — fix stale DB records on the fly
+	if (user.Role == "admin" || user.Role == "owner") && user.StorageLimit != 0 {
+		h.db.Model(&user).UpdateColumn("storage_limit", 0)
+		user.StorageLimit = 0
 	}
 
 	writeJSON(w, http.StatusOK, user)
@@ -342,6 +418,15 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	uid := user.ID
+	LogAudit(h.db, AuditEntry{
+		UserID:    &uid,
+		UserName:  user.Name,
+		UserEmail: user.Email,
+		Action:    "auth.password_change",
+		IPAddress: auditIP(r),
+	})
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Password changed successfully"})
 }
 
@@ -366,21 +451,29 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Generate token
 	tokenBytes := make([]byte, 32)
-	rand.Read(tokenBytes)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		slog.Error("failed to generate password reset token", "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to generate reset token")
+		return
+	}
 	token := hex.EncodeToString(tokenBytes)
-
-	// Delete any existing reset tokens for this user
-	h.db.Where("user_id = ?", user.ID).Delete(&models.PasswordReset{})
 
 	reset := &models.PasswordReset{
 		ID:        uuid.New(),
 		UserID:    user.ID,
 		Token:     token,
-		ExpiresAt: time.Now().Add(time.Duration(h.cfg.InviteTokenTTLHours) * time.Hour),
+		ExpiresAt: time.Now().Add(1 * time.Hour), // short window — 1 hour
 	}
 
-	if err := h.db.Create(reset).Error; err != nil {
-		slog.Error("failed to create password reset", "error", err)
+	// Delete old tokens and create the new one atomically so we can never
+	// end up with a stale token after a partial failure.
+	if txErr := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", user.ID).Delete(&models.PasswordReset{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(reset).Error
+	}); txErr != nil {
+		slog.Error("failed to create password reset", "error", txErr)
 		writeJSON(w, http.StatusOK, map[string]string{"message": "If that email exists, a reset link has been sent"})
 		return
 	}
@@ -390,7 +483,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		resetURL := fmt.Sprintf("%s/reset-password?token=%s", h.cfg.FrontendURL, token)
 		go h.sendPasswordResetEmail(user.Email, user.Name, resetURL)
 	} else {
-		slog.Info("password reset token generated (email disabled)", "token", token, "user", user.Email)
+		slog.Info("password reset token generated (email disabled — configure SMTP to send emails)", "user", user.Email)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "If that email exists, a reset link has been sent"})
@@ -434,7 +527,81 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	h.db.Model(&reset).Update("used_at", now)
 
+	// Fetch user for audit log.
+	var resetUser models.User
+	if err := h.db.Select("id, name, email").First(&resetUser, "id = ?", reset.UserID).Error; err == nil {
+		uid := resetUser.ID
+		LogAudit(h.db, AuditEntry{
+			UserID:    &uid,
+			UserName:  resetUser.Name,
+			UserEmail: resetUser.Email,
+			Action:    "auth.password_reset",
+			IPAddress: auditIP(r),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Password reset successfully"})
+}
+
+// PATCH /api/v1/auth/avatar
+func (h *AuthHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
+	claims := mw.GetClaims(r)
+	if claims == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	userID, err := uuid.Parse(claims.Sub)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Allow up to 2 MiB body (covers a base64-encoded ~1.5 MiB image).
+	// We decode directly here instead of using readJSON so we can set our own limit.
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+	var req struct {
+		Avatar string `json:"avatar"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body or image too large (max 2 MB)")
+		return
+	}
+
+	if !strings.HasPrefix(req.Avatar, "data:image/") {
+		writeError(w, http.StatusBadRequest, "Avatar must be a valid image data URL")
+		return
+	}
+
+	var user models.User
+	if err := h.db.First(&user, "id = ?", userID).Error; err != nil {
+		writeError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	if err := h.db.Model(&user).Update("avatar", req.Avatar).Error; err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to save avatar")
+		return
+	}
+
+	user.Avatar = &req.Avatar
+	writeJSON(w, http.StatusOK, user)
+}
+
+// DELETE /api/v1/auth/avatar
+func (h *AuthHandler) DeleteAvatar(w http.ResponseWriter, r *http.Request) {
+	claims := mw.GetClaims(r)
+	if claims == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	userID, err := uuid.Parse(claims.Sub)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	h.db.Model(&models.User{}).Where("id = ?", userID).Update("avatar", nil)
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Avatar removed"})
 }
 
 func (h *AuthHandler) sendPasswordResetEmail(to, name, resetURL string) {

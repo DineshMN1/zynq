@@ -13,7 +13,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
-import { Users, Bell, Activity, ArrowLeft, Hammer } from 'lucide-react';
+import { Users, Bell, Activity, ArrowLeft, Hammer, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/notifications', label: 'Notifications', icon: Bell },
   { href: '/admin/monitoring', label: 'Monitoring', icon: Activity },
+  { href: '/admin/audit', label: 'Audit', icon: ClipboardList },
 ];
 
 export default function AdminLayout() {

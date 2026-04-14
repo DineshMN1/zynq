@@ -74,7 +74,7 @@ export default function SetupPage() {
   // If auth is still loading, show spinner
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -82,7 +82,7 @@ export default function SetupPage() {
 
   if (needsSetup === false) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -154,7 +154,7 @@ export default function SetupPage() {
 
   return (
     <>
-      <div className="min-h-screen flex bg-background">
+      <div className="min-h-[100dvh] flex bg-background">
         {/* Left side - Branding */}
         <div className="hidden lg:flex lg:w-1/2 bg-card border-r border-border flex-col justify-between p-12">
           <div className="flex items-center gap-3">
@@ -186,7 +186,7 @@ export default function SetupPage() {
         </div>
 
         {/* Right side - Setup Form */}
-        <div className="flex-1 flex items-start sm:items-center justify-center px-6 py-8 sm:p-8 overflow-y-auto">
+        <div className="flex-1 flex items-center justify-center px-6 py-8 sm:p-8 overflow-y-auto">
           <div className="w-full max-w-sm space-y-6 sm:space-y-8">
             {/* Mobile logo */}
             <div className="lg:hidden flex items-center justify-center gap-3 mb-2 sm:mb-6">

@@ -230,7 +230,7 @@ export function FileListRow({
 
       {/* Size */}
       <div className="hidden sm:block w-24 shrink-0 text-right text-xs text-muted-foreground lg:w-28">
-        {formatBytes(Number(file.size || 0))}
+        {formatBytes(Number(file.is_folder ? (file.folder_size || 0) : (file.size || 0)))}
       </div>
 
       {/* Modified */}

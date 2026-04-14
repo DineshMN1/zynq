@@ -13,7 +13,7 @@ CREATE TABLE users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'user',
   storage_used BIGINT DEFAULT 0,
-  storage_limit BIGINT DEFAULT 10737418240, -- 10 GB
+  storage_limit BIGINT DEFAULT 0, -- 0 = unlimited; per-user quotas set by the app
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

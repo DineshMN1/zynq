@@ -17,6 +17,7 @@ import AdminLayout from './pages/admin/layout';
 import AdminUsersPage from './pages/dashboard/settings/users';
 import AdminNotificationsPage from './pages/dashboard/settings/notifications';
 import AdminMonitoringPage from './pages/dashboard/settings/monitoring';
+import AdminAuditPage from './pages/admin/audit';
 import TeamLayout from './pages/team/layout';
 import TeamFilesPage from './pages/team/files';
 import TeamActivityPage from './pages/team/activity';
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="notifications" element={<AdminNotificationsPage />} />
         <Route path="monitoring" element={<AdminMonitoringPage />} />
+        <Route path="audit" element={<AdminAuditPage />} />
       </Route>
 
       {/* Team space — separate layout with its own sidebar */}

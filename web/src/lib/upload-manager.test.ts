@@ -184,9 +184,8 @@ describe('UploadManager', () => {
     });
   });
 
-  describe('text file normalization', () => {
-    it('normalizes line endings and trims whitespace for text files', async () => {
-      // Force main-thread fallback to inspect the actual hash
+  describe('raw byte hashing', () => {
+    it('hashes raw bytes — CRLF and LF files produce different hashes', async () => {
       globalThis.Worker = vi.fn().mockImplementation(() => {
         throw new Error('Worker not supported');
       }) as unknown as typeof Worker;
@@ -194,28 +193,21 @@ describe('UploadManager', () => {
       const mod = await createManager();
       const manager = mod.uploadManager;
 
-      // Two files with different line endings and trailing whitespace
-      const file1 = new File(['hello\r\nworld\r\n  '], 'test.txt', {
-        type: 'text/plain',
-      });
-      const file2 = new File(['  hello\nworld'], 'test2.txt', {
-        type: 'text/plain',
-      });
+      const crlfFile = new File(['hello\r\nworld'], 'crlf.txt', { type: 'text/plain' });
+      const lfFile   = new File(['hello\nworld'],   'lf.txt',   { type: 'text/plain' });
 
-      // The normalization trims and replaces \r\n with \n
-      // file1 normalizes to: "hello\nworld" (trimmed trailing spaces + converted \r\n)
-      // file2 normalizes to: "hello\nworld" (trimmed leading spaces)
-      const hash1 = await manager.calculateHash(file1);
-      const hash2 = await manager.calculateHash(file2);
+      const crlfHash = await manager.calculateHash(crlfFile);
+      const lfHash   = await manager.calculateHash(lfFile);
 
-      expect(hash1).toMatch(/^[a-f0-9]{64}$/);
-      expect(hash2).toMatch(/^[a-f0-9]{64}$/);
-      expect(hash1).toBe(hash2);
+      expect(crlfHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(lfHash).toMatch(/^[a-f0-9]{64}$/);
+      // No normalization — different bytes → different hashes
+      expect(crlfHash).not.toBe(lfHash);
 
       manager.destroy();
     });
 
-    it('does NOT normalize binary files', async () => {
+    it('returns empty string for extensions not in DEDUP_EXTENSIONS', async () => {
       globalThis.Worker = vi.fn().mockImplementation(() => {
         throw new Error('Worker not supported');
       }) as unknown as typeof Worker;
@@ -223,15 +215,16 @@ describe('UploadManager', () => {
       const mod = await createManager();
       const manager = mod.uploadManager;
 
-      // Same content but different extensions - pdf is not text-normalized
-      const txtFile = new File(['hello\r\nworld  '], 'test.txt');
-      const pdfFile = new File(['hello\r\nworld  '], 'test.pdf');
+      const mp4File = new File(['hello\r\nworld'], 'test.mp4');
+      const txtFile = new File(['hello\r\nworld'], 'test.txt');
 
+      const mp4Hash = await manager.calculateHash(mp4File);
       const txtHash = await manager.calculateHash(txtFile);
-      const pdfHash = await manager.calculateHash(pdfFile);
 
-      // Hashes should differ since text file gets normalized but pdf does not
-      expect(txtHash).not.toBe(pdfHash);
+      // mp4 is not in DEDUP_EXTENSIONS → skipped (returns '')
+      expect(mp4Hash).toBe('');
+      // txt is in DEDUP_EXTENSIONS → hashed normally
+      expect(txtHash).toMatch(/^[a-f0-9]{64}$/);
 
       manager.destroy();
     });

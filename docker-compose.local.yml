@@ -55,9 +55,11 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       RATE_LIMIT_TTL: ${RATE_LIMIT_TTL:-60000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       MAX_CONCURRENT_UPLOADS: ${MAX_CONCURRENT_UPLOADS:-256}
+      MAX_ASSEMBLY_WORKERS: ${MAX_ASSEMBLY_WORKERS:-32}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
       MIN_FREE_BYTES: ${MIN_FREE_BYTES:-536870912}
     ports:
@@ -66,6 +68,27 @@ services:
       - ${ZYNQ_DATA_PATH:-./data/files}:/data/files
     networks:
       - zynqcloud-localbuild-network
+
+  # ── Cloudflare Tunnel (optional) ─────────────────────────────────────────────
+  # Enable with:
+  #   CLOUDFLARE_TUNNEL_TOKEN=<token> docker compose -f docker-compose.local.yml --profile cloudflare up -d
+  # Public hostname target in CF dashboard: http://zynqcloud:80
+  # See docker-compose.yml for full setup instructions and credentials-file alternative.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: zynqcloud-cloudflared-local
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    # volumes:                                      # ← credentials-file method
+    #   - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - zynqcloud
+    networks:
+      - zynqcloud-localbuild-network
+    profiles:
+      - cloudflare
 
 volumes:
   postgres_localbuild_data:

@@ -18,11 +18,15 @@ vi.mock('react-router-dom', async (importOriginal) => {
 // Mock the api module
 const mockGetSetupStatus = vi.fn();
 const mockMe = vi.fn();
+const mockLogout = vi.fn().mockResolvedValue({ success: true });
 vi.mock('@/lib/api', () => ({
   authApi: {
     getSetupStatus: (...args: unknown[]) => mockGetSetupStatus(...args),
     me: (...args: unknown[]) => mockMe(...args),
+    logout: (...args: unknown[]) => mockLogout(...args),
   },
+  saveAuthToken: vi.fn(),
+  clearAuthToken: vi.fn(),
 }));
 
 function wrapper({ children }: { children: ReactNode }) {

@@ -234,7 +234,7 @@ func (h *SpacesHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if search != "" {
-		query = query.Where("name ILIKE ?", "%"+search+"%")
+		query = query.Where("name ILIKE ? ESCAPE '\\'", likeSafe(search))
 	}
 
 	switch category {
@@ -284,6 +284,25 @@ func (h *SpacesHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
 		Order("is_folder DESC, name ASC").
 		Offset(offset).Limit(limit).
 		Find(&files)
+
+	// Compute folder sizes
+	for i := range files {
+		if files[i].IsFolder {
+			var folderSize int64
+			h.db.Raw(`
+				WITH RECURSIVE descendants AS (
+					SELECT id, is_folder, size FROM files
+					WHERE parent_id = ? AND deleted_at IS NULL
+					UNION ALL
+					SELECT f.id, f.is_folder, f.size FROM files f
+					INNER JOIN descendants d ON f.parent_id = d.id
+					WHERE f.deleted_at IS NULL
+				)
+				SELECT COALESCE(SUM(size), 0) FROM descendants WHERE is_folder = false
+			`, files[i].ID).Scan(&folderSize)
+			files[i].FolderSize = folderSize
+		}
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"items": files,
@@ -464,7 +483,7 @@ func (h *SpacesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mimeType == "application/octet-stream" {
-		if tf, err := os.Open(tmpPath); err == nil {
+		if tf, err := os.Open(tmpPath); err == nil { // #nosec G304 -- tmpPath from os.CreateTemp
 			sniff := make([]byte, 512)
 			n, _ := tf.Read(sniff)
 			tf.Close()
@@ -538,7 +557,7 @@ func (h *SpacesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	// Space files use a distinct storage path to avoid collisions with personal files
 	storagePath := fmt.Sprintf("spaces/%s/%s.enc", spaceID.String(), fileID.String())
 
-	plainReader, err := os.Open(tmpPath)
+	plainReader, err := os.Open(tmpPath) // #nosec G304 -- tmpPath from os.CreateTemp
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to open temp file")
 		return

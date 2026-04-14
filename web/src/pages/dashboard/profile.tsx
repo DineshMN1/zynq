@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -9,7 +9,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
@@ -23,6 +23,8 @@ import {
   EyeOff,
   CheckCircle2,
   HardDrive,
+  Camera,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { authApi, storageApi, type StorageOverview } from '@/lib/api';
@@ -59,8 +61,10 @@ export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
   const [storageOverview, setStorageOverview] =
     useState<StorageOverview | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Profile form
   const [name, setName] = useState('');
@@ -108,6 +112,76 @@ export default function ProfilePage() {
         passwordForm.newPassword === passwordForm.confirmPassword,
     });
   }, [passwordForm.newPassword, passwordForm.confirmPassword]);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Invalid file', description: 'Please select an image file.', variant: 'destructive' });
+      return;
+    }
+    // 10 MB hard cap before resize
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'Image too large', description: 'Please choose an image under 10 MB.', variant: 'destructive' });
+      return;
+    }
+
+    setAvatarLoading(true);
+    try {
+      // Resize to max 400×400 via canvas, output as JPEG quality 0.85
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            const MAX = 400;
+            let { width, height } = img;
+            if (width > MAX || height > MAX) {
+              if (width > height) {
+                height = Math.round((height / width) * MAX);
+                width = MAX;
+              } else {
+                width = Math.round((width / height) * MAX);
+                height = MAX;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          };
+          img.src = reader.result as string;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      await authApi.uploadAvatar(dataUrl);
+      await refreshUser();
+      toast({ title: 'Avatar updated', description: 'Your profile picture has been saved.' });
+    } catch {
+      toast({ title: 'Upload failed', description: 'Could not save avatar. Try again.', variant: 'destructive' });
+    } finally {
+      setAvatarLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarLoading(true);
+    try {
+      await authApi.deleteAvatar();
+      await refreshUser();
+      toast({ title: 'Avatar removed' });
+    } catch {
+      toast({ title: 'Failed to remove avatar', variant: 'destructive' });
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,14 +310,38 @@ export default function ProfilePage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16">
-                <AvatarFallback className="bg-primary text-primary-foreground text-xl font-medium">
-                  {getInitials(user.name)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="space-y-1">
-                <h2 className="text-xl font-semibold">{user.name}</h2>
-                <div className="flex items-center gap-2">
+              {/* Avatar with hover-to-change overlay */}
+              <div className="relative group shrink-0">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={user.avatar ?? undefined} alt={user.name} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xl font-medium">
+                    {getInitials(user.name)}
+                  </AvatarFallback>
+                </Avatar>
+                {/* Hover overlay */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={avatarLoading}
+                  className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  {avatarLoading
+                    ? <Loader2 className="h-5 w-5 text-white animate-spin" />
+                    : <Camera className="h-5 w-5 text-white" />
+                  }
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
+              </div>
+
+              <div className="space-y-1 min-w-0">
+                <h2 className="text-xl font-semibold truncate">{user.name}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
                   <Badge
                     variant={
                       user.role === 'owner'
@@ -255,6 +353,17 @@ export default function ProfilePage() {
                   >
                     {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                   </Badge>
+                  {user.avatar && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveAvatar}
+                      disabled={avatarLoading}
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove photo
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
