@@ -1,22 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   HardDrive,
   Users,
@@ -25,6 +8,8 @@ import {
   Server,
   RefreshCw,
   AlertTriangle,
+  Zap,
+  Edit2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -54,6 +39,8 @@ import {
 } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { getInitials } from '@/lib/auth';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -86,6 +73,143 @@ interface SystemStats {
   error: boolean;
 }
 
+// ── Stat card ─────────────────────────────────────────────────────────────────
+function StatCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  iconClass,
+  loading,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  icon: React.ElementType;
+  iconClass: string;
+  loading: boolean;
+  accent?: string;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-border/60 bg-card p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+            {label}
+          </p>
+          {loading ? (
+            <Skeleton className="mt-2 h-7 w-28" />
+          ) : (
+            <p className={cn('mt-1 text-2xl font-bold tracking-tight', accent)}>
+              {value}
+            </p>
+          )}
+          {loading ? (
+            <Skeleton className="mt-1.5 h-3.5 w-20" />
+          ) : (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>
+          )}
+        </div>
+        <div
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+            iconClass,
+          )}
+        >
+          <Icon className="h-4.5 w-4.5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Storage bar ───────────────────────────────────────────────────────────────
+function StorageBar({
+  pct,
+  loading,
+}: {
+  pct: number;
+  loading: boolean;
+}) {
+  const color =
+    pct >= 90
+      ? 'bg-red-500'
+      : pct >= 75
+        ? 'bg-amber-500'
+        : 'bg-emerald-500';
+  const glow =
+    pct >= 90
+      ? 'shadow-red-500/30'
+      : pct >= 75
+        ? 'shadow-amber-500/30'
+        : 'shadow-emerald-500/30';
+  const textColor =
+    pct >= 90
+      ? 'text-red-500'
+      : pct >= 75
+        ? 'text-amber-500'
+        : 'text-emerald-500';
+
+  return loading ? (
+    <Skeleton className="h-3 w-full rounded-full" />
+  ) : (
+    <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={cn('h-full rounded-full shadow-lg transition-all duration-700', color, glow)}
+        style={{ width: `${Math.min(pct, 100)}%` }}
+      />
+    </div>
+  );
+}
+
+// ── Role badge ─────────────────────────────────────────────────────────────────
+function RolePill({ role }: { role: string }) {
+  const styles: Record<string, string> = {
+    owner: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
+    admin: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+    user: 'bg-muted text-muted-foreground border-border',
+  };
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold capitalize',
+        styles[role] ?? styles.user,
+      )}
+    >
+      {role}
+    </span>
+  );
+}
+
+// ── Inline mini progress bar ───────────────────────────────────────────────────
+function MiniBar({ pct }: { pct: number }) {
+  const color =
+    pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-primary';
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn('h-full rounded-full transition-all duration-500', color)}
+          style={{ width: `${Math.min(pct, 100)}%` }}
+        />
+      </div>
+      <span
+        className={cn(
+          'w-8 text-right text-[10px] font-medium tabular-nums',
+          pct >= 100
+            ? 'text-red-500'
+            : pct >= 80
+              ? 'text-amber-500'
+              : 'text-muted-foreground',
+        )}
+      >
+        {pct}%
+      </span>
+    </div>
+  );
+}
+
 export default function MonitoringPage() {
   const [stats, setStats] = useState<SystemStats>({
     storage: null,
@@ -95,6 +219,7 @@ export default function MonitoringPage() {
     error: false,
   });
   const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [quotaValue, setQuotaValue] = useState('');
@@ -108,7 +233,6 @@ export default function MonitoringPage() {
         adminApi.getUsers().catch(() => null),
         storageApi.getAllUsersStorage().catch(() => []),
       ]);
-
       setStats({
         storage: storageData,
         users: usersData?.items || [],
@@ -116,8 +240,8 @@ export default function MonitoringPage() {
         loading: false,
         error: false,
       });
-    } catch (error) {
-      console.error('Failed to load monitoring stats:', error);
+      setLastRefreshed(new Date());
+    } catch {
       setStats((prev) => ({ ...prev, loading: false, error: true }));
     }
   }, []);
@@ -134,28 +258,12 @@ export default function MonitoringPage() {
     setRefreshing(false);
   };
 
-  const systemUsedPercentage = stats.storage?.system
-    ? Math.round(
-        (stats.storage.system.usedBytes / stats.storage.system.totalBytes) *
-          100,
-      )
+  const sysPct = stats.storage
+    ? Math.round((stats.storage.system.usedBytes / stats.storage.system.totalBytes) * 100)
     : 0;
 
-  const getStorageColor = (percentage: number) => {
-    if (percentage >= 90) return 'text-red-500';
-    if (percentage >= 75) return 'text-amber-500';
-    return 'text-emerald-500';
-  };
-
-  const getProgressColor = (percentage: number) => {
-    if (percentage >= 90) return '[&>div]:bg-red-500';
-    if (percentage >= 75) return '[&>div]:bg-amber-500';
-    return '[&>div]:bg-emerald-500';
-  };
-
-  const getUserStorageInfo = (userId: string) => {
-    return stats.usersStorage.find((s) => s.userId === userId);
-  };
+  const getUserStorageInfo = (userId: string) =>
+    stats.usersStorage.find((s) => s.userId === userId);
 
   const openQuotaDialog = (user: User) => {
     setSelectedUser(user);
@@ -188,24 +296,14 @@ export default function MonitoringPage() {
       const availableBytes = stats.storage?.system?.freeBytes;
 
       if (quotaBytes !== 0 && quotaBytes < usedBytes) {
-        toast({
-          title: 'Quota too low',
-          description: 'Quota cannot be lower than current usage.',
-          variant: 'warning',
-        });
+        toast({ title: 'Quota too low', description: 'Quota cannot be lower than current usage.', variant: 'warning' });
         setSavingQuota(false);
         return;
       }
-
-      if (
-        quotaBytes !== 0 &&
-        availableBytes != null &&
-        quotaBytes > usedBytes + availableBytes
-      ) {
-        const maxAllowed = usedBytes + availableBytes;
+      if (quotaBytes !== 0 && availableBytes != null && quotaBytes > usedBytes + availableBytes) {
         toast({
           title: 'Quota exceeds available storage',
-          description: `Max allowed is ${formatBytes(maxAllowed)} based on free space.`,
+          description: `Max allowed is ${formatBytes(usedBytes + availableBytes)} based on free space.`,
           variant: 'warning',
         });
         setSavingQuota(false);
@@ -215,394 +313,367 @@ export default function MonitoringPage() {
       await storageApi.updateUserQuota(selectedUser.id, quotaBytes);
       setQuotaDialogOpen(false);
       await loadStats();
-    } catch (error) {
-      console.error('Failed to update quota:', error);
-      toast({
-        title: 'Failed to update quota',
-        description: 'Please try again.',
-        variant: 'destructive',
-      });
+    } catch {
+      toast({ title: 'Failed to update quota', description: 'Please try again.', variant: 'destructive' });
     } finally {
       setSavingQuota(false);
     }
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="min-h-full bg-background">
       <ToastContainer />
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Monitoring
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            System overview and resource usage
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="gap-2 w-full sm:w-auto"
-        >
-          <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-          Refresh
-        </Button>
-      </div>
 
-      {/* Error banner */}
-      {stats.error && !stats.loading && (
-        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium">Failed to load monitoring data</p>
-            <p className="text-destructive/80 text-xs mt-0.5">
-              Check your connection and make sure you are signed in, then click Refresh.
-            </p>
+      {/* ── Page header ── */}
+      <div className="border-b border-border/60 bg-card/50 px-6 py-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+              <Activity className="h-4.5 w-4.5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-[17px] font-bold tracking-tight text-foreground">
+                Monitoring
+              </h1>
+              <p className="text-[12px] text-muted-foreground">
+                System overview · auto-refreshes every 30s
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Live indicator */}
+            {!stats.loading && !stats.error && (
+              <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  Live
+                </span>
+              </div>
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} />
+              Refresh
+            </Button>
           </div>
         </div>
-      )}
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        {/* System Storage */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              System Storage
-            </CardTitle>
-            <HardDrive className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {stats.loading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">
-                  {stats.storage
-                    ? formatBytes(stats.storage.system.usedBytes)
-                    : '—'}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  of{' '}
-                  {stats.storage
-                    ? formatBytes(stats.storage.system.totalBytes)
-                    : '—'}{' '}
-                  used
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Free Space */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Free Space</CardTitle>
-            <Database className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {stats.loading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <>
-                <div
-                  className={cn(
-                    'text-2xl font-bold',
-                    getStorageColor(systemUsedPercentage),
-                  )}
-                >
-                  {stats.storage
-                    ? formatBytes(stats.storage.system.freeBytes)
-                    : '—'}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {100 - systemUsedPercentage}% available
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Total Users */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {stats.loading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{stats.users.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  Registered accounts
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* System Status */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">System Status</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {stats.loading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold text-emerald-500">
-                  Online
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  All services running
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {!stats.loading && (
+          <p className="mt-2 text-[11px] text-muted-foreground/50">
+            Last updated {lastRefreshed.toLocaleTimeString()}
+          </p>
+        )}
       </div>
 
-      {/* Detailed Storage Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Server className="h-5 w-5" />
-            Storage Overview
-          </CardTitle>
-          <CardDescription>
-            Detailed breakdown of system storage usage
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {stats.loading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
+      <div className="space-y-6 p-6">
+
+        {/* ── Error banner ── */}
+        {stats.error && !stats.loading && (
+          <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3.5 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-semibold">Failed to load monitoring data</p>
+              <p className="mt-0.5 text-[12px] text-destructive/70">
+                Check your connection and ensure you are signed in, then click Refresh.
+              </p>
             </div>
-          ) : stats.storage ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">System Disk</span>
-                <span
-                  className={cn(
-                    'font-medium',
-                    getStorageColor(systemUsedPercentage),
-                  )}
-                >
-                  {systemUsedPercentage}% used
-                </span>
+          </div>
+        )}
+
+        {/* ── Stat cards ── */}
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="System Storage"
+            value={stats.storage ? formatBytes(stats.storage.system.usedBytes) : '—'}
+            sub={`of ${stats.storage ? formatBytes(stats.storage.system.totalBytes) : '—'} total`}
+            icon={HardDrive}
+            iconClass="bg-blue-500/10 text-blue-500"
+            loading={stats.loading}
+          />
+          <StatCard
+            label="Free Space"
+            value={stats.storage ? formatBytes(stats.storage.system.freeBytes) : '—'}
+            sub={`${100 - sysPct}% available`}
+            icon={Database}
+            iconClass={
+              sysPct >= 90
+                ? 'bg-red-500/10 text-red-500'
+                : sysPct >= 75
+                  ? 'bg-amber-500/10 text-amber-500'
+                  : 'bg-emerald-500/10 text-emerald-500'
+            }
+            accent={
+              sysPct >= 90
+                ? 'text-red-500'
+                : sysPct >= 75
+                  ? 'text-amber-500'
+                  : 'text-emerald-500'
+            }
+            loading={stats.loading}
+          />
+          <StatCard
+            label="Total Users"
+            value={String(stats.users.length)}
+            sub="Registered accounts"
+            icon={Users}
+            iconClass="bg-violet-500/10 text-violet-500"
+            loading={stats.loading}
+          />
+          <StatCard
+            label="System Status"
+            value={stats.error ? 'Degraded' : 'Online'}
+            sub="All services running"
+            icon={Zap}
+            iconClass={stats.error ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}
+            accent={stats.error ? 'text-red-500' : 'text-emerald-500'}
+            loading={stats.loading}
+          />
+        </div>
+
+        {/* ── Storage overview ── */}
+        <div className="rounded-xl border border-border/60 bg-card shadow-sm">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+              <Server className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="text-[13.5px] font-semibold text-foreground">Storage Overview</p>
+              <p className="text-[11px] text-muted-foreground">System disk breakdown</p>
+            </div>
+          </div>
+
+          <div className="p-5">
+            {stats.loading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-2/3" />
               </div>
-              <Progress
-                value={systemUsedPercentage}
-                className={cn('h-3', getProgressColor(systemUsedPercentage))}
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Used: {formatBytes(stats.storage.system.usedBytes)}</span>
-                <span>Free: {formatBytes(stats.storage.system.freeBytes)}</span>
-                <span>
-                  Total: {formatBytes(stats.storage.system.totalBytes)}
-                </span>
+            ) : stats.storage ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-[12.5px]">
+                  <span className="font-medium text-foreground">System Disk</span>
+                  <span
+                    className={cn(
+                      'font-semibold tabular-nums',
+                      sysPct >= 90
+                        ? 'text-red-500'
+                        : sysPct >= 75
+                          ? 'text-amber-500'
+                          : 'text-emerald-500',
+                    )}
+                  >
+                    {sysPct}% used
+                  </span>
+                </div>
+
+                <StorageBar pct={sysPct} loading={false} />
+
+                <div className="grid grid-cols-3 gap-4 pt-1">
+                  {[
+                    { label: 'Used', value: formatBytes(stats.storage.system.usedBytes), color: 'bg-primary' },
+                    { label: 'Free', value: formatBytes(stats.storage.system.freeBytes), color: sysPct >= 90 ? 'bg-red-500' : sysPct >= 75 ? 'bg-amber-500' : 'bg-emerald-500' },
+                    { label: 'Total', value: formatBytes(stats.storage.system.totalBytes), color: 'bg-muted-foreground' },
+                  ].map((item) => (
+                    <div key={item.label} className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className={cn('h-2 w-2 rounded-full', item.color)} />
+                        <span className="text-[11px] font-medium text-muted-foreground">{item.label}</span>
+                      </div>
+                      <span className="text-[13px] font-semibold text-foreground">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Unable to load storage information</p>
+            )}
+          </div>
+        </div>
+
+        {/* ── User storage table ── */}
+        <div className="rounded-xl border border-border/60 bg-card shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-[13.5px] font-semibold text-foreground">User Storage</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {stats.users.length} {stats.users.length === 1 ? 'account' : 'accounts'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {stats.loading ? (
+            <div className="divide-y divide-border/40">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-5 py-4">
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-32" />
+                    <Skeleton className="h-3 w-44" />
+                  </div>
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              ))}
+            </div>
+          ) : stats.users.length === 0 ? (
+            <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+              No users found
             </div>
           ) : (
-            <p className="text-muted-foreground">
-              Unable to load storage information
-            </p>
-          )}
-        </CardContent>
-      </Card>
+            <div className="divide-y divide-border/40">
+              {stats.users.map((user) => {
+                const storageInfo = getUserStorageInfo(user.id);
+                const usedPct = storageInfo?.usedPercentage || 0;
+                const isOver = usedPct >= 100;
+                const isNear = usedPct >= 80 && !isOver;
 
-      {/* Users Storage Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            User Storage Usage
-          </CardTitle>
-          <CardDescription>Storage usage breakdown by user</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          {stats.loading ? (
-            <div className="p-6 space-y-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-muted-foreground font-medium">
-                      Name
-                    </TableHead>
-                    <TableHead className="text-muted-foreground font-medium hidden sm:table-cell">
-                      Email
-                    </TableHead>
-                    <TableHead className="text-muted-foreground font-medium hidden md:table-cell">
-                      Role
-                    </TableHead>
-                    <TableHead className="text-muted-foreground font-medium">
-                      Used
-                    </TableHead>
-                    <TableHead className="text-muted-foreground font-medium hidden sm:table-cell">
-                      Quota
-                    </TableHead>
-                    <TableHead className="text-muted-foreground font-medium hidden lg:table-cell">
-                      Usage
-                    </TableHead>
-                    <TableHead className="text-muted-foreground font-medium text-right">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {stats.users.map((user) => {
-                    const storageInfo = getUserStorageInfo(user.id);
-                    const usedPercent = storageInfo?.usedPercentage || 0;
-                    const isOverQuota = usedPercent >= 100;
-                    const isNearQuota = usedPercent >= 80 && usedPercent < 100;
+                return (
+                  <div
+                    key={user.id}
+                    className="group flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/30"
+                  >
+                    {/* Avatar */}
+                    <Avatar className="h-8 w-8 shrink-0 rounded-lg">
+                      <AvatarFallback className="rounded-lg bg-primary/10 text-[10px] font-bold text-primary">
+                        {getInitials(user.name ?? '')}
+                      </AvatarFallback>
+                    </Avatar>
 
-                    return (
-                      <TableRow
-                        key={user.id}
-                        className="border-border hover:bg-secondary/50 transition-colors"
-                      >
-                        <TableCell className="font-medium">
+                    {/* Name + email */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate text-[13px] font-semibold text-foreground">
                           {user.name}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground hidden sm:table-cell">
-                          {user.email}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <Badge
-                            variant={
-                              user.role === 'owner' ? 'default' : 'secondary'
-                            }
-                            className={cn(
-                              'capitalize',
-                              user.role === 'owner' &&
-                                'bg-primary/20 text-primary border-0',
-                              user.role === 'admin' &&
-                                'bg-amber-500/20 text-amber-500 border-0',
-                            )}
-                          >
-                            {user.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span
-                            className={cn(
-                              isOverQuota && 'text-red-500 font-medium',
-                            )}
-                          >
-                            {formatBytes(storageInfo?.usedBytes || 0)}
+                        </span>
+                        <RolePill role={user.role ?? 'user'} />
+                        {isOver && (
+                          <span className="rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[9.5px] font-semibold text-red-500">
+                            OVER QUOTA
                           </span>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          {storageInfo?.isUnlimited ? (
-                            <span className="text-primary font-medium">
-                              Unlimited
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">
-                              {formatBytes(storageInfo?.quotaBytes || 0)}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <div className="w-28">
-                            <Progress
-                              value={Math.min(usedPercent, 100)}
-                              className={cn(
-                                'h-2',
-                                isOverQuota && '[&>div]:bg-red-500',
-                                isNearQuota && '[&>div]:bg-amber-500',
-                                !isOverQuota &&
-                                  !isNearQuota &&
-                                  '[&>div]:bg-primary',
-                              )}
-                            />
-                            <span
-                              className={cn(
-                                'text-xs mt-1 block',
-                                isOverQuota && 'text-red-500',
-                                isNearQuota && 'text-amber-500',
-                                !isOverQuota &&
-                                  !isNearQuota &&
-                                  'text-muted-foreground',
-                              )}
-                            >
-                              {usedPercent}%
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openQuotaDialog(user)}
-                          >
-                            <span className="hidden sm:inline">Edit quota</span>
-                            <span className="sm:hidden">Edit</span>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                        )}
+                      </div>
+                      <p className="truncate text-[11px] text-muted-foreground/60">{user.email}</p>
+                    </div>
+
+                    {/* Storage figures */}
+                    <div className="hidden items-end gap-1 text-right md:flex md:flex-col">
+                      <span
+                        className={cn(
+                          'text-[12.5px] font-semibold tabular-nums',
+                          isOver ? 'text-red-500' : isNear ? 'text-amber-500' : 'text-foreground',
+                        )}
+                      >
+                        {formatBytes(storageInfo?.usedBytes || 0)}
+                      </span>
+                      <span className="text-[10.5px] text-muted-foreground/50">
+                        {storageInfo?.isUnlimited ? (
+                          <span className="text-primary font-medium">Unlimited</span>
+                        ) : (
+                          `of ${formatBytes(storageInfo?.quotaBytes || 0)}`
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Mini bar */}
+                    <div className="hidden lg:block">
+                      {storageInfo?.isUnlimited ? (
+                        <span className="text-[11px] font-medium text-primary">∞</span>
+                      ) : (
+                        <MiniBar pct={usedPct} />
+                      )}
+                    </div>
+
+                    {/* Edit quota button */}
+                    <button
+                      onClick={() => openQuotaDialog(user)}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
+                      title="Edit quota"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
+      {/* ── Quota dialog ── */}
       <Dialog open={quotaDialogOpen} onOpenChange={setQuotaDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Update Storage Quota</DialogTitle>
-            <DialogDescription>
-              Set the storage quota for {selectedUser?.name}
+            <DialogTitle className="text-[15px]">Edit Storage Quota</DialogTitle>
+            <DialogDescription className="text-[12.5px]">
+              Set storage quota for{' '}
+              <span className="font-semibold text-foreground">{selectedUser?.name}</span>
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+
+          <div className="space-y-4 py-2">
+            {/* Current usage summary */}
             {selectedUser && (
-              <div className="px-3 py-2 rounded-lg bg-muted border border-border">
-                <p className="text-sm text-muted-foreground">
-                  Current usage:{' '}
-                  <span className="font-medium text-foreground">
-                    {formatBytes(
-                      getUserStorageInfo(selectedUser.id)?.usedBytes || 0,
-                    )}
-                  </span>
-                </p>
-                {stats.storage && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Available system free:{' '}
-                    <span className="font-medium text-foreground">
-                      {formatBytes(stats.storage.system.freeBytes)}
-                    </span>
-                  </p>
-                )}
+              <div className="rounded-lg border border-border/60 bg-muted/50 px-4 py-3 space-y-2">
+                {(() => {
+                  const info = getUserStorageInfo(selectedUser.id);
+                  const pct = info?.usedPercentage || 0;
+                  return (
+                    <>
+                      <div className="flex justify-between text-[12px]">
+                        <span className="text-muted-foreground">Current usage</span>
+                        <span className="font-semibold text-foreground">
+                          {formatBytes(info?.usedBytes || 0)}
+                        </span>
+                      </div>
+                      {!info?.isUnlimited && (
+                        <>
+                          <StorageBar pct={pct} loading={false} />
+                          <div className="flex justify-between text-[11px] text-muted-foreground/60">
+                            <span>{pct}% used</span>
+                            <span>Quota: {formatBytes(info?.quotaBytes || 0)}</span>
+                          </div>
+                        </>
+                      )}
+                      {stats.storage && (
+                        <div className="flex justify-between text-[11px] border-t border-border/40 pt-2 mt-1">
+                          <span className="text-muted-foreground">System free</span>
+                          <span className="font-medium text-foreground">
+                            {formatBytes(stats.storage.system.freeBytes)}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="quota_value">Quota</Label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="quota_value" className="text-[12.5px] font-medium">
+                New Quota
+              </Label>
               <div className="flex gap-2">
                 <Input
                   id="quota_value"
                   type="number"
-                  placeholder="Enter quota"
+                  placeholder="0 = unlimited"
                   value={quotaValue}
                   onChange={(e) => setQuotaValue(e.target.value)}
-                  className="flex-1"
+                  className="flex-1 h-9 text-sm"
                   min="0"
                   step="0.01"
                 />
@@ -610,7 +681,7 @@ export default function MonitoringPage() {
                   value={quotaUnit}
                   onValueChange={(v) => setQuotaUnit(v as typeof quotaUnit)}
                 >
-                  <SelectTrigger className="w-24">
+                  <SelectTrigger className="w-20 h-9 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -620,15 +691,17 @@ export default function MonitoringPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <p className="text-[11px] text-muted-foreground">Set to 0 for unlimited storage.</p>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setQuotaDialogOpen(false)}>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setQuotaDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveQuota} disabled={savingQuota}>
-              {savingQuota && <span className="mr-2">...</span>}
-              Save
+            <Button size="sm" onClick={handleSaveQuota} disabled={savingQuota}>
+              {savingQuota && <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Save Quota
             </Button>
           </DialogFooter>
         </DialogContent>

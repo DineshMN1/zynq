@@ -107,20 +107,6 @@ function StorageBar({
   );
 }
 
-// ── Role badge ────────────────────────────────────────────────────────────────
-function RoleBadge({ role }: { role: string }) {
-  const styles: Record<string, string> = {
-    owner: 'bg-violet-500/10 text-violet-500',
-    admin: 'bg-blue-500/10 text-blue-500',
-    user:  'bg-muted text-muted-foreground',
-  };
-  return (
-    <span className={cn('rounded px-1.5 py-0.5 text-[9.5px] font-semibold capitalize', styles[role] ?? styles.user)}>
-      {role}
-    </span>
-  );
-}
-
 // ── Update modal ──────────────────────────────────────────────────────────────
 function UpdateModal({
   open,
