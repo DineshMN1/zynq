@@ -25,6 +25,8 @@ import {
   Users2,
   ArrowLeft,
   Building2,
+  User as UserIcon,
+  Hammer,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
@@ -106,16 +108,14 @@ export default function TeamLayout() {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {isAdmin && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={pathname === '/team/members'}>
-                      <Link to="/team/members">
-                        <Users2 />
-                        <span>Members</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )}
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === '/team/members'}>
+                    <Link to="/team/members">
+                      <Users2 />
+                      <span>Members</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -123,6 +123,24 @@ export default function TeamLayout() {
 
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === '/dashboard/profile'}>
+                <Link to="/dashboard/profile">
+                  <UserIcon />
+                  <span>Profile</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            {isAdmin && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/admin')}>
+                  <Link to="/admin">
+                    <Hammer />
+                    <span>Admin</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
                 <Link to="/dashboard/files">

@@ -42,12 +42,15 @@ export default function TeamMembersPage() {
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'owner';
 
+  const [noSpace, setNoSpace] = useState(false);
+
   useEffect(() => {
     spaceApi.list()
       .then((spaces) => {
         if (spaces.length > 0) {
           setSpaceId(spaces[0].id);
         } else {
+          setNoSpace(true);
           setLoading(false);
         }
       })
@@ -108,6 +111,19 @@ export default function TeamMembersPage() {
       });
     }
   };
+
+  if (noSpace) {
+    return (
+      <div className="flex flex-col h-full">
+        <ToastContainer />
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+          <Users2 className="h-10 w-10 opacity-20" />
+          <p className="text-sm">No team space available</p>
+          <p className="text-xs text-center max-w-xs">Ask your administrator to create a team space.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">

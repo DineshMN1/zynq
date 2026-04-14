@@ -44,8 +44,10 @@ import {
   Music,
   Code2,
   Loader2,
+  Building2,
 } from 'lucide-react';
 import { spaceApi, type FileMetadata, type Space, getApiBaseUrl, getAuthToken, ApiError } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
 import { FilePreviewDialog } from '@/features/file/components/file-preview-dialog';
@@ -98,6 +100,7 @@ function getSafeMimeType(file: File): string {
 
 export default function TeamFilesPage() {
   const { pathname } = useLocation();
+  const { user } = useAuth();
 
   const segment = pathname.split('/').filter(Boolean).pop() ?? 'files';
   const category = CATEGORY_MAP[segment] ?? undefined;
@@ -107,6 +110,7 @@ export default function TeamFilesPage() {
 
   const [space, setSpace] = useState<Space | null>(null);
   const [spaceId, setSpaceId] = useState<string | null>(null);
+  const [noSpace, setNoSpace] = useState(false);
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -147,6 +151,7 @@ export default function TeamFilesPage() {
           setSpace(spaces[0]);
           setSpaceId(spaces[0].id);
         } else {
+          setNoSpace(true);
           setLoading(false);
         }
       })
@@ -373,6 +378,28 @@ export default function TeamFilesPage() {
   };
 
   const totalPages = Math.ceil(total / limit);
+
+  const isSystemAdmin = user?.role === 'admin' || user?.role === 'owner';
+
+  if (noSpace) {
+    return (
+      <div className="flex flex-col h-full">
+        <ToastContainer />
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+          <Building2 className="h-12 w-12 opacity-20" />
+          <p className="text-sm font-medium">No team space available</p>
+          <p className="text-xs text-center max-w-xs">
+            {isSystemAdmin
+              ? 'Create a team space from the Admin panel to get started.'
+              : 'Ask your administrator to create a team space and add you as a member.'}
+          </p>
+          {isSystemAdmin && (
+            <a href="/admin" className="text-xs text-primary hover:underline">Go to Admin</a>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
