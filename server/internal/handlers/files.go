@@ -1311,6 +1311,31 @@ func (h *FilesHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
 		req.Permission = "read"
 	}
 
+	// For public shares, return the existing active share rather than creating a duplicate.
+	if req.IsPublic {
+		var existing models.Share
+		q := h.db.Where("file_id = ? AND created_by = ? AND is_public = true", fileID, userID)
+		if err := q.First(&existing).Error; err == nil {
+			// Found an existing public share. If it has expired, delete it and fall through
+			// to create a fresh one; otherwise return it as-is.
+			if existing.ExpiresAt == nil || existing.ExpiresAt.After(time.Now()) {
+				existing.HasPassword = existing.Password != nil
+				type shareResponse struct {
+					*models.Share
+					PublicLink string `json:"publicLink,omitempty"`
+				}
+				resp := shareResponse{Share: &existing}
+				if existing.ShareToken != nil {
+					resp.PublicLink = h.cfg.FrontendURL + "/share/" + *existing.ShareToken
+				}
+				writeJSON(w, http.StatusOK, resp)
+				return
+			}
+			// Expired — remove it so we create a new one below.
+			h.db.Delete(&existing)
+		}
+	}
+
 	share := &models.Share{
 		ID:         uuid.New(),
 		FileID:     fileID,
