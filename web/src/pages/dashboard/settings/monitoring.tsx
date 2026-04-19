@@ -136,12 +136,6 @@ function StorageBar({
       : pct >= 75
         ? 'shadow-amber-500/30'
         : 'shadow-emerald-500/30';
-  const textColor =
-    pct >= 90
-      ? 'text-red-500'
-      : pct >= 75
-        ? 'text-amber-500'
-        : 'text-emerald-500';
 
   return loading ? (
     <Skeleton className="h-3 w-full rounded-full" />

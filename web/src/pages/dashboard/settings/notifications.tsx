@@ -744,11 +744,6 @@ export default function NotificationsPage() {
   const [editing, setEditing] = useState<NotificationChannel | null>(null);
   const [deleting, setDeleting] = useState<NotificationChannel | null>(null);
 
-  useEffect(() => {
-    if (user && !isAdmin) navigate('/dashboard/settings');
-    else if (user) void load();
-  }, [user, isAdmin, navigate]);
-
   const load = useCallback(async () => {
     try {
       setLoading(true);
@@ -759,6 +754,11 @@ export default function NotificationsPage() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (user && !isAdmin) navigate('/dashboard/settings');
+    else if (user) void load();
+  }, [user, isAdmin, navigate, load]);
 
   const handleToggle = async (ch: NotificationChannel, enabled: boolean) => {
     try {

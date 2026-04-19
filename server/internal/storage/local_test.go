@@ -84,8 +84,8 @@ func TestLocal_WriteAtomic(t *testing.T) {
 	b := tempBackend(t)
 
 	// Write the same path twice — second write must overwrite cleanly.
-	b.Write("atomic.bin", bytes.NewReader([]byte("first")))   //nolint:errcheck
-	b.Write("atomic.bin", bytes.NewReader([]byte("second")))  //nolint:errcheck
+	b.Write("atomic.bin", bytes.NewReader([]byte("first")))  //nolint:errcheck
+	b.Write("atomic.bin", bytes.NewReader([]byte("second"))) //nolint:errcheck
 
 	rc, _, _ := b.Read("atomic.bin")
 	defer rc.Close()
