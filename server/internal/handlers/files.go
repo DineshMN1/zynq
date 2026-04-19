@@ -83,16 +83,39 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 	var files []models.File
 	query.Order("is_folder DESC, name ASC").Offset(offset).Limit(limit).Find(&files)
 
-	// Compute share counts and folder sizes
+	// Batch share counts in a single query instead of 3 queries per file.
+	type shareRow struct {
+		FileID  string
+		Total   int
+		Public  int
+		Private int
+	}
+	fileIDs := make([]string, len(files))
+	for i, f := range files {
+		fileIDs[i] = f.ID.String()
+	}
+	var shareCounts []shareRow
+	if len(fileIDs) > 0 {
+		h.db.Raw(`
+			SELECT file_id::text,
+			       COUNT(*)                                      AS total,
+			       COUNT(*) FILTER (WHERE is_public = true)     AS public,
+			       COUNT(*) FILTER (WHERE is_public = false)    AS private
+			FROM shares
+			WHERE file_id = ANY(?)
+			GROUP BY file_id
+		`, fileIDs).Scan(&shareCounts)
+	}
+	shareMap := make(map[string]shareRow, len(shareCounts))
+	for _, sc := range shareCounts {
+		shareMap[sc.FileID] = sc
+	}
 	for i := range files {
-		var shareCount, publicCount, privateCount int64
-		h.db.Model(&models.Share{}).Where("file_id = ?", files[i].ID).Count(&shareCount)
-		h.db.Model(&models.Share{}).Where("file_id = ? AND is_public = true", files[i].ID).Count(&publicCount)
-		h.db.Model(&models.Share{}).Where("file_id = ? AND is_public = false", files[i].ID).Count(&privateCount)
-		files[i].ShareCount = int(shareCount)
-		files[i].PublicShareCount = int(publicCount)
-		files[i].PrivateShareCount = int(privateCount)
-
+		if sc, ok := shareMap[files[i].ID.String()]; ok {
+			files[i].ShareCount = sc.Total
+			files[i].PublicShareCount = sc.Public
+			files[i].PrivateShareCount = sc.Private
+		}
 		if files[i].IsFolder {
 			var folderSize int64
 			h.db.Raw(`
@@ -780,6 +803,17 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if user.StorageLimit > 0 && user.StorageUsed+plainSize > user.StorageLimit {
 		writeError(w, http.StatusForbidden, "Storage limit exceeded")
 		return
+	}
+
+	// Check free disk space — avail==0 means stats unavailable, skip check.
+	if localBackend, ok := h.backend.(*storage.Local); ok {
+		if avail, _ := localBackend.DiskStats(); avail > 0 {
+			minFree := uint64(h.cfg.MinFreeBytes)
+			if avail < uint64(plainSize)+minFree {
+				writeError(w, http.StatusInsufficientStorage, "Insufficient disk space")
+				return
+			}
+		}
 	}
 
 	// ── Detect MIME type (peek first 512 bytes from temp file) ────────────────

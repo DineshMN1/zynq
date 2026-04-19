@@ -1,38 +1,41 @@
-# Contributing
+# Contributing to ZynqCloud
 
-Thanks for your interest in contributing to zynqCloud!
+Thanks for your interest in contributing!
 
-## Getting Started
+---
+
+## Development Setup
 
 ```bash
 git clone https://github.com/DineshMN1/zynq.git
 cd zynq
 
-# Install workspace dependencies
-pnpm install
-
-# Start development stack (postgres + backend + frontend)
+# Start PostgreSQL
 docker compose -f docker-compose.dev.yml up -d
 
-# Backend
+# Backend (Go 1.21+)
 cd server
-cp .env.example .env
-pnpm run start:dev
+cp .env.dev.example .env.dev
+go run ./cmd/api
 
-# Frontend (new terminal)
+# Frontend (new terminal, Node 20+, pnpm 9+)
 cd web
-pnpm run dev
+pnpm install
+pnpm dev
 ```
 
-## Before Submitting
+Frontend runs at `http://localhost:5173`, API at `http://localhost:4000`.
 
-Run these checks locally:
+---
+
+## Before Submitting
 
 ```bash
 # Backend
 cd server
-pnpm run lint
-pnpm run test
+go build ./...
+go test ./...
+go vet ./...
 
 # Frontend
 cd web
@@ -40,30 +43,50 @@ pnpm run lint
 pnpm run build
 ```
 
-## Pull Request Process
+All checks must pass. PRs with failing builds will not be merged.
 
-1. Fork and create a feature branch
-2. Make changes, add tests if needed
-3. Run lint and tests
-4. Submit PR with clear description
+---
 
 ## Commit Messages
 
-Use conventional commits:
+Use [Conventional Commits](https://www.conventionalcommits.org/):
 
+```text
+feat: add file preview for PDF
+fix: return 507 when disk is full
+docs: update reverse-proxy guide
+test: add crypto stream round-trip test
+refactor: consolidate formatBytes to lib/auth
 ```
-feat: add file preview
-fix: resolve upload timeout
-docs: update readme
-```
+
+---
+
+## Pull Request Process
+
+1. Fork the repo and create a feature branch from `main`
+2. Make focused changes — one concern per PR
+3. Add or update tests for new behaviour
+4. Update `CHANGELOG.md` under `[Unreleased]`
+5. Submit the PR with a clear description of what and why
+
+---
 
 ## Code Style
 
-- TypeScript strict mode
-- Avoid `any` types
-- Keep functions small
-- Use existing patterns in codebase
+**Go:**
+
+- `gofmt` formatted (CI enforces this)
+- No `panic` in request handlers — return errors and write HTTP responses
+- New handlers follow the existing `struct + method` pattern in `server/internal/handlers/`
+
+**TypeScript/React:**
+
+- Strict mode — no `any`
+- New shared utilities go in `web/src/lib/`; new shared components go in `web/src/components/`
+- Use the existing `uploadManager` for file uploads, not raw XHR
+
+---
 
 ## Questions?
 
-Open an issue or discussion on GitHub.
+Open an issue or a discussion on GitHub.

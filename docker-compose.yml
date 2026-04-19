@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: ${DATABASE_USER}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: ${DATABASE_NAME}
-    ports:
-      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -109,6 +107,32 @@ services:
       - zynqcloud-network
     profiles:
       - cloudflare
+
+  # ── Automated PostgreSQL backups ──────────────────────────────────────────────
+  # Runs daily by default. Backups land in BACKUP_PATH (default: ./backups).
+  # Enable with:  docker compose --profile backup up -d
+  backup:
+    image: prodrigestivill/postgres-backup-local:16
+    container_name: zynqcloud-backup
+    restart: unless-stopped
+    volumes:
+      - ${BACKUP_PATH:-./backups}:/backups
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - zynqcloud-network
+    profiles:
+      - backup
 
 volumes:
   postgres_data:

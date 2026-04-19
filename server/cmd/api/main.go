@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"os"
@@ -90,6 +92,36 @@ func main() {
 	}
 	slog.Info("avatar column ready")
 
+	// Verify master key fingerprint — fail hard if the key has changed since first boot.
+	// This prevents silently encrypting new files with the wrong key while old files
+	// become permanently unreadable.
+	if cfg.FileEncryptionMasterKey != "" {
+		sum := sha256.Sum256([]byte(cfg.FileEncryptionMasterKey))
+		fingerprint := hex.EncodeToString(sum[:])
+
+		var stored struct{ Value string }
+		err := db.Raw("SELECT value::text AS value FROM settings WHERE user_id IS NULL AND key = 'key_fingerprint' LIMIT 1").Scan(&stored).Error
+		if err != nil || stored.Value == "" || stored.Value == "null" {
+			// First boot — store fingerprint.
+			if err := db.Exec(
+				"INSERT INTO settings (id, key, value, user_id) VALUES (uuid_generate_v4(), 'key_fingerprint', to_jsonb(?::text), NULL) ON CONFLICT DO NOTHING",
+				fingerprint,
+			).Error; err != nil {
+				slog.Error("failed to store key fingerprint", "error", err)
+				os.Exit(1)
+			}
+			slog.Info("key fingerprint stored (first boot)")
+		} else {
+			// Strip surrounding JSON quotes if value came back as a JSON string.
+			stored.Value = strings.Trim(stored.Value, `"`)
+			if stored.Value != fingerprint {
+				slog.Error("FILE_ENCRYPTION_MASTER_KEY has changed since first boot — all previously encrypted files will be unreadable. Restore the original key or run a key migration before starting.")
+				os.Exit(1)
+			}
+			slog.Info("key fingerprint verified")
+		}
+	}
+
 	// Load persisted SMTP settings from DB (overrides env vars if present)
 	handlers.LoadSMTPFromDB(db, cfg)
 	slog.Info("SMTP settings loaded from DB")
@@ -143,6 +175,7 @@ func main() {
 	slog.Info("space bootstrap complete")
 
 	// Initialize handlers
+	healthH := handlers.NewHealthHandler(db)
 	authH := handlers.NewAuthHandler(db, cfg)
 	filesH := handlers.NewFilesHandler(db, cfg, cryptoSvc, localBackend)
 	usersH := handlers.NewUsersHandler(db)
@@ -165,7 +198,7 @@ func main() {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// Health
-		r.Get("/health", handlers.HealthHandler)
+		r.Get("/health", healthH.Health)
 
 		// Auth routes
 		r.Route("/auth", func(r chi.Router) {

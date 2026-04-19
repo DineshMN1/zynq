@@ -73,9 +73,7 @@ import { emitStorageRefresh } from '@/lib/storage-events';
 import { useUploadContext } from '@/context/UploadContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn, getSafeMimeType } from '@/lib/utils';
-
-// Maximum allowed upload size (15 GB)
-const MAX_FILE_BYTES = 15 * 1024 * 1024 * 1024;
+import { MAX_FILE_BYTES } from '@/lib/constants';
 
 function getXhrErrorMessage(xhr: XMLHttpRequest): string {
   const status = xhr.status;

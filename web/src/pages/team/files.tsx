@@ -46,7 +46,7 @@ import {
   Loader2,
   Building2,
 } from 'lucide-react';
-import { spaceApi, type FileMetadata, type Space, getApiBaseUrl, getAuthToken, ApiError } from '@/lib/api';
+import { spaceApi, type FileMetadata, type Space, ApiError } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { ToastContainer } from '@/components/toast-container';
@@ -58,6 +58,8 @@ import { formatBytes } from '@/lib/auth';
 import { getInitials } from '@/lib/auth';
 import { cn, getSafeMimeType } from '@/lib/utils';
 import { useUploadContext } from '@/context/UploadContext';
+import { uploadManager } from '@/lib/upload-manager';
+import { MAX_FILE_BYTES } from '@/lib/constants';
 
 const CATEGORY_MAP: Record<string, string> = {
   photos: 'photos',
@@ -88,7 +90,6 @@ const CATEGORY_ICONS: Record<string, React.ElementType> = {
   others: FileIcon,
 };
 
-const MAX_FILE_BYTES = 15 * 1024 * 1024 * 1024;
 
 export default function TeamFilesPage() {
   const { pathname } = useLocation();
@@ -234,22 +235,11 @@ export default function TeamFilesPage() {
           parentId: currentFolderId ?? undefined,
         });
 
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('PUT', `${getApiBaseUrl()}/spaces/${spaceId}/files/${created.id}/upload`);
-          xhr.withCredentials = true;
-          const token = getAuthToken();
-          if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-          xhr.upload.onprogress = (ev) => {
-            if (ev.lengthComputable) {
-              const pct = Math.round((ev.loaded / ev.total) * 100);
-              updateUpload(progressId, { progress: pct });
-            }
-          };
-          xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(xhr.statusText));
-          xhr.onerror = () => reject(new Error('Upload failed'));
-          xhr.send(file);
-        });
+        await uploadManager.uploadWithXHR(
+          `/api/v1/spaces/${spaceId}/files/${created.id}/upload`,
+          file,
+          (pct) => updateUpload(progressId, { progress: pct }),
+        );
 
         updateUpload(progressId, { progress: 100, status: 'completed' });
       } catch (err) {

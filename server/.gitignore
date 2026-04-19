@@ -2,6 +2,13 @@
 /dist
 /node_modules
 
+# Go build artifacts
+/bin/
+
+# Turborepo / pnpm (not used in this Go project — prevent accidental re-creation)
+.turbo/
+.pnpm-store/
+
 # Logs
 logs
 *.log

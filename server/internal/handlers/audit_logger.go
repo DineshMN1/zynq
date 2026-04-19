@@ -23,25 +23,23 @@ type AuditEntry struct {
 	Metadata     models.JSONB
 }
 
-// LogAudit writes an audit record asynchronously — it never blocks the caller.
+// LogAudit writes an audit record synchronously so no events are lost on DB hiccups.
 func LogAudit(db *gorm.DB, e AuditEntry) {
-	go func() {
-		record := models.AuditLog{
-			ID:           uuid.New(),
-			UserID:       e.UserID,
-			UserName:     e.UserName,
-			UserEmail:    e.UserEmail,
-			Action:       e.Action,
-			ResourceType: e.ResourceType,
-			ResourceName: e.ResourceName,
-			ResourceID:   e.ResourceID,
-			IPAddress:    e.IPAddress,
-			Metadata:     e.Metadata,
-		}
-		if err := db.Create(&record).Error; err != nil {
-			slog.Error("audit log write failed", "action", e.Action, "error", err)
-		}
-	}()
+	record := models.AuditLog{
+		ID:           uuid.New(),
+		UserID:       e.UserID,
+		UserName:     e.UserName,
+		UserEmail:    e.UserEmail,
+		Action:       e.Action,
+		ResourceType: e.ResourceType,
+		ResourceName: e.ResourceName,
+		ResourceID:   e.ResourceID,
+		IPAddress:    e.IPAddress,
+		Metadata:     e.Metadata,
+	}
+	if err := db.Create(&record).Error; err != nil {
+		slog.Error("audit log write failed", "action", e.Action, "error", err)
+	}
 }
 
 // auditIP extracts the real client IP for audit logging.

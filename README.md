@@ -1,122 +1,79 @@
-<div align="center">
+# ZynqCloud
 
-# zynqCloud
+**Open-source self-hosted file storage for teams and individuals.**
 
-**An open-source & self‑hostable file cloud for teams and individuals.**
+Your files, your server, your encryption keys — zero vendor lock-in.
 
-Self‑hosted file storage with roles, invites, sharing, and quotas — your files, your server, your control.
-
-[Quick Start](#quick-start) • [About](#about) • [Features](#features) • [Installation](#installation) • [Support](#support) • [Contributing](#contributing)
-
-<a href="https://immich.dineshmn.me/s/zynq-demo">
-  <img src="https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Watch_Demo-blue?style=for-the-badge&logoColor=white" alt="Watch Demo" />
-</a>
-
-</div>
+[Quick Start](#quick-start) · [Features](#features) · [Configuration](#configuration) · [Docs](#documentation) · [Contributing](#contributing)
 
 ---
 
 ## About
 
-zynqCloud helps you run a private file cloud on your own infrastructure. You get a clean UI, strong access control, and familiar workflows without vendor lock‑in.
+ZynqCloud is a privacy-first file cloud you deploy on your own infrastructure. It combines strong AES-256-GCM encryption, invite-only user management, role-based access control, and a clean web UI — packaged as a single Docker Compose stack that runs anywhere Docker does.
 
-- Manage users, roles, and storage quotas
-- Share files privately or publicly
-- Keep ownership of your data and configuration
-
-If you stop using zynqCloud, your files and database remain fully on your servers.
+**Stack:** Go (Chi, GORM) · React 19 + Vite · PostgreSQL 16 · Docker
 
 ---
 
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/install.sh -o install.sh
-bash install.sh
+curl -fsSL https://raw.githubusercontent.com/DineshMN1/zynq/main/install.sh | bash
 ```
 
-For non-interactive servers/automation:
+Or manually:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/install.sh | bash -s -- --init-only --non-interactive
-# edit generated .env, then:
-bash install.sh --start --non-interactive
-```
-
-### Before Running `install.sh`
-
-Keep these ready:
-
-1. A Linux server with Docker + Docker Compose plugin installed
-2. Open port for app access (default `3000`, or your custom `APP_PORT`)
-3. Domain name (optional, but recommended for production)
-4. SMTP details if you want invite/password-reset emails (host, port, secure mode, user, password, from address)
-5. Storage path decision for uploads (`ZYNQ_DATA_PATH`)
-6. Secure place to store generated secrets (`JWT_SECRET`, `FILE_ENCRYPTION_MASTER_KEY`)
-
-### Interactive Fields Asked By `install.sh`
-
-The installer wizard prompts for:
-
-1. Install directory
-2. Domain/IP
-3. App port
-4. Data path
-5. Docker image tag
-6. Database user
-7. Database name
-8. Database password
-9. JWT secret
-10. File encryption master key (base64)
-11. Public registration toggle
-12. Invite token TTL (hours)
-13. SMTP enable toggle
-14. SMTP host/port/secure/user/password/from (if SMTP enabled)
-15. Optional `.env` review/edit before startup
-
-If password/secret fields are left empty, secure values are auto-generated.
-
-Or manual:
-
-```bash
-git clone https://github.com/dineshmn1/zynq.git
+git clone https://github.com/DineshMN1/zynq.git
 cd zynq
 cp .env.example .env
+# Edit .env — set JWT_SECRET, FILE_ENCRYPTION_MASTER_KEY, DATABASE_PASSWORD
 docker compose up -d
 ```
 
-Open `http://localhost:3000` after containers are started → Create your admin account → Done.
+Open `http://localhost:3000` → register the first account (becomes Owner automatically) → done.
+
+> **Important:** Back up `FILE_ENCRYPTION_MASTER_KEY` separately from your server. Without it, encrypted files cannot be recovered even with a full database backup.
 
 ---
 
 ## Features
 
-- Upload, download, and organize files
-- Private and public sharing links
-- Invite-only registration
-- Roles: Owner, Admin, User
-- Per‑user storage quotas
-- Trash with restore
-- SMTP for invites and password reset
-- Light/Dark themes
+- **File management** — upload, download, folder tree, drag-and-drop, rename, move, trash + restore
+- **Encryption at rest** — AES-256-GCM per-file keys wrapped by a master KEK; plaintext never touches disk
+- **Deduplication** — SHA-256 hashing detects identical files; duplicates share one copy on disk
+- **Three-tier RBAC** — Owner · Admin · User; Team Spaces add Viewer / Contributor / Admin space roles
+- **File sharing** — public links or private shares with optional password and expiry
+- **Invite-only registration** — email invitations with pre-assigned roles; public registration toggle
+- **Per-user storage quotas** — configurable limits enforced at upload time with 507 on disk full
+- **Audit log** — append-only record of every security-relevant action with IP and actor
+- **Notification channels** — email, Microsoft Teams, or Resend webhooks for system events
+- **Admin panel** — user management, monitoring dashboard, SMTP settings, quota control
+- **Cloudflare Tunnel support** — expose securely without opening inbound ports
+- **Light / Dark themes**
 
 ---
 
-## Installation
+## Architecture
 
-**Docker (recommended)**
-
-```bash
-cp .env.example .env
-docker compose up -d
+```text
+┌─────────────────────────────────────────┐
+│  Browser (React 19 + Vite + Tailwind)   │
+└──────────────────┬──────────────────────┘
+                   │ HTTP/REST (JWT cookie)
+┌──────────────────▼──────────────────────┐
+│  Go API  (Chi router · GORM · AES-GCM)  │
+│  Single binary serves API + React SPA   │
+└──────┬─────────────────────┬────────────┘
+       │                     │
+┌──────▼──────┐   ┌──────────▼──────────┐
+│ PostgreSQL  │   │  /data/files (CAS)  │
+│  (metadata) │   │  encrypted blobs    │
+└─────────────┘   └─────────────────────┘
 ```
 
-**Development**
-
-```bash
-pnpm install
-docker compose -f docker-compose.dev.yml up -d
-```
+All services run in Docker Compose. The Go binary serves both the REST API and the pre-built React SPA — no separate reverse proxy required for basic deployments.
 
 ---
 
@@ -124,229 +81,133 @@ docker compose -f docker-compose.dev.yml up -d
 
 Copy `.env.example` to `.env` and configure:
 
-| Variable                     | Description                                                 |
-| ---------------------------- | ----------------------------------------------------------- |
-| `JWT_SECRET`                 | Auth secret (32+ chars)                                     |
-| `DATABASE_*`                 | PostgreSQL connection                                       |
-| `FILE_ENCRYPTION_MASTER_KEY` | Master key for file encryption (critical: back up securely) |
-| `ZYNQ_DATA_PATH`             | Host path for file data                                     |
-| `SMTP_*`                     | Email settings                                              |
+| Variable | Description |
+| --- | --- |
+| `JWT_SECRET` | Auth signing secret — 32+ random characters |
+| `FILE_ENCRYPTION_MASTER_KEY` | Base64-encoded 32-byte master key — **back this up** |
+| `DATABASE_PASSWORD` | PostgreSQL password |
+| `ZYNQ_DATA_PATH` | Host path where encrypted files are stored |
+| `COOKIE_DOMAIN` | Your domain (e.g. `cloud.example.com`) |
+| `CORS_ORIGIN` | Frontend URL (e.g. `https://cloud.example.com`) |
 
-## Operations
-
-- Backup and restore runbook: `docs/backup-restore.md`
-- Backup script: `scripts/backup.sh`
-- Restore script: `scripts/restore.sh`
-
-### Manual Upgrade / Downgrade (No pnpm, Keep Volumes)
-
-Run these directly on your server.
-
-Upgrade to latest:
+Generate secrets:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/scripts/docker-image-manager.sh | bash -s -- upgrade
+openssl rand -base64 48   # JWT_SECRET
+openssl rand -base64 32   # FILE_ENCRYPTION_MASTER_KEY
 ```
 
-Upgrade (or switch) to a specific version:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/scripts/docker-image-manager.sh | bash -s -- v1.2.3
-```
-
-Downgrade to a specific version:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/scripts/docker-image-manager.sh | bash -s -- downgrade v1.2.2
-```
-
-Use a full custom image reference:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dineshmn1/zynq/main/scripts/docker-image-manager.sh | bash -s -- set ghcr.io/example/zynqcloud:v1.2.3
-```
-
-Notes:
-
-- Script updates `ZYNQCLOUD_IMAGE` in `.env`, then runs `docker compose pull` + `docker compose up -d`.
-- Data volumes are preserved.
-- If your install is not in `$HOME/zynqcloud`, run with: `STACK_DIR=/your/install/path ...`
-- Do not run `docker compose down -v` unless you intentionally want to remove volumes.
-
-## Ports
-
-- External default: `3000` (`APP_PORT`)
-- App container port: `80`
-- Internal only: frontend `3000`, backend `4000` (not exposed externally)
+See `.env.example` for the full reference with all options and defaults.
 
 ---
 
-## Support
+## Documentation
 
-If you need help, open an issue or start a discussion in the repository.
+| Doc | Description |
+| --- | --- |
+| [docs/reverse-proxy.md](docs/reverse-proxy.md) | Caddy, nginx, Traefik, and LAN-only setup |
+| [docs/backup-restore.md](docs/backup-restore.md) | Backup and restore runbook |
+| [docs/updating.md](docs/updating.md) | Zero-downtime update guide |
+| [docs/key-recovery.md](docs/key-recovery.md) | What to do if you lose your `.env` |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Common failures and fixes |
+
+---
+
+## Operations
+
+**Backup** (DB + files + key):
+
+```bash
+./scripts/backup.sh
+```
+
+**Update to latest:**
+
+```bash
+./scripts/update.sh
+```
+
+**Restore from backup:**
+
+```bash
+./scripts/restore.sh
+```
+
+**Enable automated daily DB backups:**
+
+```bash
+docker compose --profile backup up -d
+```
+
+---
+
+## Hardware Requirements
+
+| | Minimum | Recommended |
+| --- | --- | --- |
+| CPU | 1 vCPU | 2 vCPU |
+| RAM | 512 MB | 1 GB |
+| Disk | 10 GB+ | SSD |
+| OS | Linux with Docker | Ubuntu 22.04+ |
+
+Runs on a Raspberry Pi 4, an Oracle Cloud free tier VM, or any VPS.
+
+---
+
+## Security
+
+- AES-256-GCM encryption per file with KEK/DEK hierarchy
+- bcrypt password hashing
+- JWT in HTTP-only Secure cookies
+- Rate limiting on auth endpoints (10 attempts / 15 min per IP)
+- Blocked upload extensions (exe, bat, ps1, sh, dll, apk, and more)
+- Security headers: HSTS, X-Frame-Options, X-Content-Type-Options, Permissions-Policy
+- Path traversal protection on all file I/O
+- Non-root user inside container
+- Startup key fingerprint verification — server refuses to start if master key changed
+
+To report a vulnerability privately, see [SECURITY.md](SECURITY.md).
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/DineshMN1/zynq.git
+cd zynq
+
+# Start PostgreSQL for local dev
+docker compose -f docker-compose.dev.yml up -d
+
+# Backend (Go)
+cd server
+cp .env.dev.example .env.dev
+go run ./cmd/api
+
+# Frontend (new terminal)
+cd web
+pnpm install
+pnpm dev
+```
+
+Run backend tests:
+
+```bash
+cd server && go test ./...
+```
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Please read `CONTRIBUTING.md` and keep changes focused.
-
----
-
-## FAQ
-
-<details>
-<summary><strong>1. What is zynqCloud and who is it for?</strong></summary>
-
-zynqCloud is an open‑source, self‑hosted file cloud built for developers, small teams, and privacy‑conscious individuals who want full control over their data. Instead of trusting a third party with your files, you run zynqCloud on your own server — a VPS, home lab, or even a Raspberry Pi — and keep everything under your roof.
-
-It gives you a modern web UI for uploading, organizing, and sharing files with features like user roles, invitations, storage quotas, and encrypted storage, all without monthly fees or vendor lock‑in.
-
-</details>
-
-<details>
-<summary><strong>2. How does zynqCloud compare to Google Drive or OneDrive?</strong></summary>
-
-|                          | Google Drive / OneDrive            | zynqCloud                           |
-| ------------------------ | ---------------------------------- | ----------------------------------- |
-| **Who holds your data?** | Google / Microsoft                 | You                                 |
-| **Encryption keys**      | Controlled by the provider         | You control the master key          |
-| **Monthly cost**         | $2–$10/month per user              | Free (you pay only for your server) |
-| **Storage limit**        | 15 GB free, then paid tiers        | Limited only by your disk           |
-| **Privacy**              | Data scanned for ads / AI training | Zero third‑party access             |
-| **Customization**        | None                               | Full source code access             |
-
-zynqCloud is ideal when you need privacy, unlimited storage on your own hardware, and zero recurring costs.
-
-</details>
-
-<details>
-<summary><strong>3. How does zynqCloud compare to Nextcloud, Seafile, or Cloudreve?</strong></summary>
-
-- **Simpler stack** — zynqCloud runs as one container (frontend + backend via nginx/supervisord) + PostgreSQL. No PHP, Redis, Apache, Cron, or Aria2 required. `docker compose up` and you're done.
-- **Encryption by default** — Every file is encrypted at rest with AES‑256‑GCM using per‑file keys. Nextcloud and Cloudreve treat encryption as an optional plugin.
-- **Built‑in deduplication** — SHA‑256 hashing detects identical files before upload. Duplicates share a single copy on disk.
-- **Modern UI** — Built with Next.js 15 and Tailwind CSS. Responsive, fast, and supports light/dark themes out of the box.
-- **Lower resource usage** — Node.js event‑loop handles concurrency without spawning processes. Typical idle memory: 80–150 MB for the backend.
-
-</details>
-
-<details>
-<summary><strong>4. Is my data encrypted?</strong></summary>
-
-Yes, every file is encrypted at rest using **AES‑256‑GCM** with an envelope encryption model:
-
-1. Each file gets its own random 256‑bit **Data Encryption Key (DEK)**
-2. The DEK encrypts the file content with AES‑256‑GCM (authenticated encryption — detects tampering)
-3. The DEK itself is encrypted with a master **Key Encryption Key (KEK)** and stored alongside the file metadata
-4. Compromising one file's DEK does not expose any other file
-
-Your files are never stored in plaintext on disk.
-
-</details>
-
-<details>
-<summary><strong>5. How secure is zynqCloud?</strong></summary>
-
-Security is built into every layer:
-
-- **Password hashing** — bcrypt with cost factor 12, resistant to brute‑force and rainbow‑table attacks
-- **JWT cookies** — httpOnly, Secure, SameSite=strict — tokens are not accessible to JavaScript, preventing XSS theft
-- **Rate limiting** — Login: 5 req/min, forgot‑password: 3 req/min to throttle brute‑force attempts
-- **File upload validation** — Dangerous extensions (.exe, .bat, .ps1, etc.) are blocked; MIME types are validated against a whitelist of 60+ safe types
-- **Input validation** — All request bodies are validated with `class-validator`; unknown fields are stripped automatically
-- **Email enumeration prevention** — The forgot‑password endpoint always returns the same response, preventing attackers from discovering valid email addresses
-- **Non‑root Docker containers** — Both backend and frontend run as unprivileged users inside their containers
-
-</details>
-
-<details>
-<summary><strong>6. What are the minimum hardware requirements?</strong></summary>
-
-zynqCloud is designed to run on minimal hardware:
-
-|          | Minimum                        | Recommended     |
-| -------- | ------------------------------ | --------------- |
-| **CPU**  | 1 vCPU                         | 2 vCPU          |
-| **RAM**  | 1 GB                           | 2 GB            |
-| **Disk** | 10 GB+ (depends on your files) | SSD recommended |
-| **OS**   | Any Linux with Docker          | Ubuntu 22.04+   |
-
-A single `docker compose up -d` deploys PostgreSQL plus one zynqCloud app container that bundles frontend and backend. Works on any cloud provider (AWS, DigitalOcean, Hetzner, Oracle Cloud free tier) or a home server.
-
-</details>
-
-<details>
-<summary><strong>7. Can I migrate from another cloud storage?</strong></summary>
-
-Yes. zynqCloud stores files in a standard directory structure on your server. To migrate:
-
-1. Deploy zynqCloud and create your account
-2. Upload your files through the web UI (supports drag‑and‑drop, folder uploads, and parallel uploads of up to 3 files)
-3. Your files are encrypted and stored immediately
-
-For bulk migration, you can upload folders directly — the folder structure is preserved in zynqCloud. There is no proprietary format; if you ever leave zynqCloud, your files remain on your server in their original form (encrypted, but decryptable with your master key).
-
-</details>
-
-<details>
-<summary><strong>8. How does file deduplication work?</strong></summary>
-
-Before uploading, zynqCloud computes a **SHA‑256 hash** of each file:
-
-- **Client‑side hashing** — The hash is calculated in a background **Web Worker** so the browser UI never freezes, even for large files
-- **Server‑side check** — If a file with the same hash already exists in your account, the API returns a duplicate warning (`ConflictException`) by default
-- **Explicit override** — To proceed anyway, the client must opt in with `skipDuplicateCheck=true` on create/upload flows
-- **Scope** — Deduplication applies to documents and images (PDF, DOCX, PNG, JPG, etc.)
-- **Result** — Identical files are stored only once on disk, saving storage space automatically
-
-This means uploading the same 50 MB PDF twice uses only 50 MB of disk space, not 100 MB.
-
-</details>
-
-<details>
-<summary><strong>9. Does zynqCloud support team collaboration?</strong></summary>
-
-Yes. zynqCloud includes built‑in multi‑user features:
-
-- **Roles** — Three levels: Owner (full control), Admin (manage users), and User (standard access)
-- **Invite‑only registration** — The owner can send email invitations with pre‑assigned roles. Public registration can be disabled
-- **Per‑user storage quotas** — Admins can set storage limits for each user (e.g., 10 GB per user)
-- **File sharing** — Share files privately with specific users (read or write permission) or generate public links
-- **SMTP integration** — Send invitations and password reset emails through your own mail server
-
-</details>
-
-<details>
-<summary><strong>10. How do I update zynqCloud?</strong></summary>
-
-Updating is a single command:
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-This pulls the latest images and restarts the containers. Your data is stored in Docker volumes and the PostgreSQL database, so nothing is lost during updates.
-
-For version‑pinned deployments, use a specific tag:
-
-```yaml
-image: yourusername/zynqcloud:v1.2.0
-```
-
-Database migrations run automatically via the one-shot `migrate` service in `docker-compose.yml` before the app starts.
-
-</details>
+See [CONTRIBUTING.md](CONTRIBUTING.md). Pull requests are welcome — please keep changes focused and include tests for new behaviour.
 
 ---
 
 ## License
 
-MIT © zynqCloud
+MIT © ZynqCloud
 
-<div align="center">
+---
 
 **Your files. Your cloud. Your control.**
-
-</div>
