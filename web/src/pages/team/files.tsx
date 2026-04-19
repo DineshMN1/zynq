@@ -395,70 +395,86 @@ export default function TeamFilesPage() {
       <DropZoneOverlay isActive={isDragActive} />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-        <div className="flex items-center gap-2.5">
-          <PageIcon className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-[15px] font-semibold">{pageTitle}</h1>
-          {total > 0 && (
-            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-              {total}
-            </span>
-          )}
-        </div>
+      <div className="flex flex-col gap-2 px-4 sm:px-6 py-3 border-b border-border shrink-0">
+        {/* Row 1: title + action buttons */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <PageIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <h1 className="text-[15px] font-semibold truncate">{pageTitle}</h1>
+            {total > 0 && (
+              <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0">
+                {total}
+              </span>
+            )}
+          </div>
 
-        <div className="flex items-center gap-2">
-          <form onSubmit={handleSearchSubmit}>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search…"
-                className="pl-8 h-8 w-44 text-sm"
-              />
-            </div>
-          </form>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Search — hidden on mobile, shown inline on sm+ */}
+            <form onSubmit={handleSearchSubmit} className="hidden sm:block">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Search…"
+                  className="pl-8 h-8 w-44 text-sm"
+                />
+              </div>
+            </form>
 
-          {canWrite && (
-            <>
-              {/* New Folder — only in All Files view */}
-              {isAllFiles && (
-                <Button variant="outline" size="sm" className="h-8" onClick={() => setShowNewFolder(true)}>
-                  <FolderPlus className="mr-1.5 h-3.5 w-3.5" />
-                  New Folder
-                </Button>
-              )}
-
-              {/* Upload dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" className="h-8">
-                    <Upload className="mr-1.5 h-3.5 w-3.5" />
-                    Upload
-                    <ChevronDown className="ml-1 h-3.5 w-3.5" />
+            {canWrite && (
+              <>
+                {isAllFiles && (
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => setShowNewFolder(true)}>
+                    <FolderPlus className="mr-1.5 h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">New Folder</span>
+                    <span className="sm:hidden">Folder</span>
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2">
-                    <FileIcon className="h-3.5 w-3.5" />
-                    Upload Files
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => folderInputRef.current?.click()} className="gap-2">
-                    <Folder className="h-3.5 w-3.5" />
-                    Upload Folder
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                )}
 
-              <input ref={fileInputRef} type="file" multiple className="hidden"
-                onChange={(e) => { void uploadFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
-              <input ref={folderInputRef} type="file" multiple className="hidden"
-                // @ts-expect-error webkitdirectory is non-standard
-                webkitdirectory=""
-                onChange={handleFolderInputChange} />
-            </>
-          )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" className="h-8">
+                      <Upload className="mr-1.5 h-3.5 w-3.5" />
+                      Upload
+                      <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-40">
+                    <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2">
+                      <FileIcon className="h-3.5 w-3.5" />
+                      Upload Files
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => folderInputRef.current?.click()} className="gap-2">
+                      <Folder className="h-3.5 w-3.5" />
+                      Upload Folder
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <input ref={fileInputRef} type="file" multiple className="hidden"
+                  onChange={(e) => { void uploadFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+                <input ref={folderInputRef} type="file" multiple className="hidden"
+                  // @ts-expect-error webkitdirectory is non-standard
+                  webkitdirectory=""
+                  onChange={handleFolderInputChange} />
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Row 2 (mobile only): full-width search */}
+        <form onSubmit={handleSearchSubmit} className="sm:hidden">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search…"
+              className="pl-8 h-8 w-full text-sm"
+            />
+          </div>
+        </form>
       </div>
 
       {/* Breadcrumb for All Files folder navigation */}

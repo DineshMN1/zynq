@@ -7,6 +7,7 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -192,7 +193,11 @@ export default function AdminLayout() {
     <TooltipProvider delayDuration={0}>
       <SidebarProvider className="min-h-0! h-screen overflow-hidden">
         <AdminSidebarInner user={user} />
-        <SidebarInset className="overflow-hidden">
+        <SidebarInset className="overflow-hidden flex flex-col">
+          <header className="lg:hidden flex h-12 shrink-0 items-center gap-2 border-b px-4">
+            <SidebarTrigger className="-ml-1" />
+            <span className="text-sm font-medium text-foreground/80">Admin</span>
+          </header>
           <main className="flex-1 overflow-auto h-full">
             <Outlet />
           </main>

@@ -4,15 +4,15 @@ import { AppSidebar } from '@/components/Sidebar';
 import {
   SidebarProvider,
   SidebarInset,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
-import { UploadProvider } from '@/context/UploadContext';
-import { UploadManagerPopup } from '@/components/UploadManagerPopup';
 
 // Map routes to page names for the breadcrumb
 const PAGE_NAMES: Record<string, string> = {
   '/dashboard/files':    'My Files',
+  '/dashboard/uploads':  'Uploads',
   '/dashboard/shared':   'Shared',
   '/dashboard/trash':    'Trash',
   '/dashboard/profile':  'Profile',
@@ -42,6 +42,7 @@ function DashboardHeader() {
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+      <SidebarTrigger className="lg:hidden -ml-1" />
       <span className="text-sm font-medium text-foreground/80">{pageName}</span>
     </header>
   );
@@ -66,17 +67,14 @@ export default function DashboardLayout() {
   if (!user) return null;
 
   return (
-    <UploadProvider>
-      <SidebarProvider defaultOpen={true} className="min-h-0! h-screen overflow-hidden">
-        <AppSidebar user={user} />
-        <SidebarInset className="overflow-hidden">
-          <DashboardHeader />
-          <main className="flex-1 overflow-auto">
-            <Outlet />
-          </main>
-        </SidebarInset>
-      </SidebarProvider>
-      <UploadManagerPopup />
-    </UploadProvider>
+    <SidebarProvider defaultOpen={true} className="min-h-0! h-screen overflow-hidden">
+      <AppSidebar user={user} />
+      <SidebarInset className="overflow-hidden">
+        <DashboardHeader />
+        <main className="flex-1 overflow-auto">
+          <Outlet />
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

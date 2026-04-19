@@ -124,6 +124,19 @@ export interface FileMetadata {
   privateShareCount?: number;
 }
 
+export interface UploadSessionInfo {
+  sessionId: string;
+  fileId: string;
+  chunkSize: number;
+  totalChunks: number;
+  uploadedChunks: number[];
+  uploadedBytes: number;
+  nextChunk: number;
+  expiresAt: string;
+  uploadUrl: string;
+  completeUrl: string;
+}
+
 export interface Share {
   id: string;
   file_id: string;
@@ -424,12 +437,58 @@ export const fileApi = {
       FileMetadata & {
         uploadUrl?: string;
         presignedFields?: Record<string, string>;
-        duplicateFiles?: FileMetadata[];
-      }
+      duplicateFiles?: FileMetadata[];
+    }
     >('/files', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  startUploadSession: (fileId: string) =>
+    fetchApi<UploadSessionInfo>(`/files/${fileId}/upload-session`, {
+      method: 'POST',
+    }),
+
+  getUploadSession: (fileId: string, sessionId: string) =>
+    fetchApi<UploadSessionInfo>(`/files/${fileId}/upload-session/${sessionId}`),
+
+  uploadChunk: async (
+    fileId: string,
+    sessionId: string,
+    chunkIndex: number,
+    chunk: Blob,
+    contentType = 'application/octet-stream',
+  ): Promise<UploadSessionInfo> => {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {
+      'Content-Type': contentType,
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(
+      `${getApiBaseUrl()}/files/${fileId}/upload-session/${sessionId}/chunks/${chunkIndex}`,
+      {
+        method: 'PUT',
+        body: chunk,
+        headers,
+        credentials: 'include',
+      },
+    );
+    if (!response.ok) {
+      throw await toApiError(response);
+    }
+    return response.json();
+  },
+
+  completeUploadSession: (fileId: string, sessionId: string) =>
+    fetchApi<FileMetadata>(`/files/${fileId}/upload-session/${sessionId}/complete`, {
+      method: 'POST',
+    }),
+
+  abortUploadSession: (fileId: string, sessionId: string) =>
+    fetchApi<{ success: boolean }>(
+      `/files/${fileId}/upload-session/${sessionId}`,
+      { method: 'DELETE' },
+    ),
 
   upload: async (fileId: string, file: File): Promise<FileMetadata> => {
     const token = getAuthToken();

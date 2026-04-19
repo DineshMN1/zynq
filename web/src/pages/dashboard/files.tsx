@@ -52,6 +52,7 @@ import {
   getAuthToken,
   type FileMetadata,
   type ShareableUser,
+  type UploadSessionInfo,
   ApiError,
 } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -70,10 +71,29 @@ import { DropZoneOverlay } from '@/features/file/components/drop-zone-overlay';
 import { uploadManager } from '@/lib/upload-manager';
 import { formatBytes } from '@/lib/auth';
 import { emitStorageRefresh } from '@/lib/storage-events';
-import { useUploadContext } from '@/context/UploadContext';
+import { useUploadContext, type UploadProgress } from '@/context/UploadContext';
+import {
+  saveUploadSource,
+  getUploadSource,
+  resolveStoredUploadFile,
+} from '@/lib/upload-sources';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn, getSafeMimeType } from '@/lib/utils';
 import { MAX_FILE_BYTES } from '@/lib/constants';
+
+type UploadSourceRef = {
+  id: string;
+  kind: 'file' | 'directory';
+  name: string;
+  relativePath?: string;
+  handle: FileSystemHandle;
+};
+
+type UploadEntry = {
+  file: File;
+  parentId?: string;
+  source?: UploadSourceRef;
+};
 
 function getXhrErrorMessage(xhr: XMLHttpRequest): string {
   const status = xhr.status;
@@ -170,6 +190,7 @@ export default function FilesPage() {
 
   // Ref used by handleUploadFolderClick to call .click() on Firefox fallback.
   const folderFallbackRef = useRef<HTMLInputElement>(null);
+  const pendingFolderSourceRef = useRef<FileSystemDirectoryHandle | null>(null);
 
   // Callback ref: sets webkitdirectory AND stores in folderFallbackRef.
   const setFolderInputRef = useCallback((el: HTMLInputElement | null) => {
@@ -185,7 +206,7 @@ export default function FilesPage() {
   const [publicLinkFileName, setPublicLinkFileName] = useState<string | null>(
     null,
   );
-  const { addUpload, updateUpload, removeUpload } = useUploadContext();
+  const { uploadQueue, addUpload, updateUpload, removeUpload } = useUploadContext();
   const uploadSpeedRef = useRef<
     Map<string, { lastTs: number; lastLoaded: number; smoothedBps: number }>
   >(new Map());
@@ -210,7 +231,7 @@ export default function FilesPage() {
   // Folder upload confirmation state
   const [showFolderUploadDialog, setShowFolderUploadDialog] = useState(false);
   const [pendingFolderUpload, setPendingFolderUpload] = useState<{
-    files: File[];
+    entries: UploadEntry[];
     folderName: string;
     totalSize: number;
     fileCount: number;
@@ -219,6 +240,8 @@ export default function FilesPage() {
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastClickedId = useRef<string | null>(null);
+
+  const CHUNK_UPLOAD_BYTES = 25 * 1024 * 1024;
 
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -317,12 +340,15 @@ export default function FilesPage() {
    * to 'checking' and re-runs `fn`, re-registering itself on each failure so
    * the retry button stays available after multiple attempts.
    */
-  const registerRetry = (progressId: string, fn: () => Promise<void>) => {
-    const retryFn = async () => {
+  const registerRetry = (
+    progressId: string,
+    fn: (file?: File) => Promise<void>,
+  ) => {
+    const retryFn = async (file?: File) => {
       updateUpload(progressId, { status: 'checking', progress: 0 });
       registerRetry(progressId, fn); // re-register before attempt
       try {
-        await fn();
+        await fn(file);
       } catch {
         updateUpload(progressId, { status: 'error' });
         registerRetry(progressId, fn); // re-register after failure
@@ -338,14 +364,14 @@ export default function FilesPage() {
    *  - ok:        size < 5 GB (upload immediately)
    */
   const checkFileSizeLimits = (
-    entries: { file: File; parentId?: string }[],
+    entries: UploadEntry[],
   ): {
-    ok: { file: File; parentId?: string }[];
-    atLimit: { file: File; parentId?: string }[];
+    ok: UploadEntry[];
+    atLimit: UploadEntry[];
     rejected: File[];
   } => {
-    const ok: { file: File; parentId?: string }[] = [];
-    const atLimit: { file: File; parentId?: string }[] = [];
+    const ok: UploadEntry[] = [];
+    const atLimit: UploadEntry[] = [];
     const rejected: File[] = [];
     for (const entry of entries) {
       if (entry.file.size > MAX_FILE_BYTES) {
@@ -560,7 +586,76 @@ export default function FilesPage() {
     }
   };
 
-  const handleUploadFileClick = () => fileInputRef.current?.click();
+  const handleUploadFileClick = async () => {
+    if (typeof window !== 'undefined' && 'showOpenFilePicker' in window) {
+      try {
+        type FilePickerWindow = Window & {
+          showOpenFilePicker: (opts?: {
+            multiple?: boolean;
+            mode?: 'read' | 'readwrite';
+          }) => Promise<FileSystemFileHandle[]>;
+        };
+        const handles = await (window as FilePickerWindow).showOpenFilePicker({
+          multiple: true,
+          mode: 'read',
+        });
+        if (handles.length === 0) return;
+
+        const entries: UploadEntry[] = [];
+        for (const handle of handles) {
+          const file = await handle.getFile();
+          entries.push({
+            file,
+            parentId: currentFolderId || undefined,
+            source: {
+              id: crypto.randomUUID(),
+              kind: 'file',
+              name: handle.name,
+              handle,
+            },
+          });
+        }
+        await uploadMultipleFiles(entries);
+        return;
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name === 'AbortError') return;
+        console.warn('showOpenFilePicker failed, falling back to input:', err);
+      }
+    }
+    fileInputRef.current?.click();
+  };
+
+  const persistSourceForTask = async (
+    progressId: string,
+    source?: UploadSourceRef,
+  ) => {
+    if (!source) return;
+    await saveUploadSource({
+      id: source.id,
+      kind: source.kind,
+      name: source.name,
+      relativePath: source.relativePath,
+      handle: source.handle,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    });
+    updateUpload(progressId, {
+      sourceId: source.id,
+      sourceKind: source.kind,
+      sourcePath: source.relativePath,
+    });
+  };
+
+  const resolveTaskSourceFile = async (item: UploadProgress): Promise<File> => {
+    if (!item.sourceId) {
+      throw new Error('This upload cannot be resumed after refresh in this browser.');
+    }
+    const source = await getUploadSource(item.sourceId);
+    if (!source) {
+      throw new Error('Upload source expired. Please re-select the file.');
+    }
+    return resolveStoredUploadFile(source);
+  };
 
   const handleFolderInputChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -574,7 +669,7 @@ export default function FilesPage() {
     const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
 
     setPendingFolderUpload({
-      files: allFiles,
+      entries: allFiles.map((file) => ({ file })),
       folderName: rootFolderName,
       totalSize,
       fileCount: allFiles.length,
@@ -604,6 +699,7 @@ export default function FilesPage() {
       const dirHandle = await (window as DirPickerWindow).showDirectoryPicker({
         mode: 'read',
       });
+      pendingFolderSourceRef.current = dirHandle;
 
       const allFilesWithPaths: { file: File; relativePath: string }[] = [];
 
@@ -638,14 +734,25 @@ export default function FilesPage() {
         0,
       );
 
+      const sourceId = crypto.randomUUID();
       setPendingFolderUpload({
-        files: allFilesWithPaths.map(({ file, relativePath }) => {
+        entries: allFilesWithPaths.map(({ file, relativePath }) => {
           const newFile = new File([file], file.name, { type: file.type });
           Object.defineProperty(newFile, 'webkitRelativePath', {
             value: relativePath,
             writable: false,
           });
-          return newFile;
+          return {
+            file: newFile,
+            parentId: currentFolderId || undefined,
+            source: {
+              id: sourceId,
+              kind: 'directory',
+              name: dirHandle.name,
+              relativePath,
+              handle: dirHandle,
+            },
+          } satisfies UploadEntry;
         }),
         folderName: dirHandle.name,
         totalSize,
@@ -709,13 +816,13 @@ export default function FilesPage() {
     );
 
     setPendingFolderUpload({
-      files: allFilesWithPaths.map((f) => {
+      entries: allFilesWithPaths.map((f) => {
         const newFile = new File([f.file], f.file.name, { type: f.file.type });
         Object.defineProperty(newFile, 'webkitRelativePath', {
           value: f.relativePath,
           writable: false,
         });
-        return newFile;
+        return { file: newFile };
       }),
       folderName: rootFolderName,
       totalSize,
@@ -724,151 +831,264 @@ export default function FilesPage() {
     setShowFolderUploadDialog(true);
   };
 
-  const uploadFileWithProgress = (
-    url: string,
+  const uploadFileWithProgress = async (
+    fileId: string,
     file: File,
     contentType: string,
     progressId: string,
-  ): Promise<void> => {
-    const apiBase = getApiBaseUrl();
-    const fullUrl = url.startsWith('http')
-      ? url
-      : `${apiBase}${url.replace(/^\/api\/v1/, '')}`;
+    initialSession?: UploadSessionInfo,
+  ): Promise<'completed' | 'paused'> => {
+    const startChunkUpload = (
+      session: UploadSessionInfo,
+      chunkIndex: number,
+      chunkBlob: Blob,
+      chunkStart: number,
+    ): Promise<'completed' | 'paused'> => {
+      const chunkUrl = `${getApiBaseUrl()}/files/${fileId}/upload-session/${session.sessionId}/chunks/${chunkIndex}`;
+      const maxAttempts = 3;
 
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      // Track why the XHR was aborted so handlers can distinguish pause vs cancel
-      const flags = { abortReason: '' as '' | 'pause' | 'cancel' };
-      let settled = false;
+      const attemptOnce = (): Promise<'completed' | 'paused'> =>
+        new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          const flags = { abortReason: '' as '' | 'pause' | 'cancel' };
+          let settled = false;
 
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const percent = Math.round((event.loaded / event.total) * 100);
-          const now = performance.now();
-          const current = uploadSpeedRef.current.get(progressId);
-          const startTs = uploadStartRef.current.get(progressId) ?? now;
-          const previousTs = current?.lastTs ?? startTs;
-          const previousLoaded = current?.lastLoaded ?? 0;
-          const elapsedSeconds = (now - previousTs) / 1000;
-          const deltaBytes = event.loaded - previousLoaded;
-          const instantBps =
-            elapsedSeconds > 0 && deltaBytes > 0
-              ? deltaBytes / elapsedSeconds
-              : 0;
-          const smoothedBps = current
-            ? current.smoothedBps * 0.7 + instantBps * 0.3
-            : instantBps;
-          uploadSpeedRef.current.set(progressId, {
-            lastTs: now,
-            lastLoaded: event.loaded,
-            smoothedBps,
+          xhr.upload.addEventListener('progress', (event) => {
+            if (!event.lengthComputable) return;
+            const overallLoaded = Math.min(file.size, chunkStart + event.loaded);
+            const now = performance.now();
+            const current = uploadSpeedRef.current.get(progressId);
+            const startTs = uploadStartRef.current.get(progressId) ?? now;
+            const previousTs = current?.lastTs ?? startTs;
+            const previousLoaded = current?.lastLoaded ?? chunkStart;
+            const elapsedSeconds = (now - previousTs) / 1000;
+            const deltaBytes = overallLoaded - previousLoaded;
+            const instantBps =
+              elapsedSeconds > 0 && deltaBytes > 0
+                ? deltaBytes / elapsedSeconds
+                : 0;
+            const smoothedBps = current
+              ? current.smoothedBps * 0.7 + instantBps * 0.3
+              : instantBps;
+            uploadSpeedRef.current.set(progressId, {
+              lastTs: now,
+              lastLoaded: overallLoaded,
+              smoothedBps,
+            });
+
+            const remainingBytes = Math.max(0, file.size - overallLoaded);
+            let etaSeconds =
+              smoothedBps > 0
+                ? Math.ceil(remainingBytes / smoothedBps)
+                : undefined;
+            if (overallLoaded / file.size >= 0.95 && remainingBytes > 0 && (!etaSeconds || etaSeconds < 3)) {
+              etaSeconds = 3;
+            }
+
+            updateUpload(progressId, {
+              progress: Math.min(99, Math.round((overallLoaded / file.size) * 100)),
+              loadedBytes: overallLoaded,
+              totalBytes: file.size,
+              uploadedBytes: overallLoaded,
+              etaSeconds,
+              speedBps: Math.round(smoothedBps),
+              expiresAt: session.expiresAt ? Date.parse(session.expiresAt) : undefined,
+            });
           });
 
-          const remainingBytes = Math.max(0, event.total - event.loaded);
-          let etaSeconds =
-            smoothedBps > 0
-              ? Math.ceil(remainingBytes / smoothedBps)
-              : undefined;
-          if (
-            percent >= 95 &&
-            remainingBytes > 0 &&
-            (!etaSeconds || etaSeconds < 3)
-          ) {
-            etaSeconds = 3;
-          }
+          xhr.addEventListener('abort', () => {
+            if (settled) return;
+            settled = true;
+            if (flags.abortReason === 'pause') {
+              resolve('paused');
+              return;
+            }
+            if (flags.abortReason === 'cancel') {
+              void fileApi.abortUploadSession(fileId, session.sessionId).catch(() => {});
+              reject(new Error('Upload cancelled'));
+              return;
+            }
+            reject(new Error('Upload aborted'));
+          });
 
+          xhr.addEventListener('error', () => {
+            if (settled) return;
+            settled = true;
+            reject(new Error('Network error'));
+          });
+
+          xhr.addEventListener('readystatechange', () => {
+            if (settled || xhr.readyState !== 4) return;
+            if (xhr.status >= 200 && xhr.status < 300) {
+              settled = true;
+              resolve('completed');
+            } else if (xhr.status > 0) {
+              settled = true;
+              reject(
+                new ApiError(
+                  getXhrErrorMessage(xhr),
+                  xhr.status,
+                  'UPLOAD_FAILED',
+                  { responseText: xhr.responseText },
+                ),
+              );
+            }
+          });
+
+          xhr.open('PUT', chunkUrl);
+          xhr.withCredentials = true;
+          xhr.setRequestHeader('Content-Type', contentType || 'application/octet-stream');
+          const token = getAuthToken();
+          if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
           updateUpload(progressId, {
-            progress: percent,
-            loadedBytes: event.loaded,
-            totalBytes: event.total,
-            etaSeconds,
-            speedBps: Math.round(smoothedBps),
+            cancel: () => {
+              flags.abortReason = 'cancel';
+              xhr.abort();
+            },
+            pause: () => {
+              flags.abortReason = 'pause';
+              xhr.abort();
+            },
           });
+          xhr.send(chunkBlob);
+        });
+
+      const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      const uploadAttempt = async (): Promise<'completed' | 'paused'> => {
+        let attempt = 0;
+        while (attempt < maxAttempts) {
+          try {
+            return await attemptOnce();
+          } catch (err) {
+            attempt += 1;
+            const retryable =
+              err instanceof Error &&
+              (err.message === 'Network error' ||
+                err.message === 'Upload aborted' ||
+                err instanceof ApiError && err.statusCode >= 500);
+            if (!retryable || attempt >= maxAttempts) throw err;
+            const delay = 500 * Math.pow(2, attempt - 1);
+            updateUpload(progressId, { status: 'uploading' });
+            await sleep(delay);
+          }
         }
+        return 'completed';
+      };
+
+      return uploadAttempt();
+    };
+
+    let session = initialSession ?? (await fileApi.startUploadSession(fileId));
+
+    const resumeFn = async () => {
+      try {
+        updateUpload(progressId, { status: 'uploading', retry: resumeFn });
+        await runUpload();
+      } catch (err) {
+        updateUpload(progressId, { status: 'error', retry: resumeFn });
+        throw err;
+      }
+    };
+
+    const runUpload = async (): Promise<'completed' | 'paused'> => {
+      const totalChunks = Math.max(1, session.totalChunks);
+      const nextChunk = Math.max(0, session.nextChunk ?? 0);
+      const uploadedBytes = session.uploadedBytes ?? 0;
+
+      updateUpload(progressId, {
+        status: 'uploading',
+        progress: file.size > 0 ? Math.round((uploadedBytes / file.size) * 100) : 0,
+        loadedBytes: uploadedBytes,
+        totalBytes: file.size,
+        uploadedBytes,
+        expiresAt: session.expiresAt ? Date.parse(session.expiresAt) : undefined,
+        fileId,
+        sessionId: session.sessionId,
+        uploadUrl: session.uploadUrl,
+        completeUrl: session.completeUrl,
+        chunkSize: session.chunkSize,
+        retry: resumeFn,
       });
 
-      xhr.addEventListener('abort', () => {
-        if (settled) return;
-        if (flags.abortReason === 'pause') {
-          settled = true;
-          uploadSpeedRef.current.delete(progressId);
-          uploadStartRef.current.delete(progressId);
-          // Set paused status and register a resume callback
-          const resumeFn = async () => {
-            updateUpload(progressId, { status: 'uploading', progress: 0 });
-            try {
-              await uploadFileWithProgress(url, file, contentType, progressId);
-            } catch {
-              updateUpload(progressId, { status: 'error', retry: resumeFn });
-            }
-          };
+      uploadStartRef.current.set(progressId, performance.now());
+
+      for (let chunkIndex = nextChunk; chunkIndex < totalChunks; chunkIndex++) {
+        const chunkStart = chunkIndex * (session.chunkSize || CHUNK_UPLOAD_BYTES);
+        const chunkEnd = Math.min(file.size, chunkStart + (session.chunkSize || CHUNK_UPLOAD_BYTES));
+        const chunk = file.slice(chunkStart, chunkEnd);
+        const result = await startChunkUpload(session, chunkIndex, chunk, chunkStart);
+        if (result === 'paused') {
           updateUpload(progressId, {
             status: 'paused',
             pause: undefined,
             cancel: undefined,
             retry: resumeFn,
+            expiresAt: session.expiresAt ? Date.parse(session.expiresAt) : undefined,
           });
-          resolve();
-          return;
+          return 'paused';
         }
-        // Normal cancel — don't set error (item is removed from queue)
-      });
+        session = await fileApi.getUploadSession(fileId, session.sessionId);
+      }
 
-      xhr.addEventListener('error', () => {
-        if (settled) return;
-        settled = true;
-        reject(new Error('Network error'));
-      });
-
-      xhr.addEventListener('readystatechange', () => {
-        if (settled || xhr.readyState !== 4) return;
-        if (xhr.status >= 200 && xhr.status < 300) {
-          settled = true;
-          updateUpload(progressId, {
-            progress: 100,
-            status: 'completed',
-            etaSeconds: 0,
-          });
-          uploadSpeedRef.current.delete(progressId);
-          uploadStartRef.current.delete(progressId);
-          resolve();
-        } else if (xhr.status > 0) {
-          settled = true;
-          updateUpload(progressId, { status: 'error' });
-          uploadSpeedRef.current.delete(progressId);
-          uploadStartRef.current.delete(progressId);
-          reject(
-            new ApiError(
-              getXhrErrorMessage(xhr),
-              xhr.status,
-              'UPLOAD_FAILED',
-              { responseText: xhr.responseText },
-            ),
-          );
-        }
-        // status 0 with no abortReason means cancel — item already removed
-      });
-
-      xhr.open('PUT', fullUrl);
-      xhr.withCredentials = true;
-      xhr.setRequestHeader('Content-Type', contentType || 'application/octet-stream');
-      const token = getAuthToken();
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      // Register cancel and pause handlers
+      const completed = await fileApi.completeUploadSession(fileId, session.sessionId);
       updateUpload(progressId, {
-        cancel: () => {
-          flags.abortReason = 'cancel';
-          xhr.abort();
-        },
-        pause: () => {
-          flags.abortReason = 'pause';
-          xhr.abort();
+        progress: 100,
+        loadedBytes: completed.size,
+        totalBytes: completed.size,
+        uploadedBytes: completed.size,
+        status: 'completed',
+        etaSeconds: 0,
+        expiresAt: session.expiresAt ? Date.parse(session.expiresAt) : undefined,
+      });
+      uploadSpeedRef.current.delete(progressId);
+      uploadStartRef.current.delete(progressId);
+      return 'completed';
+    };
+
+    try {
+      return await runUpload();
+    } catch (err) {
+      uploadSpeedRef.current.delete(progressId);
+      uploadStartRef.current.delete(progressId);
+      updateUpload(progressId, { status: 'error', retry: resumeFn });
+      throw err;
+    }
+  };
+
+  useEffect(() => {
+    uploadQueue.forEach((item) => {
+      if (item.status !== 'interrupted' || item.retry) return;
+      if (!item.fileId || !item.sessionId) return;
+
+      updateUpload(item.id, {
+        retry: async (overrideFile?: File) => {
+          const file =
+            overrideFile || (item.sourceId ? await resolveTaskSourceFile(item) : null);
+          if (!file) {
+            throw new Error('Please re-select the file to resume this upload.');
+          }
+          const session = await fileApi.getUploadSession(
+            item.fileId!,
+            item.sessionId!,
+          );
+          updateUpload(item.id, {
+            status: 'uploading',
+            progress: item.progress,
+            uploadedBytes: item.uploadedBytes,
+            loadedBytes: item.uploadedBytes,
+          });
+          void uploadFileWithProgress(
+            item.fileId!,
+            file,
+            getSafeMimeType(file),
+            item.id,
+            session,
+          );
         },
       });
-      uploadStartRef.current.set(progressId, performance.now());
-      xhr.send(file);
     });
-  };
+  }, [uploadQueue, updateUpload]);
 
   const proceedWithUploadForId = async (
     file: File,
@@ -876,7 +1096,8 @@ export default function FilesPage() {
     skipDuplicateCheck: boolean,
     progressId: string,
     targetParentId?: string,
-  ) => {
+    source?: UploadSourceRef,
+  ): Promise<'completed' | 'paused'> => {
     updateUpload(progressId, { status: 'uploading', progress: 0 });
 
     const parentId = targetParentId ?? currentFolderId ?? undefined;
@@ -906,26 +1127,56 @@ export default function FilesPage() {
     }
 
     if (created.uploadUrl) {
-      await uploadFileWithProgress(
-        created.uploadUrl,
-        file,
-        safeMime,
-        progressId,
-      );
+      try {
+        await persistSourceForTask(progressId, source);
+        const retryUpload = async (overrideFile?: File) => {
+          const task = uploadQueue.find((u) => u.id === progressId);
+          const sourceFile =
+            overrideFile ||
+            (task?.sourceId ? await resolveTaskSourceFile(task) : null) ||
+            file;
+          const sessionId = task?.sessionId;
+          if (!task?.fileId || !sessionId) {
+            throw new Error('Upload session not available for retry.');
+          }
+          const session = await fileApi.getUploadSession(task.fileId, sessionId);
+          updateUpload(progressId, { status: 'uploading', progress: 0 });
+          void uploadFileWithProgress(
+            task.fileId,
+            sourceFile,
+            safeMime,
+            progressId,
+            session,
+          );
+        };
+        updateUpload(progressId, { retry: retryUpload });
+
+        const result = await uploadFileWithProgress(
+          created.id,
+          file,
+          safeMime,
+          progressId,
+        );
+        if (result === 'paused') return 'paused';
+      } catch (err) {
+        throw err;
+      }
     } else {
       updateUpload(progressId, { progress: 100, status: 'completed' });
     }
+
+    return 'completed';
   };
 
   /** Core upload logic — no size-limit check. Called after user confirmation for at-limit files. */
   const uploadMultipleFilesCore = async (
-    fileEntries: { file: File; parentId?: string }[],
+    fileEntries: UploadEntry[],
   ) => {
     if (fileEntries.length === 0) return;
 
     // Phase 1: Hash all files and check for duplicates
     const duplicates: DuplicateItem[] = [];
-    const readyToUpload: { file: File; hash: string; parentId?: string }[] = [];
+    const readyToUpload: Array<UploadEntry & { hash: string }> = [];
 
     await uploadManager.processFilesParallel(
       fileEntries,
@@ -937,6 +1188,7 @@ export default function FilesPage() {
             file: entry.file,
             hash: '',
             parentId: entry.parentId,
+            source: entry.source,
           });
           return;
         }
@@ -952,12 +1204,14 @@ export default function FilesPage() {
               existingFile,
               location,
               parentId: entry.parentId,
+              source: entry.source,
             });
           } else {
             readyToUpload.push({
               file: entry.file,
               hash: fileHash,
               parentId: entry.parentId,
+              source: entry.source,
             });
           }
         } catch {
@@ -966,6 +1220,7 @@ export default function FilesPage() {
             file: entry.file,
             hash: fileHash,
             parentId: entry.parentId,
+            source: entry.source,
           });
         }
       },
@@ -984,20 +1239,23 @@ export default function FilesPage() {
 
       await uploadManager.processFilesParallel(
         uploadTasks,
-        async ({ file, hash, parentId, progressId }) => {
-          registerRetry(progressId, () =>
-            proceedWithUploadForId(file, hash, true, progressId, parentId),
-          );
+        async ({ file, hash, parentId, progressId, source }) => {
           try {
-            await proceedWithUploadForId(
+            const result = await proceedWithUploadForId(
               file,
               hash,
               true,
               progressId,
               parentId,
+              source,
             );
+            if (result === 'completed') {
+              // Auto-dismiss successful items after 2 s
+              setTimeout(() => removeUploadProgress(progressId), 2000);
+            }
           } catch {
             updateUpload(progressId, { status: 'error' });
+            // Leave error items visible so the user can retry or dismiss
           }
         },
         3,
@@ -1006,9 +1264,12 @@ export default function FilesPage() {
       await loadFiles();
       emitStorageRefresh();
 
+      // Second load after 3 s — verifies files are fully persisted and catches
+      // any race between the server response and the DB commit.
       setTimeout(() => {
-        progressIds.forEach((id) => removeUploadProgress(id));
-      }, 2000);
+        loadFiles().catch(() => {});
+        emitStorageRefresh();
+      }, 3000);
     }
 
     // Phase 3: Show dialog for duplicates
@@ -1020,7 +1281,7 @@ export default function FilesPage() {
 
   /** Size-checking wrapper around uploadMultipleFilesCore. */
   const uploadMultipleFiles = async (
-    fileEntries: { file: File; parentId?: string }[],
+    fileEntries: UploadEntry[],
   ) => {
     if (fileEntries.length === 0) return;
     const { ok, atLimit, rejected } = checkFileSizeLimits(fileEntries);
@@ -1097,18 +1358,23 @@ export default function FilesPage() {
       }
 
       // No duplicate (or large file bypassed dedup), proceed with upload
-      registerRetry(progressId, () =>
-        proceedWithUploadForId(file, fileHash, false, progressId),
+      const result = await proceedWithUploadForId(
+        file,
+        fileHash,
+        false,
+        progressId,
+        undefined,
+        undefined,
       );
-      await proceedWithUploadForId(file, fileHash, false, progressId);
-      await loadFiles();
-      emitStorageRefresh();
-
-      setTimeout(() => removeUploadProgress(progressId), 2000);
+      if (result === 'completed') {
+        await loadFiles();
+        emitStorageRefresh();
+        setTimeout(() => removeUploadProgress(progressId), 2000);
+      }
     } catch (err) {
       console.error('File upload error:', err);
       updateUpload(progressId, { status: 'error' });
-      setTimeout(() => removeUploadProgress(progressId), 2000);
+      // Leave error visible so the user can retry; do not auto-dismiss
     } finally {
       e.target.value = '';
     }
@@ -1128,14 +1394,21 @@ export default function FilesPage() {
       progressId: progressIds[i],
     }));
 
-    await uploadManager.processFilesParallel(
+      await uploadManager.processFilesParallel(
       tasks,
-      async ({ file, hash, parentId, progressId }) => {
-        registerRetry(progressId, () =>
-          proceedWithUploadForId(file, hash, true, progressId, parentId),
-        );
+      async ({ file, hash, parentId, progressId, source }) => {
         try {
-          await proceedWithUploadForId(file, hash, true, progressId, parentId);
+          const result = await proceedWithUploadForId(
+            file,
+            hash,
+            true,
+            progressId,
+            parentId,
+            source,
+          );
+          if (result === 'completed') {
+            setTimeout(() => removeUploadProgress(progressId), 2000);
+          }
         } catch {
           updateUpload(progressId, { status: 'error' });
         }
@@ -1147,8 +1420,9 @@ export default function FilesPage() {
     emitStorageRefresh();
 
     setTimeout(() => {
-      progressIds.forEach((id) => removeUploadProgress(id));
-    }, 2000);
+      loadFiles().catch(() => {});
+      emitStorageRefresh();
+    }, 3000);
   };
 
   const handleDuplicateCancel = () => {
@@ -1182,10 +1456,11 @@ export default function FilesPage() {
     setShowFolderUploadDialog(false);
     if (!pendingFolderUpload) return;
 
-    const allFiles = pendingFolderUpload.files;
+    const allFiles = pendingFolderUpload.entries;
 
     const folderPaths = new Set<string>();
-    for (const file of allFiles) {
+    for (const item of allFiles) {
+      const file = item.file;
       const relPath = file.webkitRelativePath;
       if (!relPath) continue;
       const parts = relPath.split('/');
@@ -1234,8 +1509,8 @@ export default function FilesPage() {
       }
     }
 
-    const fileEntries: { file: File; parentId?: string }[] = allFiles.map(
-      (file) => {
+    const fileEntries: UploadEntry[] = allFiles.map((item) => {
+        const file = item.file;
         const relPath = file.webkitRelativePath;
         const parts = relPath.split('/');
         const parentPath =
@@ -1243,19 +1518,20 @@ export default function FilesPage() {
         const parentId = parentPath
           ? folderIdMap.get(parentPath)
           : baseParentId;
-        return { file, parentId };
-      },
-    );
+        return { ...item, parentId };
+      });
 
     await uploadMultipleFiles(fileEntries);
     await loadFiles();
     emitStorageRefresh();
     setPendingFolderUpload(null);
+    pendingFolderSourceRef.current = null;
   };
 
   const handleFolderUploadCancel = () => {
     setShowFolderUploadDialog(false);
     setPendingFolderUpload(null);
+    pendingFolderSourceRef.current = null;
     toast({
       title: 'Folder upload cancelled',
       description: 'Folder upload was cancelled.',
@@ -1434,7 +1710,14 @@ export default function FilesPage() {
         password,
       });
       if (res.publicLink) {
-        setPublicLink(res.publicLink);
+        // Replace the backend's FRONTEND_URL origin with the browser's actual
+        // origin so links work correctly on home servers, LAN IPs, or custom domains.
+        let correctedLink = res.publicLink;
+        try {
+          const url = new URL(res.publicLink);
+          correctedLink = window.location.origin + url.pathname + url.search;
+        } catch { /* keep original if URL is somehow malformed */ }
+        setPublicLink(correctedLink);
         setPublicLinkFileName(fileName);
         loadFiles();
       } else {
@@ -1656,14 +1939,14 @@ export default function FilesPage() {
 
     // Show folder upload confirmation dialog
     setPendingFolderUpload({
-      files: allFilesWithPaths.map((f) => {
+      entries: allFilesWithPaths.map((f) => {
         // Create a new File with webkitRelativePath-like path
         const newFile = new File([f.file], f.file.name, { type: f.file.type });
         Object.defineProperty(newFile, 'webkitRelativePath', {
           value: f.relativePath,
           writable: false,
         });
-        return newFile;
+        return { file: newFile };
       }),
       folderName: rootFolderName,
       totalSize,

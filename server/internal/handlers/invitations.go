@@ -85,7 +85,7 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inviteLink := fmt.Sprintf("%s/register?token=%s", h.cfg.FrontendURL, invitation.Token.String())
+	inviteLink := fmt.Sprintf("%s/register?token=%s", requestOrigin(r, h.cfg.FrontendURL), invitation.Token.String())
 	emailSent := false
 	emailMessage := ""
 

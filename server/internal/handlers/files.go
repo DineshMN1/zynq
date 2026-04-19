@@ -3,14 +3,11 @@ package handlers
 import (
 	"archive/zip"
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
-	"mime"
 	"net/http"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -96,15 +93,24 @@ func (h *FilesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	var shareCounts []shareRow
 	if len(fileIDs) > 0 {
-		h.db.Raw(`
+		// Build explicit placeholders to avoid GORM expanding slices as ANY() for
+		// Raw queries, which PostgreSQL rejects as a malformed array literal.
+		placeholders := make([]string, len(fileIDs))
+		args := make([]interface{}, len(fileIDs))
+		for i, id := range fileIDs {
+			placeholders[i] = "?"
+			args[i] = id
+		}
+		rawSQL := fmt.Sprintf(`
 			SELECT file_id::text,
 			       COUNT(*)                                      AS total,
 			       COUNT(*) FILTER (WHERE is_public = true)     AS public,
 			       COUNT(*) FILTER (WHERE is_public = false)    AS private
 			FROM shares
-			WHERE file_id = ANY(?)
+			WHERE file_id::text IN (%s)
 			GROUP BY file_id
-		`, fileIDs).Scan(&shareCounts)
+		`, strings.Join(placeholders, ","))
+		h.db.Raw(rawSQL, args...).Scan(&shareCounts)
 	}
 	shareMap := make(map[string]shareRow, len(shareCounts))
 	for _, sc := range shareCounts {
@@ -228,7 +234,7 @@ func (h *FilesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"updated_at": file.UpdatedAt,
 	}
 	if !file.IsFolder {
-		resp["uploadUrl"] = fmt.Sprintf("/api/v1/files/%s/upload", file.ID)
+		resp["uploadUrl"] = fmt.Sprintf("/api/v1/files/%s/upload-session", file.ID)
 	}
 	writeJSON(w, http.StatusCreated, resp)
 }
@@ -791,221 +797,13 @@ func (h *FilesHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	plainSize, copyErr := io.Copy(tmpFile, io.TeeReader(r.Body, hasher))
 	tmpFile.Close()
 	if copyErr != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to read upload body")
+		slog.Warn("upload body read failed (client disconnected?)", "file_id", fileID, "error", copyErr)
+		writeError(w, http.StatusInternalServerError, "Upload interrupted — please try again")
 		return
 	}
-	if plainSize == 0 {
-		writeError(w, http.StatusBadRequest, "Empty file body")
+	if !h.commitUploadedTempFile(w, r, &file, &user, tmpPath, plainSize, hasher) {
 		return
 	}
-
-	// Check storage limit (now that we know the real size)
-	if user.StorageLimit > 0 && user.StorageUsed+plainSize > user.StorageLimit {
-		writeError(w, http.StatusForbidden, "Storage limit exceeded")
-		return
-	}
-
-	// Check free disk space — avail==0 means stats unavailable, skip check.
-	if localBackend, ok := h.backend.(*storage.Local); ok {
-		if avail, _ := localBackend.DiskStats(); avail > 0 {
-			minFree := uint64(h.cfg.MinFreeBytes)
-			if avail < uint64(plainSize)+minFree {
-				writeError(w, http.StatusInsufficientStorage, "Insufficient disk space")
-				return
-			}
-		}
-	}
-
-	// ── Detect MIME type (peek first 512 bytes from temp file) ────────────────
-	mimeType := "application/octet-stream"
-	if ext := filepath.Ext(file.Name); ext != "" {
-		if extMime := mime.TypeByExtension(ext); extMime != "" {
-			mimeType = extMime
-		}
-	}
-	if mimeType == "application/octet-stream" {
-		if tf, err := os.Open(tmpPath); err == nil { // #nosec G304 -- tmpPath from os.CreateTemp
-			sniff := make([]byte, 512)
-			n, _ := tf.Read(sniff)
-			tf.Close()
-			if n > 0 {
-				detected := http.DetectContentType(sniff[:n])
-				if i := strings.IndexByte(detected, ';'); i != -1 {
-					detected = strings.TrimSpace(detected[:i])
-				}
-				mimeType = detected
-			}
-		}
-	}
-
-	// ── Deduplication check ───────────────────────────────────────────────────
-	var computedHash string
-	if storage.ShouldDedup(file.Name) {
-		computedHash = hex.EncodeToString(hasher.Sum(nil))
-
-		var dedupDone bool
-		dedupErr := h.db.Transaction(func(tx *gorm.DB) error {
-			var existing models.File
-			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-				Where(
-					"owner_id = ? AND file_hash = ? AND is_folder = false AND deleted_at IS NULL AND storage_path IS NOT NULL AND space_id IS NULL",
-					userID, computedHash,
-				).First(&existing).Error
-
-			if err != nil || existing.StoragePath == nil {
-				return nil // no dedup match — proceed with normal upload
-			}
-
-			mimeStr := mimeType
-			hashStr := computedHash
-			updates := map[string]interface{}{
-				"storage_path":    existing.StoragePath,
-				"encrypted_dek":   existing.EncryptedDEK,
-				"encryption_iv":   existing.EncryptionIV,
-				"encryption_algo": existing.EncryptionAlgo,
-				"size":            plainSize,
-				"mime_type":       mimeStr,
-				"file_hash":       hashStr,
-			}
-			if err := tx.Model(&file).Updates(updates).Error; err != nil {
-				return err
-			}
-			tx.Model(&models.User{}).Where("id = ?", userID).
-				UpdateColumn("storage_used", gorm.Expr("storage_used + ?", plainSize))
-			file.Size = plainSize
-			file.MimeType = &mimeStr
-			file.StoragePath = existing.StoragePath
-			file.FileHash = &hashStr
-			dedupDone = true
-			return nil
-		})
-		if dedupErr != nil {
-			writeError(w, http.StatusInternalServerError, "Failed to update file record")
-			return
-		}
-		if dedupDone {
-			LogAudit(h.db, AuditEntry{
-				UserID:       &userID,
-				UserName:     user.Name,
-				UserEmail:    user.Email,
-				Action:       "file.upload",
-				ResourceType: "file",
-				ResourceName: file.Name,
-				ResourceID:   file.ID.String(),
-				IPAddress:    auditIP(r),
-				Metadata:     models.JSONB{"size": plainSize, "mime_type": mimeType, "dedup": true},
-			})
-			writeJSON(w, http.StatusOK, file)
-			return
-		}
-	}
-
-	// ── Generate encryption keys ──────────────────────────────────────────────
-	dek, iv, storedEncryptedDEK, algo, err := h.crypto.CreateEncryptionKeys()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate encryption keys")
-		return
-	}
-
-	// ── Stream-encrypt temp file to storage ───────────────────────────────────
-	storagePath := fmt.Sprintf("%s/%s.enc", userID.String(), fileID.String())
-
-	plainReader, err := os.Open(tmpPath) // #nosec G304 -- tmpPath from os.CreateTemp
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to open temp file")
-		return
-	}
-	defer plainReader.Close()
-
-	// Write encrypted output via a pipe so we don't buffer the whole ciphertext.
-	// encErrCh carries the goroutine's result so the main goroutine can inspect it
-	// after Write() returns (Write blocks until the pipe is closed).
-	pr, pw := io.Pipe()
-	encErrCh := make(chan error, 1)
-	go func() {
-		_, err := crypto.EncryptStream(plainReader, pw, dek, iv)
-		if err != nil {
-			pw.CloseWithError(err)
-		} else {
-			pw.Close()
-		}
-		encErrCh <- err
-	}()
-
-	_, writeErr := h.backend.Write(storagePath, pr)
-	encErr := <-encErrCh // always wait for the goroutine to finish
-
-	if encErr != nil {
-		slog.Error("failed to encrypt file", "error", encErr, "path", storagePath)
-		// Clean up the partially-written blob.
-		_ = h.backend.Delete(storagePath)
-		writeError(w, http.StatusInternalServerError, "Failed to encrypt file")
-		return
-	}
-	if writeErr != nil {
-		slog.Error("failed to write encrypted file", "error", writeErr, "path", storagePath)
-		writeError(w, http.StatusInternalServerError, "Failed to store file")
-		return
-	}
-
-	// ── Update DB record ──────────────────────────────────────────────────────
-	updates := map[string]interface{}{
-		"storage_path":    storagePath,
-		"encrypted_dek":   storedEncryptedDEK,
-		"encryption_iv":   iv,
-		"encryption_algo": algo,
-		"size":            plainSize,
-		"mime_type":       mimeType,
-	}
-	if computedHash != "" {
-		updates["file_hash"] = computedHash
-	}
-
-	if err := h.db.Model(&file).Updates(updates).Error; err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to update file record")
-		return
-	}
-
-	h.db.Model(&models.User{}).Where("id = ?", userID).
-		UpdateColumn("storage_used", gorm.Expr("storage_used + ?", plainSize))
-
-	// Fire storage_warning notification when upload crosses the 75% threshold.
-	if user.StorageLimit > 0 {
-		prevPct := float64(user.StorageUsed) / float64(user.StorageLimit) * 100
-		newPct := float64(user.StorageUsed+plainSize) / float64(user.StorageLimit) * 100
-		if prevPct < 75 && newPct >= 75 {
-			go SendNotification(h.db, h.cfg, "storage_warning",
-				"Storage Warning — 75% Used",
-				fmt.Sprintf("User %s has used %.0f%% of their storage quota (%s / %s).",
-					user.Email, newPct,
-					formatStorageBytes(user.StorageUsed+plainSize),
-					formatStorageBytes(user.StorageLimit),
-				),
-			)
-		}
-	}
-
-	file.Size = plainSize
-	mimeStr := mimeType
-	file.MimeType = &mimeStr
-	file.StoragePath = &storagePath
-	if computedHash != "" {
-		file.FileHash = &computedHash
-	}
-
-	LogAudit(h.db, AuditEntry{
-		UserID:       &userID,
-		UserName:     user.Name,
-		UserEmail:    user.Email,
-		Action:       "file.upload",
-		ResourceType: "file",
-		ResourceName: file.Name,
-		ResourceID:   file.ID.String(),
-		IPAddress:    auditIP(r),
-		Metadata:     models.JSONB{"size": plainSize, "mime_type": mimeType},
-	})
-
-	writeJSON(w, http.StatusOK, file)
 }
 
 // GET /api/v1/files/{id}/download

@@ -480,7 +480,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Send email if configured
 	if h.cfg.EmailEnabled {
-		resetURL := fmt.Sprintf("%s/reset-password?token=%s", h.cfg.FrontendURL, token)
+		resetURL := fmt.Sprintf("%s/reset-password?token=%s", requestOrigin(r, h.cfg.FrontendURL), token)
 		go h.sendPasswordResetEmail(user.Email, user.Name, resetURL)
 	} else {
 		slog.Info("password reset token generated (email disabled — configure SMTP to send emails)", "user", user.Email)

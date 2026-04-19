@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 import IndexPage from './pages/home';
 import LoginPage from './pages/auth/login';
@@ -9,6 +9,7 @@ import SetupPage from './pages/auth/setup';
 import PublicSharePage from './pages/share/public-share';
 import DashboardLayout from './pages/dashboard/layout';
 import DashboardFilesPage from './pages/dashboard/files';
+import DashboardUploadsPage from './pages/dashboard/uploads';
 import DashboardProfilePage from './pages/dashboard/profile';
 import DashboardTrashPage from './pages/dashboard/trash';
 import DashboardSharedPage from './pages/dashboard/shared';
@@ -23,12 +24,16 @@ import TeamFilesPage from './pages/team/files';
 import TeamActivityPage from './pages/team/activity';
 import TeamMembersPage from './pages/team/members';
 import NotFoundPage from './pages/not-found';
+import { UploadProvider } from '@/context/UploadContext';
+import { UploadManagerPopup } from '@/components/UploadManagerPopup';
 
 export default function App() {
+  const location = useLocation();
   return (
-    <Routes>
-      {/* Root — redirects based on auth state */}
-      <Route path="/" element={<IndexPage />} />
+    <UploadProvider>
+      <Routes>
+        {/* Root — redirects based on auth state */}
+        <Route path="/" element={<IndexPage />} />
 
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
@@ -44,6 +49,7 @@ export default function App() {
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<Navigate to="/dashboard/files" replace />} />
         <Route path="files" element={<DashboardFilesPage />} />
+        <Route path="uploads" element={<DashboardUploadsPage />} />
         <Route path="profile" element={<DashboardProfilePage />} />
         <Route path="trash" element={<DashboardTrashPage />} />
         <Route path="shared" element={<DashboardSharedPage />} />
@@ -73,8 +79,10 @@ export default function App() {
         <Route path="members" element={<TeamMembersPage />} />
       </Route>
 
-      {/* 404 */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+        {/* 404 */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+      {!location.pathname.startsWith('/dashboard/uploads') && <UploadManagerPopup />}
+    </UploadProvider>
   );
 }

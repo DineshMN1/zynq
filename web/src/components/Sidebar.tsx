@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Files,
   Share2,
@@ -17,6 +17,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  ListTodo,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
@@ -34,6 +35,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { User, UpdateCheckResult } from '@/lib/api';
 import { systemApi, storageApi, authApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useUploadContext } from '@/context/UploadContext';
 import { STORAGE_REFRESH_EVENT } from '@/lib/storage-events';
 import { getInitials } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
@@ -224,10 +226,22 @@ function UpdateModal({
 // ── Main sidebar ──────────────────────────────────────────────────────────────
 export function AppSidebar({ user }: AppSidebarProps) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { logout } = useAuth();
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === 'collapsed';
+  const { uploadQueue } = useUploadContext();
+
+  // Badge count: tasks that are pending, failed, or interrupted
+  const pendingTaskCount = uploadQueue.filter(
+    (u) =>
+      u.status === 'error' ||
+      u.status === 'interrupted' ||
+      u.status === 'paused' ||
+      u.status === 'uploading' ||
+      u.status === 'queued',
+  ).length;
 
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -243,6 +257,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '/');
+  const uploadsActive = isActive('/dashboard/uploads');
 
   // ── Storage refresh ────────────────────────────────────────────────────────
   const refreshStorage = useCallback(() => {
@@ -377,6 +392,33 @@ export function AppSidebar({ user }: AppSidebarProps) {
             {general.map((item) => (
               <NavItem key={item.href} {...item} active={isActive(item.href)} collapsed={collapsed} />
             ))}
+
+            {/* Uploads — visible only when there are active/failed uploads */}
+            {pendingTaskCount > 0 && (
+              <NavTooltip label={`Uploads (${pendingTaskCount})`} collapsed={collapsed}>
+              <button
+                onClick={() => {
+                  navigate('/dashboard/uploads');
+                }}
+                className={cn(
+                  'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] font-medium',
+                  uploadsActive
+                    ? 'bg-sidebar-accent/70 text-sidebar-foreground'
+                    : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/60',
+                  'transition-colors',
+                    collapsed && 'justify-center px-2',
+                  )}
+                >
+                  <div className="relative shrink-0">
+                    <ListTodo className="h-4 w-4" />
+                    <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-muted text-[8px] font-bold text-muted-foreground flex items-center justify-center leading-none border border-border">
+                      {pendingTaskCount > 9 ? '9+' : pendingTaskCount}
+                    </span>
+                  </div>
+                  {!collapsed && <span>Uploads</span>}
+                </button>
+              </NavTooltip>
+            )}
           </nav>
 
         </SidebarContent>

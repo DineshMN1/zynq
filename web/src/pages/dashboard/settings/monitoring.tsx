@@ -311,7 +311,7 @@ export default function MonitoringPage() {
       <ToastContainer />
 
       {/* ── Page header ── */}
-      <div className="border-b border-border/60 bg-card/50 px-6 py-5">
+      <div className="border-b border-border/60 bg-card/50 px-4 sm:px-6 py-4 sm:py-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
@@ -361,7 +361,7 @@ export default function MonitoringPage() {
         )}
       </div>
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
 
         {/* ── Error banner ── */}
         {stats.error && !stats.loading && (

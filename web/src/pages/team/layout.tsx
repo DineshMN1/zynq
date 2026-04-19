@@ -7,6 +7,7 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -33,8 +34,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
-import { UploadProvider } from '@/context/UploadContext';
-import { UploadManagerPopup } from '@/components/UploadManagerPopup';
 import { useTheme } from '@/components/ThemeProvider';
 import { getInitials } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -226,18 +225,19 @@ export default function TeamLayout() {
   if (!user) return null;
 
   return (
-    <UploadProvider>
-      <TooltipProvider delayDuration={0}>
-        <SidebarProvider className="min-h-0! h-screen overflow-hidden">
-          <TeamSidebarInner user={user} />
-          <SidebarInset className="overflow-hidden">
-            <main className="flex-1 overflow-auto h-full">
-              <Outlet />
-            </main>
-          </SidebarInset>
-        </SidebarProvider>
-      </TooltipProvider>
-      <UploadManagerPopup />
-    </UploadProvider>
+    <TooltipProvider delayDuration={0}>
+      <SidebarProvider className="min-h-0! h-screen overflow-hidden">
+        <TeamSidebarInner user={user} />
+        <SidebarInset className="overflow-hidden flex flex-col">
+          <header className="lg:hidden flex h-12 shrink-0 items-center gap-2 border-b px-4">
+            <SidebarTrigger className="-ml-1" />
+            <span className="text-sm font-medium text-foreground/80">Team</span>
+          </header>
+          <main className="flex-1 overflow-auto h-full">
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }

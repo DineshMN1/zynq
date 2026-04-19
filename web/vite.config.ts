@@ -20,6 +20,8 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    // Allow all hosts (ngrok tunnels, LAN IPs, custom domains in dev).
+    allowedHosts: true,
     // Proxy /api to the Go backend in dev so the browser uses relative URLs.
     // No CORS config needed — same origin from the browser's perspective.
     proxy: {

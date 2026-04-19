@@ -17,6 +17,13 @@ export interface DuplicateItem {
   existingFile: FileMetadata;
   location?: string;
   parentId?: string;
+  source?: {
+    id: string;
+    kind: 'file' | 'directory';
+    name: string;
+    relativePath?: string;
+    handle: FileSystemHandle;
+  };
 }
 
 interface DuplicateWarningDialogProps {

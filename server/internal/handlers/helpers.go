@@ -28,6 +28,29 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
+// requestOrigin derives the public-facing origin (scheme + host) from the
+// incoming request. It honours X-Forwarded-Proto / X-Forwarded-Host set by
+// reverse proxies, then falls back to the Host header. The fallbackURL is
+// used only when the Host header is empty (e.g. unit tests).
+func requestOrigin(r *http.Request, fallbackURL string) string {
+	scheme := r.Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		if r.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	if host == "" {
+		return strings.TrimRight(fallbackURL, "/")
+	}
+	return scheme + "://" + host
+}
+
 func readJSON(r *http.Request, v interface{}) error {
 	// Limit request bodies to 1 MB to prevent memory exhaustion attacks.
 	limited := io.LimitReader(r.Body, 1<<20)

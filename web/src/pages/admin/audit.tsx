@@ -155,30 +155,35 @@ export default function AdminAuditPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-        <div>
-          <h1 className="text-[15px] font-semibold">Audit Log</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5">
-            {total.toLocaleString()} event{total !== 1 ? 's' : ''} recorded
-          </p>
+      <div className="flex flex-col gap-3 px-4 sm:px-6 py-3 border-b border-border shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h1 className="text-[15px] font-semibold">Audit Log</h1>
+            <p className="text-[12px] text-muted-foreground mt-0.5">
+              {total.toLocaleString()} event{total !== 1 ? 's' : ''} recorded
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => void load()}>
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-2">
-          <form onSubmit={handleSearch} className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <form onSubmit={handleSearch} className="flex-1">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search user, file…"
-                className="pl-8 h-8 w-52 text-sm"
+                className="pl-8 h-8 w-full text-sm"
               />
             </div>
           </form>
 
           <Select value={filterAction} onValueChange={setFilterAction}>
-            <SelectTrigger className="h-8 w-44 text-sm">
+            <SelectTrigger className="h-8 w-full sm:w-44 text-sm">
               <SelectValue placeholder="All actions" />
             </SelectTrigger>
             <SelectContent>
@@ -190,10 +195,6 @@ export default function AdminAuditPage() {
               ))}
             </SelectContent>
           </Select>
-
-          <Button variant="outline" size="sm" className="h-8" onClick={() => void load()}>
-            <RefreshCw className="h-3.5 w-3.5" />
-          </Button>
         </div>
       </div>
 
@@ -285,7 +286,7 @@ export default function AdminAuditPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-6 py-3 border-t border-border shrink-0">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-t border-border shrink-0">
           <span className="text-[12px] text-muted-foreground">
             Page {page} of {totalPages} · {total.toLocaleString()} events
           </span>
