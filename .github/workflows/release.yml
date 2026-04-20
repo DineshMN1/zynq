@@ -38,7 +38,7 @@ jobs:
 
       # ── Main app image (Go API + React frontend + nginx) ─────────────────
       - name: Build and push app image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -60,7 +60,7 @@ jobs:
             docker-compose.yml
             .env.example
             install.sh
-            update.sh
+            scripts/update.sh
           body: |
             ## Docker Image
 

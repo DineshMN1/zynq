@@ -336,28 +336,6 @@ export default function FilesPage() {
   };
 
   /**
-   * Registers a retry callback on an upload item. The callback resets the item
-   * to 'checking' and re-runs `fn`, re-registering itself on each failure so
-   * the retry button stays available after multiple attempts.
-   */
-  const registerRetry = (
-    progressId: string,
-    fn: (file?: File) => Promise<void>,
-  ) => {
-    const retryFn = async (file?: File) => {
-      updateUpload(progressId, { status: 'checking', progress: 0 });
-      registerRetry(progressId, fn); // re-register before attempt
-      try {
-        await fn(file);
-      } catch {
-        updateUpload(progressId, { status: 'error' });
-        registerRetry(progressId, fn); // re-register after failure
-      }
-    };
-    updateUpload(progressId, { retry: retryFn });
-  };
-
-  /**
    * Splits file entries into three buckets:
    *  - rejected:  size > 5 GB (never uploaded)
    *  - atLimit:   size === 5 GB exactly (warn before uploading)
