@@ -7,7 +7,7 @@ COPY server/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/api ./cmd/api
 
 # ── Stage 2: Build React frontend ────────────────────────────
-FROM node:20-alpine AS frontend-builder
+FROM node:25-alpine AS frontend-builder
 WORKDIR /build
 ARG APP_VERSION=dev
 ENV VITE_APP_VERSION=$APP_VERSION
